@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>To-Do List</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Referenced by the .todo-item/.modal panels' backdrop-filter
+       (style.css), chained with a small blur() there -- pure distortion here
+       (feTurbulence + feDisplacementMap warps the backdrop like uneven
+       glass) rather than uniformly smearing it, with just a touch of blur
+       layered on top in CSS for a softer edge. -->
+  <svg width="0" height="0" style="position: absolute">
+    <filter id="glass-distort" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="2" seed="4" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="12" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
+
+  <main>
+    <div class="todo-column">
+      <div class="app-header">
+        <h1>To-Do List</h1>
+        <button id="todo-manage-btn" class="menu-btn-small">Manage tasks&hellip;</button>
+      </div>
+
+      <div id="todo-section" class="todo-section hidden">
+        <button id="todo-view-toggle-btn" class="todo-view-toggle-btn" title="Switch view"></button>
+        <button id="todo-scroll-up" class="scroll-btn scroll-btn-h" title="Previous task">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6"/></svg>
+        </button>
+        <div id="todo-viewport">
+          <div id="todo-list"></div>
+        </div>
+        <button id="todo-scroll-down" class="scroll-btn scroll-btn-h" title="Next task">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Reserved for future functionality -- intentionally empty for now. -->
+    <div class="side-panel"></div>
+  </main>
+
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title"></div>
+      <div class="modal-fields"></div>
+      <div class="modal-actions">
+        <button class="modal-cancel">Cancel</button>
+        <button class="modal-ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="todo-manage-overlay" class="modal-overlay hidden">
+    <div class="modal todo-manage-modal">
+      <button id="todo-manage-close" class="modal-close-btn" title="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-title-row">
+        <div class="modal-title">To-do list</div>
+        <button id="todo-manage-view-toggle-btn" class="todo-view-toggle-btn" title="Switch view"></button>
+      </div>
+      <div id="todo-manage-list"></div>
+      <button id="todo-add-btn" class="menu-btn-small">+ Add task</button>
+    </div>
+  </div>
+
+  <div id="edit-scope-overlay" class="modal-overlay hidden">
+    <div class="modal edit-scope-modal">
+      <div class="modal-title">Edit recurring task</div>
+      <p class="edit-scope-desc">This task repeats. What would you like to edit?</p>
+      <button id="edit-scope-instance" class="menu-btn-small menu-btn-wide">Only this occurrence</button>
+      <button id="edit-scope-following" class="menu-btn-small menu-btn-wide">This and following occurrences</button>
+      <button id="edit-scope-all" class="menu-btn-small menu-btn-wide">All occurrences</button>
+      <div class="modal-actions">
+        <button id="edit-scope-cancel" class="modal-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sharedInputBehavior.js"></script>
+  <script src="recurrence.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

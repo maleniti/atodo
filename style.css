@@ -1,0 +1,751 @@
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  /* Tells Chromium/Firefox to render native controls we don't fully style
+     ourselves (a <select>'s dropdown popup, date/time picker widgets) in
+     dark mode, instead of the OS's default light theme clashing against
+     this app's dark UI -- the closed <select> box itself is already styled
+     via .modal-input, but the open dropdown list is native UI outside CSS's
+     reach otherwise. */
+  color-scheme: dark;
+  /* Exactly the viewport height (not min-height) so the page itself never
+     scrolls -- the to-do list is sized to fit within it, and any overflow
+     scrolls internally via its own up/down buttons instead of growing the
+     page. */
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color: #e8eaed;
+  background: #131314;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  /* Spans the full viewport width (no max-width cap) so the 75%/25% split
+     below is against the actual screen, not just a centered content column
+     within it. */
+  width: 100%;
+  padding: 32px 24px;
+  gap: 24px;
+  /* Fills whatever height body's flex column leaves it (the full viewport);
+     min-height: 0 lets that shrink below its content's natural height
+     instead of forcing the (overflow: hidden) ancestors to grow past the
+     viewport -- .todo-section below is the one child that actually absorbs
+     the leftover space via flex: 1. */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+/* The to-do list itself, on the left -- .side-panel below is the other 25%,
+   reserved for future functionality. */
+.todo-column {
+  flex: 0 0 75%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-panel {
+  flex: 0 0 25%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex: none;
+}
+.app-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: #fff;
+}
+
+.todo-section {
+  /* No panel background of its own any more -- each .todo-item below carries
+     its own beveled-glass background instead, so the list reads as a stack
+     of individual cards over the plain page background rather than one big
+     glass pane. */
+  position: relative;
+  width: 100%;
+  padding: 14px 0;
+  /* Absorbs all of main's leftover height, so however many tasks there are,
+     the to-do list scrolls within this fixed box (see #todo-viewport) rather
+     than growing the page. */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.todo-section.hidden { display: none; }
+
+.todo-view-toggle-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  /* Above .todo-day-header's own z-index: 1 (see there) -- once the list is
+     short enough that a header sits pinned right at the very top with
+     nothing left to scroll, it would otherwise cover this corner instead of
+     sitting behind it. */
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9aa0a6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+/* In the to-do manage modal, the toggle sits inline next to the title
+   instead of the corner -- that corner slot is the modal's own Close
+   button there (.modal-close-btn), to avoid the two being mistaken for
+   each other. */
+#todo-manage-view-toggle-btn {
+  position: static;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.modal-title-row .modal-title {
+  margin-bottom: 0;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9aa0a6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8eaed;
+}
+
+.todo-view-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #e8eaed;
+}
+
+#todo-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+}
+#todo-viewport::-webkit-scrollbar { display: none; } /* Chromium */
+
+.todo-day-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  padding: 10px 6px 4px;
+}
+.todo-day-header:first-child { padding-top: 2px; }
+
+/* Exactly one header is ever "pinned" at a time -- updatePinnedTodoHeader
+   (app.js) adds/removes this class on scroll based on each day's own
+   sentinel div, rather than making every header sticky (which is what CSS's
+   own stacking of multiple sticky siblings does automatically, but leaves
+   the previous day's header rendered right underneath the new one, showing
+   through unless it's fully opaque). Needs an opaque background of its own
+   now that .todo-item rows carry their own glass cards (see .todo-item
+   above) instead of the whole section being one uniform panel behind a
+   transparent header -- otherwise a card scrolling underneath the sticky
+   header would show through it. Flat and matching the page background
+   (rather than another glass layer) since it only ever has to mask
+   ordinary scrolled-past content, not look like a card itself.
+   */
+.todo-day-header.pinned {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #131314;
+}
+/* Dims only the label text, not the header element itself -- opacity on the
+   whole element would also fade its background, so a dimmed ("not today")
+   header handing off to the next one mid-scroll would look like a lighter,
+   less-opaque box than a same-day header's own hand-off, instead of every
+   hand-off looking identical regardless of which two days are involved. */
+.todo-day-header.not-today > span { opacity: 0.6; }
+
+.todo-day-add-btn {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #80868b;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.todo-day-add-btn:hover { background: rgba(255, 255, 255, 0.12); color: #e8eaed; }
+
+/* Each day's tasks split into two columns (see renderTodo) -- ordered into
+   them, not across them in rows: the first column is every earlier-due task
+   for that day, the second the later-due ones, so reading top-to-bottom
+   then left-to-right still matches the day's normal due-time order. */
+.todo-day-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
+}
+.todo-day-column {
+  min-width: 0;
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 6px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative; /* positioning context for .todo-timer-bar */
+  overflow: hidden; /* clips .todo-timer-bar and the glass background to this row's own rounded corners */
+  /* The beveled-glass look that used to belong to the whole .todo-section
+     panel -- each task row is now its own small glass card instead. */
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: url(#glass-distort) blur(2px) saturate(140%);
+  -webkit-backdrop-filter: url(#glass-distort) blur(2px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    inset -1px 0 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.todo-item:hover { background: rgba(255, 255, 255, 0.09); }
+.todo-item.active { background: rgba(138, 180, 248, 0.16); }
+.todo-item.not-today { opacity: 0.6; }
+.todo-item.not-today:hover { opacity: 0.85; }
+
+/* A positioned (absolute) element without its own z-index still paints
+   above ordinary in-flow content regardless of DOM order -- these three are
+   the row's only other direct children, given position: relative (so their
+   own default z-index: auto stacks them, in DOM order, above the bar below
+   rather than at the same level as ordinary flow content). */
+.todo-item > input[type="checkbox"],
+.todo-item > .todo-item-text,
+.todo-item > .todo-focus-btn {
+  position: relative;
+}
+
+.todo-timer-bar {
+  position: absolute;
+  inset: 0;
+  background: rgba(138, 180, 248, 0.16);
+}
+
+.todo-item input[type="checkbox"] {
+  margin-top: 3px;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  accent-color: #8ab4f8;
+  cursor: pointer;
+}
+
+/* A failed appointment's checkbox -- same size/position/click behavior as
+   the normal checkbox (still a real <input type="checkbox">, still toggles
+   completion), just drawn as a black X on the same red used for failed
+   text (see .todo-item.failed) instead of the usual checkbox, to read as
+   "failed" rather than "not done yet". */
+.todo-item input[type="checkbox"].todo-checkbox-failed {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #f28b82;
+  border-radius: 3px;
+  position: relative;
+}
+.todo-item input[type="checkbox"].todo-checkbox-failed::after {
+  content: '\2715';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.todo-item-text { flex: 1; min-width: 0; }
+
+.todo-item-name {
+  font-size: 13px;
+  color: #e8eaed;
+  font-weight: 500;
+}
+.todo-item.completed .todo-item-name {
+  color: #fff;
+  text-decoration: line-through;
+}
+/* An appointment task past its due date and still not done, per
+   pastDueStatus -- crossed out like .completed, but red instead of white so
+   it reads as failed rather than done. Mutually exclusive with .completed
+   in practice (see the row's className), so no ordering tie-break needed
+   against it. */
+.todo-item.failed .todo-item-name {
+  color: #f28b82;
+  text-decoration: line-through;
+}
+
+.todo-item-desc {
+  font-size: 11px;
+  color: #9aa0a6;
+  margin-top: 2px;
+}
+.todo-item.completed .todo-item-desc {
+  color: #80868b;
+  text-decoration: line-through;
+}
+.todo-item.failed .todo-item-desc {
+  color: #f28b82;
+  text-decoration: line-through;
+}
+
+.todo-item-meta {
+  font-size: 10px;
+  color: #80868b;
+  margin-top: 2px;
+}
+.todo-item-meta.overdue { color: #f28b82; }
+.todo-item-meta.failed { color: #f28b82; }
+
+.todo-item.all-day .todo-item-name { color: #8ab4f8; }
+/* After .all-day so a task that's both all-day and an appointment (not yet
+   due) shows the appointment color. */
+.todo-item.appointment .todo-item-name { color: #81c995; }
+
+.todo-focus-btn {
+  flex: none;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #80868b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.todo-focus-btn:hover { background: rgba(255, 255, 255, 0.12); color: #e8eaed; }
+.todo-focus-btn.active { color: #8ab4f8; }
+.todo-focus-btn.active:hover { background: rgba(138, 180, 248, 0.15); }
+
+.scroll-btn {
+  flex: none;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: transparent;
+  color: #9aa0a6;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  transition: background 0.15s, color 0.15s;
+}
+.scroll-btn.visible { display: flex; }
+.scroll-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eaed;
+}
+.scroll-btn:disabled {
+  color: #3c4043;
+  cursor: default;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* To-do list: horizontal bars above/below the viewport. */
+.scroll-btn-h {
+  width: 100%;
+  height: 22px;
+  margin: 4px 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #e8eaed;
+  cursor: pointer;
+}
+.menu-item:hover { background: rgba(255, 255, 255, 0.08); }
+
+/* A to-do task's right-click menu -- positioned wherever the click happened
+   (set inline in JS), same glass-panel look as the modals. */
+.todo-context-menu {
+  position: fixed;
+  z-index: 20;
+  background: rgba(32, 33, 36, 0.7);
+  backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
+  -webkit-backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+  min-width: 160px;
+}
+
+.menu-btn-small {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8eaed;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.menu-btn-small:hover { background: rgba(255, 255, 255, 0.12); }
+
+.menu-btn-wide {
+  display: block;
+  width: calc(100% - 12px);
+  margin: 4px 6px;
+  text-align: center;
+}
+
+.accent-btn {
+  flex: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #8ab4f8;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.accent-btn:hover {
+  background: rgba(138, 180, 248, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+.empty-state {
+  color: #80868b;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.hidden { display: none; }
+/* The generic single-form modal (#modal-overlay) is used for transient
+   forms like the add/edit-task form, which can open on top of the to-do
+   manager list (#todo-manage-overlay) -- always keep it topmost. */
+#modal-overlay { z-index: 31; }
+
+.modal {
+  background: rgba(32, 33, 36, 0.75);
+  backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
+  -webkit-backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 18px;
+  width: 280px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8);
+}
+
+.modal-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e8eaed;
+  margin-bottom: 12px;
+}
+
+/* All chrome text (the to-do list, every modal) is UI, not copy --
+   non-selectable with a plain arrow cursor by default. To-do task rows
+   (.todo-item, .todo-manage-item) get a hand cursor like the rest of the
+   app; actual text-entry fields inside modals keep normal selection/text-
+   cursor behavior. */
+main,
+.modal {
+  user-select: none;
+  cursor: default;
+}
+.modal a,
+.todo-manage-item {
+  cursor: pointer;
+}
+.modal input:not([type="checkbox"]):not([type="range"]),
+.modal textarea {
+  user-select: text;
+  cursor: text;
+}
+
+.todo-manage-modal {
+  position: relative;
+  width: 380px;
+}
+
+#todo-manage-list {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+#todo-manage-list::-webkit-scrollbar { width: 6px; } /* Chromium */
+#todo-manage-list::-webkit-scrollbar-track { background: transparent; }
+#todo-manage-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+#todo-manage-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+
+.edit-scope-modal {
+  width: 320px;
+}
+
+.edit-scope-desc {
+  font-size: 12px;
+  color: #9aa0a6;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.todo-manage-empty {
+  font-size: 12px;
+  color: #80868b;
+  padding: 4px 0 12px;
+}
+
+.todo-manage-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
+}
+.todo-manage-item:hover { background: rgba(255, 255, 255, 0.05); }
+
+.todo-manage-item-info { flex: 1; min-width: 0; }
+
+.todo-manage-item-name {
+  font-size: 13px;
+  color: #e8eaed;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-manage-item-meta {
+  font-size: 11px;
+  color: #80868b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-manage-item button {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #80868b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.todo-manage-item button:hover { background: rgba(255, 255, 255, 0.1); color: #e8eaed; }
+.todo-manage-item button.confirm,
+.todo-manage-item button.confirm:hover {
+  background: #d93025;
+  color: #fff;
+}
+
+.modal-field {
+  margin-bottom: 10px;
+}
+.modal-field-hidden {
+  display: none;
+}
+
+.modal-field label {
+  display: block;
+  font-size: 11px;
+  color: #80868b;
+  margin-bottom: 3px;
+}
+
+.modal-input {
+  width: 100%;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+  color: #e8eaed;
+  padding: 0 8px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+/* color-scheme: dark (set on html/body) gets a <select>'s dropdown popup
+   most of the way to matching the app, but Chromium still renders
+   unselected <option> rows with its own mid-gray, not this app's actual
+   dark surface color -- <option> can't use the rest of the app's rgba()
+   transparency (the popup isn't drawn over our page background), so this
+   is the closest solid-color match to it (same family as .modal's
+   rgba(32, 33, 36, ...)). */
+option {
+  background-color: #202124;
+  color: #e8eaed;
+}
+.modal-input:focus { border-color: #8ab4f8; }
+.modal-input::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.6; }
+
+.modal-textarea {
+  height: 56px;
+  padding: 6px 8px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.modal-checkboxes {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.modal-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: #e8eaed;
+  cursor: pointer;
+}
+.modal-checkbox-row input { accent-color: #8ab4f8; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.modal-actions button {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.modal-cancel {
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8eaed;
+}
+.modal-cancel:hover { background: rgba(255, 255, 255, 0.12); }
+
+.modal-ok {
+  background: #8ab4f8;
+  color: #131314;
+}
+.modal-ok:hover { background: #aecbfa; transform: translateY(-1px); }
+
+/* margin-right: auto pushes Cancel/OK to the far right, keeping this
+   separated from them so it can't be clicked by accident. */
+.modal-delete {
+  margin-right: auto;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f28b82;
+}
+.modal-delete:hover { background: rgba(217, 48, 37, 0.15); }
+.modal-delete.confirm {
+  background: #d93025;
+  color: #fff;
+}
+
+/* Shrinks the fixed-size chrome on shorter windows/screens, leaving more of
+   the fixed viewport height for the to-do list -- everything above still
+   needs to fit without the page scrolling (see html/body's overflow:
+   hidden). */
+@media (max-height: 560px) {
+  main { padding: 16px 24px 12px; }
+  .todo-item-desc { display: none; }
+}
+
+@media (max-width: 640px) {
+  /* The reserved 25% side panel has nothing in it yet and just eats space
+     that the to-do list needs once the window's this narrow -- drop the
+     split and let the list use the full width. */
+  .side-panel { display: none; }
+  .todo-column { flex: 1; }
+  /* Two side-by-side columns get cramped once the window itself is this
+     narrow -- collapse back to one. The two column divs are still in the
+     same order (earlier-due tasks' column first), so stacking them
+     vertically instead of side by side keeps the day's overall top-to-bottom
+     due-time order intact either way. */
+  .todo-day-columns { grid-template-columns: 1fr; }
+}
