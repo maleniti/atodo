@@ -1365,9 +1365,11 @@ function toggleTaskCompletion(task, occurrenceDate) {
 // A "passive" task (a plain reminder, see the form's checkbox) is neither --
 // it's never auto-marked failed just for going past due (`completed` is
 // always false for it too, since it has no completions entry to begin with;
-// see toggleTaskFailedMark instead of toggleTaskCompletion), so it just
-// stays "overdue" indefinitely until the user explicitly marks it failed
-// (task.markedFailed) or dismisses it (see dismissPassiveOccurrence).
+// see toggleTaskFailedMark instead of toggleTaskCompletion). It stays
+// "overdue" through the one extra day it's shown carried-over (see
+// autoDismissStalePassiveOccurrences), giving the user a chance to instead
+// mark it failed (task.markedFailed) or dismiss it (see dismissOccurrence)
+// -- after that day, if still neither, it's auto-dismissed as quietly done.
 function pastDueStatus(task, occurrenceDate, completed, now) {
   if (task.passive) {
     if (task.markedFailed && task.markedFailed[occurrenceDate]) return { overdue: false, failed: true };
@@ -1379,8 +1381,8 @@ function pastDueStatus(task, occurrenceDate, completed, now) {
 }
 
 // Toggles whether a passive task's occurrence is marked failed -- the only
-// action available on it besides dismissing (see dismissPassiveOccurrence):
-// a passive task's checkbox means this instead of "mark complete" (see
+// action available on it besides dismissing (see dismissOccurrence): a
+// passive task's checkbox means this instead of "mark complete" (see
 // buildTodoItemRow), since it's a plain reminder with no real "done" state.
 function toggleTaskFailedMark(task, occurrenceDate) {
   if (!task.markedFailed) task.markedFailed = {};
@@ -1390,13 +1392,15 @@ function toggleTaskFailedMark(task, occurrenceDate) {
   renderTodo();
 }
 
-// Immediately clears a passive task's occurrence from the list without
-// marking it failed -- available once it's no longer due today (see
-// buildTodoItemRow), whether or not it's already been marked failed. Unlike
-// scheduleDismissal's short linger (for confirming a just-completed
-// checkbox click before it disappears), this is a direct, deliberate action
-// with nothing to visually confirm, so it takes effect right away.
-function dismissPassiveOccurrence(task, occurrenceDate) {
+// Immediately clears any task's carried-over (yesterday-or-earlier)
+// occurrence from the list, whatever state it's currently in -- an
+// alternative to whatever the checkbox on that occurrence would otherwise do
+// (mark complete for an ordinary or already-failed-appointment task, mark
+// failed for a passive one). Unlike scheduleDismissal's short linger (for
+// confirming a just-completed checkbox click before it disappears), this is
+// a direct, deliberate action with nothing to visually confirm, so it takes
+// effect right away.
+function dismissOccurrence(task, occurrenceDate) {
   task.dismissed[occurrenceDate] = true;
   saveTasks();
   renderTodo();
@@ -1819,30 +1823,23 @@ function buildTodoItemRow(item, isToday) {
   // Focusing is entirely user-initiated, via the "Work on this now" button
   // below only -- nothing auto-activates a task, and clicking anywhere else
   // on a row (including an overdue one) never does either, so it can't ever
-  // race with row.ondblclick's edit-task action below. A carried-over
-  // (already-past) task has no such button (see canWorkOnNow below, scoped
-  // to today's tasks) and so currently has no way to become the active task
-  // at all -- that's an accepted gap, not something a plain click on the row
-  // should paper over.
+  // race with row.ondblclick's edit-task action below.
 
-  // Lets the user voluntarily mark any of today's tasks as the one they're
-  // working on -- not just an overdue one -- and toggle back off again.
-  // Only one task can be active at a time (activeTaskId is a single value,
-  // not a set), so marking a different task implicitly un-marks whichever
-  // one was active before. Scoped to today's tasks only: a carried-over
-  // (already-past) task has no button here at all. A carried-over
-  // APPOINTMENT is the one exception -- it gets this button too. Excluding a
-  // failed one (!item.failed below) is what makes failing terminal: it was
-  // already active (and stayed exempt from failing) or it wasn't, but once
-  // it's failed, re-activating can't undo that -- only checking it off can.
-  // Shared with the timer context menu below: starting a timer is the same
-  // kind of voluntary "work on this now" this button offers, just worded for
-  // the timer instead.
-  const canWorkOnNow =
-    !item.task.passive &&
-    (item.kind === 'today' || (item.kind === 'carried-over' && item.task.appointment)) &&
-    !item.completed &&
-    !item.failed;
+  // Lets the user voluntarily mark any of today's tasks (or a carried-over
+  // one) as the one they're working on -- and toggle back off again. Only
+  // one task can be active at a time (activeTaskId is a single value, not a
+  // set), so marking a different task implicitly un-marks whichever one was
+  // active before. Passive tasks never get this -- they can't be focused or
+  // timed at all. Excluding a failed one (!item.failed below) is what makes
+  // failing terminal for an appointment: it was already active (and stayed
+  // exempt from failing) or it wasn't, but once it's failed, re-activating
+  // can't undo that -- only checking it off can. A plain overdue task is
+  // never "failed" (that's appointment/passive-only), so this still lets it
+  // be focused however long it's been carried over. Shared with the timer
+  // context menu below: starting a timer is the same kind of voluntary
+  // "work on this now" this button offers, just worded for the timer
+  // instead.
+  const canWorkOnNow = !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed;
   if (canWorkOnNow) {
     const isActive = item.task.id === activeTaskId;
     const workOnBtn = document.createElement('button');
@@ -1857,18 +1854,21 @@ function buildTodoItemRow(item, isToday) {
     row.appendChild(workOnBtn);
   }
 
-  // A passive occurrence that's no longer due today can be cleared without
-  // deciding it was a failure -- "due earlier than today" is exactly what
-  // kind === 'carried-over' already means (see computeTodoDisplayItems),
-  // regardless of whether it's been marked failed in the meantime.
-  if (item.task.passive && item.kind === 'carried-over') {
+  // Any carried-over (due yesterday or earlier) occurrence can be cleared
+  // without going through its checkbox -- a plain overdue task or a failed
+  // appointment can be dismissed instead of marked complete, and a passive
+  // one instead of marked failed. Passive occurrences that go two or more
+  // days without either happening are cleared this same way automatically
+  // (see autoDismissStalePassiveOccurrences); this button just lets the user
+  // do it themselves right away instead of waiting out that day.
+  if (item.kind === 'carried-over') {
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'todo-focus-btn';
     dismissBtn.innerHTML = DISMISS_ICON;
-    dismissBtn.title = 'Dismiss (remove from the list without marking failed)';
+    dismissBtn.title = 'Dismiss (remove from the list)';
     dismissBtn.onclick = (e) => {
       e.stopPropagation();
-      dismissPassiveOccurrence(item.task, item.occurrenceDate);
+      dismissOccurrence(item.task, item.occurrenceDate);
     };
     row.appendChild(dismissBtn);
   }
@@ -1969,8 +1969,35 @@ function expireFinishedTimers() {
   if (changed) saveTasks();
 }
 
+// A passive task's carried-over occurrence is given exactly one extra day
+// (shown as "yesterday" carried over) to be marked failed before it's
+// assumed to have quietly gone fine and cleared away on its own -- once it's
+// aged past that (its most recent occurrence is two or more days old) with
+// no failed mark, it's dismissed here the same way the button would, so it
+// doesn't linger on the list forever the way an ordinary undismissed
+// carried-over item would. A task that WAS marked failed is a deliberate,
+// visible outcome and is left alone -- it stays until the user dismisses it
+// themselves, same as a failed appointment.
+function autoDismissStalePassiveOccurrences() {
+  const todayISO = Recurrence.dateToISO(new Date());
+  const yesterdayISO = Recurrence.dateToISO(Recurrence.addDays(new Date(), -1));
+  let changed = false;
+  for (const task of tasks) {
+    if (!task.passive) continue;
+    const priorDate = Recurrence.previousOccurrenceBefore(task, todayISO);
+    if (!priorDate || task.dismissed[priorDate]) continue;
+    if (task.markedFailed && task.markedFailed[priorDate]) continue;
+    if (priorDate < yesterdayISO) {
+      task.dismissed[priorDate] = true;
+      changed = true;
+    }
+  }
+  if (changed) saveTasks();
+}
+
 function renderTodo() {
   expireFinishedTimers();
+  autoDismissStalePassiveOccurrences();
   updateTodoViewToggleButton();
 
   if (tasks.length === 0) {
