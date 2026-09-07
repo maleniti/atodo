@@ -604,11 +604,15 @@ document.addEventListener('keydown', (e) => {
 });
 
 // canWorkOnNow mirrors the row's own "Work on this now" button eligibility
-// (see buildTodoItemRow) -- starting or resuming a timer marks the task
-// active the same way that button does, so it's gated identically. A timer
-// that already exists can always be cancelled regardless, even if the task
-// somehow stopped being eligible in the meantime.
-function showTodoContextMenu(event, task, canWorkOnNow, occurrenceDate) {
+// (see buildTodoItemRow) -- starting/resuming a timer or focusing marks the
+// task active the same way that button does, so they're all gated
+// identically. A timer that already exists can always be cancelled
+// regardless, even if the task somehow stopped being eligible in the
+// meantime. Everything except Task stats/Edit is hidden entirely for a
+// not-yet-due tomorrow/upcoming preview row -- there's nothing to mark
+// done/failed, hide, or focus on something that isn't due yet.
+function showTodoContextMenu(event, item, canWorkOnNow) {
+  const { task, occurrenceDate, completed, failed, kind } = item;
   closeTodoContextMenu();
   const menu = document.createElement('div');
   menu.className = 'todo-context-menu';
@@ -627,7 +631,42 @@ function showTodoContextMenu(event, task, canWorkOnNow, occurrenceDate) {
 
   addItem('Task stats…', () => showTaskStatsModal(task));
 
-  if (!task.timer) {
+  const isFutureItem = kind === 'tomorrow' || kind === 'upcoming';
+  if (!isFutureItem) {
+    if (!task.passive && !completed) {
+      addItem('Mark as done', () => toggleTaskCompletion(task, occurrenceDate));
+    }
+    if (task.passive && !failed) {
+      addItem('Mark as failed', () => toggleTaskFailedMark(task, occurrenceDate));
+    }
+
+    if (kind === 'carried-over') {
+      if (task.dismissed[occurrenceDate]) {
+        addItem('Show', () => restoreOccurrence(task, occurrenceDate));
+      } else {
+        addItem('Hide', () => dismissOccurrence(task, occurrenceDate));
+      }
+    }
+
+    if (canWorkOnNow && task.id !== activeTaskId) {
+      addItem('Focus', () => {
+        setActiveTaskId(task.id);
+        renderTodo();
+      });
+    }
+    if (task.id === activeTaskId) {
+      addItem('Unfocus', () => {
+        setActiveTaskId(null);
+        renderTodo();
+      });
+    }
+  }
+
+  addItem('Edit', () => editTaskOccurrence(task, occurrenceDate));
+
+  if (isFutureItem) {
+    // Nothing below applies to a not-yet-due preview -- see above.
+  } else if (!task.timer) {
     if (canWorkOnNow) addItem('Timer…', () => startTaskTimerPrompt(task, occurrenceDate));
   } else if (task.id === activeTaskId) {
     addItem('Pause timer', () => {
@@ -1338,6 +1377,23 @@ function showEditScopeChoice() {
   });
 }
 
+// Shared by a row's double-click and its context menu's "Edit" item. A
+// 'once' task has no recurrence to split, so it skips straight to editing
+// it -- only recurring tasks get the "which occurrence(s)" choice.
+async function editTaskOccurrence(task, occurrenceDate) {
+  if (task.frequency.type === 'once') {
+    openTaskForm(task);
+    return;
+  }
+  const scope = await showEditScopeChoice();
+  if (!scope) return;
+  if (scope === 'all') {
+    openTaskForm(task);
+  } else {
+    openTaskForm(task, { occurrenceDate, scope });
+  }
+}
+
 function deleteTask(taskId) {
   const task = tasks.find((t) => t.id === taskId);
   if (!task) return;
@@ -1445,6 +1501,16 @@ function toggleTaskFailedMark(task, occurrenceDate) {
 // effect right away.
 function dismissOccurrence(task, occurrenceDate) {
   task.dismissed[occurrenceDate] = true;
+  saveTasks();
+  renderTodo();
+}
+
+// Undoes dismissOccurrence -- brings a hidden carried-over occurrence back
+// (the "pending/overdue" and "all tasks" views show it either way, since
+// both already ignore task.dismissed, but "next recurrence" only shows it
+// once this clears the flag).
+function restoreOccurrence(task, occurrenceDate) {
+  delete task.dismissed[occurrenceDate];
   saveTasks();
   renderTodo();
 }
@@ -1783,6 +1849,8 @@ const WORK_ON_ICON =
 const WORKING_ON_ICON = '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>';
 const DISMISS_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>';
+const SHOW_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>';
 
 // Builds a single to-do row -- extracted from renderTodo's per-day loop so
 // it can be appended into either of a day's two columns rather than always
@@ -1909,10 +1977,10 @@ function buildTodoItemRow(item, isToday) {
   // exempt from failing) or it wasn't, but once it's failed, re-activating
   // can't undo that -- only checking it off can. A plain overdue task is
   // never "failed" (that's appointment/passive-only), so this still lets it
-  // be focused however long it's been carried over. Shared with the timer
-  // context menu below: starting a timer is the same kind of voluntary
-  // "work on this now" this button offers, just worded for the timer
-  // instead.
+  // be focused however long it's been carried over. Shared with the context
+  // menu below: its own Focus/Unfocus items do exactly this, and starting a
+  // timer is the same kind of voluntary "work on this now", just worded for
+  // the timer instead.
   const canWorkOnNow = !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed;
   if (canWorkOnNow) {
     const isActive = item.task.id === activeTaskId;
@@ -1935,46 +2003,33 @@ function buildTodoItemRow(item, isToday) {
   // two or more days is cleared this same way automatically regardless of
   // state (see autoDismissStaleCarriedOverOccurrences); this button just
   // lets the user do it themselves right away instead of waiting out that
-  // day.
+  // day. Once dismissed, the "pending/overdue" and "all tasks" views still
+  // show it (both ignore task.dismissed -- see computeTodoDisplayItems/
+  // computeAllTasksItems), so the button flips to undoing that instead.
   if (item.kind === 'carried-over') {
+    const isDismissed = !!item.task.dismissed[item.occurrenceDate];
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'todo-focus-btn';
-    dismissBtn.innerHTML = DISMISS_ICON;
-    dismissBtn.title = 'Dismiss (remove from the list)';
+    dismissBtn.innerHTML = isDismissed ? SHOW_ICON : DISMISS_ICON;
+    dismissBtn.title = isDismissed ? 'Show (undo hiding it)' : 'Hide (remove from the list)';
     dismissBtn.onclick = (e) => {
       e.stopPropagation();
-      dismissOccurrence(item.task, item.occurrenceDate);
+      if (isDismissed) restoreOccurrence(item.task, item.occurrenceDate);
+      else dismissOccurrence(item.task, item.occurrenceDate);
     };
     row.appendChild(dismissBtn);
   }
 
-  // Always available -- Task stats is a plain read-only view with no
-  // eligibility requirement. The Timer... / Pause|Resume timer / Cancel
-  // timer items inside are still gated the same as the "Work on this now"
-  // button above (starting one marks the task active, same restriction),
-  // except a task that already has a timer keeps the option to cancel it
-  // even if it somehow stopped being eligible in the meantime.
+  // Always available -- Task stats and Edit are plain actions with no
+  // eligibility requirement of their own. Everything else showTodoContextMenu
+  // offers is gated the same as the buttons above (and hidden entirely for a
+  // not-yet-due tomorrow/upcoming preview row).
   row.oncontextmenu = (e) => {
     e.preventDefault();
-    showTodoContextMenu(e, item.task, canWorkOnNow, item.occurrenceDate);
+    showTodoContextMenu(e, item, canWorkOnNow);
   };
 
-  // A 'once' task has no recurrence to split, so its double-click skips
-  // straight to editing it -- only recurring tasks get the "which
-  // occurrence(s)" choice.
-  row.ondblclick = async () => {
-    if (item.task.frequency.type === 'once') {
-      openTaskForm(item.task);
-      return;
-    }
-    const scope = await showEditScopeChoice();
-    if (!scope) return;
-    if (scope === 'all') {
-      openTaskForm(item.task);
-    } else {
-      openTaskForm(item.task, { occurrenceDate: item.occurrenceDate, scope });
-    }
-  };
+  row.ondblclick = () => editTaskOccurrence(item.task, item.occurrenceDate);
 
   return row;
 }
