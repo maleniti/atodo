@@ -251,6 +251,7 @@ function showFormModal(title, fields, opts = {}) {
 
 const TASKS_STORAGE_KEY = 'advanced-todo-tasks';
 const ACTIVE_TASK_STORAGE_KEY = 'advanced-todo-active-task';
+const ACTIVE_OCCURRENCE_STORAGE_KEY = 'advanced-todo-active-occurrence';
 
 function loadTasks() {
   try {
@@ -273,6 +274,13 @@ function loadTasks() {
 
 let tasks = loadTasks();
 let activeTaskId = localStorage.getItem(ACTIVE_TASK_STORAGE_KEY) || null;
+// Which occurrence of activeTaskId is focused -- a recurring task can show
+// up to three rows at once (yesterday's still-overdue one, today's, and
+// tomorrow's preview -- see computeTodoDisplayItems/computeNextRecurrenceItems),
+// and only the one actually clicked (via its "Work on this now" button or
+// the context menu's Focus item) should end up highlighted/eligible, not
+// every row sharing the same task. null whenever activeTaskId is null.
+let activeOccurrenceDate = activeTaskId ? localStorage.getItem(ACTIVE_OCCURRENCE_STORAGE_KEY) || null : null;
 
 // Wall-clock timestamp since the active task started being focused WITHOUT a
 // timer running -- the focus-only counterpart of a timer's own runningSince.
@@ -289,6 +297,8 @@ function saveTasks() {
 function saveActiveTaskId() {
   if (activeTaskId) localStorage.setItem(ACTIVE_TASK_STORAGE_KEY, activeTaskId);
   else localStorage.removeItem(ACTIVE_TASK_STORAGE_KEY);
+  if (activeOccurrenceDate) localStorage.setItem(ACTIVE_OCCURRENCE_STORAGE_KEY, activeOccurrenceDate);
+  else localStorage.removeItem(ACTIVE_OCCURRENCE_STORAGE_KEY);
 }
 
 // A task's timer only actually counts down while its task is the active one
@@ -301,9 +311,14 @@ function saveActiveTaskId() {
 // uniformly, in exactly one place. A task's own "resume"/"pause" timer
 // actions are really just this same active-task change, worded for the
 // timer instead of the generic "work on this now" button (see the todo
-// context menu).
-function setActiveTaskId(newId) {
-  if (newId === activeTaskId) return;
+// context menu). `occurrenceDate` (ignored when newId is null) is which of
+// the task's currently-shown rows this applies to -- see
+// activeOccurrenceDate. Compared alongside newId for the no-op check below,
+// since re-focusing the very same task but a different one of its own
+// occurrences (e.g. switching from yesterday's still-overdue row to
+// today's) is a real change, not a no-op.
+function setActiveTaskId(newId, occurrenceDate) {
+  if (newId === activeTaskId && occurrenceDate === activeOccurrenceDate) return;
   const prevTask = tasks.find((t) => t.id === activeTaskId);
   if (prevTask) {
     if (prevTask.timer) {
@@ -314,10 +329,18 @@ function setActiveTaskId(newId) {
     }
   }
   activeTaskId = newId;
+  activeOccurrenceDate = newId ? occurrenceDate : null;
   saveActiveTaskId();
   const nextTask = tasks.find((t) => t.id === activeTaskId);
   if (nextTask) {
-    if (nextTask.timer) nextTask.timer.runningSince = Date.now();
+    // Only actually resume the timer if it belongs to the occurrence being
+    // focused now -- nextTask can be the very same task object as prevTask
+    // above (switching which of a recurring task's own occurrences is
+    // focused, not switching task entirely), whose timer was just frozen a
+    // moment ago but still tagged to the *previous* occurrence. Without this
+    // check it would immediately un-pause again here, ticking away on an
+    // occurrence that no longer shows as focused.
+    if (timerMatchesOccurrence(nextTask.timer, activeOccurrenceDate)) nextTask.timer.runningSince = Date.now();
     else activeFocusOnlySince = Date.now();
   }
   saveTasks();
@@ -325,10 +348,12 @@ function setActiveTaskId(newId) {
 
 // task.focusLog is per-occurrence -- { [occurrenceDate]: { focusedSeconds,
 // timerSeconds } }. `occurrenceDate`, if given (a timer session always has
-// one -- see task.timer.occurrenceDate below), is exactly which occurrence
-// to credit; otherwise (a focus-only session, which isn't tied to any one
-// occurrence) it falls back to whichever is currently pending for the task
-// (today's, if it has one, otherwise the most recent carried-over one).
+// one, see task.timer.occurrenceDate; so does a focus-only session, see
+// activeOccurrenceDate), is exactly which occurrence to credit; otherwise it
+// falls back to whichever is currently pending for the task (today's, if it
+// has one, otherwise the most recent carried-over one) -- kept only for
+// robustness against a caller that genuinely has no specific occurrence in
+// mind, not exercised by either of this app's own call sites anymore.
 // Session lengths are flushed in here rather than measured after the fact,
 // so a focus-only session that happens to straddle midnight is simply
 // credited to whatever occurrence is current at flush time -- not worth the
@@ -363,7 +388,7 @@ function flushTimerElapsed(task) {
 // session. A no-op if there's no such session live.
 function flushFocusOnlyElapsed(task) {
   if (activeFocusOnlySince != null) {
-    addFocusStat(task, 'focusedSeconds', (Date.now() - activeFocusOnlySince) / 1000);
+    addFocusStat(task, 'focusedSeconds', (Date.now() - activeFocusOnlySince) / 1000, activeOccurrenceDate);
     activeFocusOnlySince = null;
   }
 }
@@ -421,15 +446,19 @@ function timerProgressPercent(timer) {
 // preview -- see computeTodoDisplayItems/computeNextRecurrenceItems), but a
 // timer only ever belongs to whichever single occurrence it was started
 // against (task.timer.occurrenceDate, see startTaskTimerPrompt) -- this is
-// what buildTodoItemRow uses to only render the countdown on that one row
-// instead of all of them. Falls back to matching a 'today' row for a timer
-// saved before occurrenceDate existed (undefined there), since that's what
-// this app has always effectively meant by "the" occurrence up to now.
-function timerBelongsToItem(item) {
-  const timer = item.task.timer;
+// what decides both which row renders the countdown (see timerBelongsToItem)
+// and, in setActiveTaskId, whether focusing a given occurrence is allowed to
+// resume it. Falls back to matching today's date for a timer saved before
+// occurrenceDate existed (undefined there), since that's what this app has
+// always effectively meant by "the" occurrence up to now.
+function timerMatchesOccurrence(timer, occurrenceDate) {
   if (!timer) return false;
-  if (timer.occurrenceDate != null) return timer.occurrenceDate === item.occurrenceDate;
-  return item.kind === 'today';
+  if (timer.occurrenceDate != null) return timer.occurrenceDate === occurrenceDate;
+  return occurrenceDate === Recurrence.dateToISO(new Date());
+}
+
+function timerBelongsToItem(item) {
+  return timerMatchesOccurrence(item.task.timer, item.occurrenceDate);
 }
 
 // Snapshots a running timer's current remaining time back into
@@ -546,16 +575,19 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
     return;
   }
 
-  // If this task was already the active one focus-only (no timer yet -- e.g.
-  // "Work on this now" was clicked first, or a previous timer on it was
-  // cancelled but it stayed active), that focus-only session's elapsed time
-  // needs logging now: setActiveTaskId below is a same-id no-op in that case
-  // and would never otherwise flush it.
-  if (task.id === activeTaskId && !task.timer) flushFocusOnlyElapsed(task);
+  // If this task was already the active one, on this same occurrence,
+  // focus-only (no timer yet -- e.g. "Work on this now" was clicked first,
+  // or a previous timer on it was cancelled but it stayed active), that
+  // focus-only session's elapsed time needs logging now: setActiveTaskId
+  // below is a same-task-and-occurrence no-op in that case and would never
+  // otherwise flush it. (If it was active on a *different* occurrence of
+  // this same task, that's a real switch, not a no-op -- setActiveTaskId
+  // below handles flushing that one itself.)
+  if (task.id === activeTaskId && activeOccurrenceDate === occurrenceDate && !task.timer) flushFocusOnlyElapsed(task);
   // runningSince is set here directly, not left for setActiveTaskId below to
-  // fill in -- if this task was already the active one (e.g. it stayed
-  // active after a previous timer on it was cancelled), setActiveTaskId is
-  // a same-id no-op and would never start this brand-new timer ticking.
+  // fill in -- if this task+occurrence was already the active one (e.g. it
+  // stayed active after a previous timer on it was cancelled), setActiveTaskId
+  // is a no-op and would never start this brand-new timer ticking.
   task.timer = {
     mode: countUp ? 'countup' : 'countdown',
     continuePastZero: result.continuePastZero.length > 0,
@@ -565,7 +597,7 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
     occurrenceDate,
   };
   saveTasks();
-  setActiveTaskId(task.id);
+  setActiveTaskId(task.id, occurrenceDate);
   renderTodo();
 }
 
@@ -613,6 +645,11 @@ document.addEventListener('keydown', (e) => {
 // done/failed, hide, or focus on something that isn't due yet.
 function showTodoContextMenu(event, item, canWorkOnNow) {
   const { task, occurrenceDate, completed, failed, kind } = item;
+  // Whether THIS row's own occurrence, specifically, is the focused one --
+  // not just whether the task is focused on some other occurrence of itself
+  // (a recurring task can show up to three rows at once; see
+  // activeOccurrenceDate).
+  const isActiveHere = task.id === activeTaskId && activeOccurrenceDate === occurrenceDate;
   closeTodoContextMenu();
   const menu = document.createElement('div');
   menu.className = 'todo-context-menu';
@@ -648,13 +685,13 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
       }
     }
 
-    if (canWorkOnNow && task.id !== activeTaskId) {
+    if (canWorkOnNow && !isActiveHere) {
       addItem('Focus', () => {
-        setActiveTaskId(task.id);
+        setActiveTaskId(task.id, occurrenceDate);
         renderTodo();
       });
     }
-    if (task.id === activeTaskId) {
+    if (isActiveHere) {
       addItem('Unfocus', () => {
         setActiveTaskId(null);
         renderTodo();
@@ -664,11 +701,21 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
 
   addItem('Edit', () => editTaskOccurrence(task, occurrenceDate));
 
+  // Gated on timerBelongsToItem(item), not just task.timer -- a task only
+  // ever has one timer slot, but it's tagged to a single occurrence (see
+  // timerMatchesOccurrence), so a row whose occurrence *isn't* the one the
+  // timer belongs to is treated the same as having no timer at all: offering
+  // "Timer…" there would start a fresh one (replacing whatever's parked on
+  // the other occurrence), not touch that other one. Without this, "Cancel
+  // timer" on this row could delete a timer that actually belongs to (and is
+  // still shown ticking or paused on) a completely different occurrence of
+  // the same recurring task.
+  const timerIsHere = timerBelongsToItem(item);
   if (isFutureItem) {
     // Nothing below applies to a not-yet-due preview -- see above.
-  } else if (!task.timer) {
+  } else if (!timerIsHere) {
     if (canWorkOnNow) addItem('Timer…', () => startTaskTimerPrompt(task, occurrenceDate));
-  } else if (task.id === activeTaskId) {
+  } else if (isActiveHere) {
     addItem('Pause timer', () => {
       setActiveTaskId(null);
       renderTodo();
@@ -677,7 +724,7 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
   } else {
     if (canWorkOnNow) {
       addItem('Resume timer', () => {
-        setActiveTaskId(task.id);
+        setActiveTaskId(task.id, occurrenceDate);
         renderTodo();
       });
     }
@@ -1453,12 +1500,13 @@ function toggleTaskCompletion(task, occurrenceDate) {
 // off after the fact. Returns {overdue: false, failed: false} for anything
 // not actually past due (or already completed, via the `completed` param).
 //
-// An appointment that's currently the active task (being worked on, see the
-// "Work on this now" button below) is exempt from failing for as long as
-// that lasts -- most real appointments can't just be "tried again", so once
-// it's no longer active (or never was) and its due date is past, that's
-// terminal: failed is permanent from then on, not something re-activating
-// can undo (canWorkOnNow below excludes a failed task entirely).
+// An appointment is exempt from failing for as long as THIS SPECIFIC
+// occurrence is the active one (being worked on, see the "Work on this now"
+// button below and activeOccurrenceDate) -- most real appointments can't
+// just be "tried again", so once it's no longer active on this occurrence
+// (or never was) and its due date is past, that's terminal: failed is
+// permanent from then on, not something re-activating can undo (canWorkOnNow
+// below excludes a failed task entirely).
 //
 // A "passive" task (a plain reminder, see the form's checkbox) is neither --
 // it's never auto-marked failed just for going past due (`completed` is
@@ -1475,7 +1523,7 @@ function pastDueStatus(task, occurrenceDate, completed, now) {
     return { overdue: Recurrence.isOverdue(task, occurrenceDate, now), failed: false };
   }
   if (completed || !Recurrence.isOverdue(task, occurrenceDate, now)) return { overdue: false, failed: false };
-  if (task.appointment && task.id === activeTaskId) return { overdue: false, failed: false };
+  if (task.appointment && task.id === activeTaskId && occurrenceDate === activeOccurrenceDate) return { overdue: false, failed: false };
   return task.appointment ? { overdue: false, failed: true } : { overdue: true, failed: false };
 }
 
@@ -1856,12 +1904,17 @@ const SHOW_ICON =
 // it can be appended into either of a day's two columns rather than always
 // straight into todoListEl.
 function buildTodoItemRow(item, isToday) {
+  // Whether THIS row's own occurrence, specifically, is the focused one --
+  // not just whether the task is focused on some other occurrence of itself
+  // (a recurring task can show up to three rows at once; see
+  // activeOccurrenceDate).
+  const isActiveHere = item.task.id === activeTaskId && item.occurrenceDate === activeOccurrenceDate;
   const row = document.createElement('div');
   row.className =
     'todo-item' +
     (item.completed ? ' completed' : '') +
     (item.failed ? ' failed' : '') +
-    (item.task.id === activeTaskId ? ' active' : '') +
+    (isActiveHere ? ' active' : '') +
     (item.task.allDay ? ' all-day' : '') +
     // Only while it's neither failed nor done yet -- see pastDueStatus;
     // an appointment past its due date is tagged .failed instead (red,
@@ -1983,14 +2036,13 @@ function buildTodoItemRow(item, isToday) {
   // the timer instead.
   const canWorkOnNow = !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed;
   if (canWorkOnNow) {
-    const isActive = item.task.id === activeTaskId;
     const workOnBtn = document.createElement('button');
-    workOnBtn.className = 'todo-focus-btn' + (isActive ? ' active' : '');
-    workOnBtn.innerHTML = isActive ? WORKING_ON_ICON : WORK_ON_ICON;
-    workOnBtn.title = isActive ? 'Stop working on this task' : 'Work on this task now';
+    workOnBtn.className = 'todo-focus-btn' + (isActiveHere ? ' active' : '');
+    workOnBtn.innerHTML = isActiveHere ? WORKING_ON_ICON : WORK_ON_ICON;
+    workOnBtn.title = isActiveHere ? 'Stop working on this task' : 'Work on this task now';
     workOnBtn.onclick = (e) => {
       e.stopPropagation();
-      setActiveTaskId(isActive ? null : item.task.id);
+      setActiveTaskId(isActiveHere ? null : item.task.id, item.occurrenceDate);
       renderTodo();
     };
     row.appendChild(workOnBtn);
@@ -2157,10 +2209,12 @@ function renderTodo() {
 
   // Focusing a task is only ever user-initiated (via "Work on this task
   // now" below) -- nothing is auto-activated here. Still clears a stale
-  // selection on its own, though: if the previously-active task stops being
-  // eligible (completed, or rolled past today), there's nothing left for it
-  // to refer to.
-  if (activeTaskId && !activeEligible.some((item) => item.task.id === activeTaskId)) {
+  // selection on its own, though: if the specific occurrence that's active
+  // (see activeOccurrenceDate) stops being eligible (completed, or rolled
+  // past today), there's nothing left for it to refer to -- even if a
+  // *different* occurrence of the same recurring task is still eligible,
+  // that's not the one the user actually focused.
+  if (activeTaskId && !activeEligible.some((item) => item.task.id === activeTaskId && item.occurrenceDate === activeOccurrenceDate)) {
     setActiveTaskId(null);
   }
 
