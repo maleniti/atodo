@@ -74,6 +74,7 @@ function showFormModal(title, fields, opts = {}) {
       wrap.appendChild(label);
 
       let getValue;
+      let fieldEls;
       if (field.type === 'select') {
         const select = document.createElement('select');
         select.className = 'modal-input';
@@ -86,6 +87,7 @@ function showFormModal(title, fields, opts = {}) {
         if (field.value != null) select.value = field.value;
         wrap.appendChild(select);
         interactiveEls.push(select);
+        fieldEls = [select];
         getValue = () => select.value;
       } else if (field.type === 'checkboxes') {
         const box = document.createElement('div');
@@ -106,6 +108,7 @@ function showFormModal(title, fields, opts = {}) {
           return cb;
         });
         wrap.appendChild(box);
+        fieldEls = checkboxes;
         getValue = () => checkboxes.filter((cb) => cb.checked).map((cb) => cb.dataset.value);
       } else if (field.type === 'textarea') {
         const textarea = document.createElement('textarea');
@@ -114,6 +117,7 @@ function showFormModal(title, fields, opts = {}) {
         textarea.placeholder = field.placeholder || '';
         wrap.appendChild(textarea);
         interactiveEls.push(textarea);
+        fieldEls = [textarea];
         getValue = () => textarea.value.trim();
       } else {
         const input = document.createElement('input');
@@ -125,6 +129,7 @@ function showFormModal(title, fields, opts = {}) {
         if (field.max != null) input.max = field.max;
         wrap.appendChild(input);
         interactiveEls.push(input);
+        fieldEls = [input];
         getValue = () => input.value.trim();
       }
 
@@ -135,7 +140,9 @@ function showFormModal(title, fields, opts = {}) {
         required: field.required !== false,
         isArray: field.type === 'checkboxes',
         wrap,
+        els: fieldEls,
         showIf: field.showIf,
+        disableIf: field.disableIf,
       };
     });
 
@@ -145,7 +152,12 @@ function showFormModal(title, fields, opts = {}) {
     // regardless of the current selection. A hidden field's own
     // required-ness is ignored on submit, but its value is still included in
     // the result -- so switching frequency back and forth doesn't lose
-    // whatever was entered in a temporarily-hidden field.
+    // whatever was entered in a temporarily-hidden field. `disableIf(values)`
+    // is the same idea but for a field that should stay visible, greyed out
+    // and non-interactive instead of disappearing (e.g. a duration that's
+    // irrelevant while a "count up instead" checkbox is on, but worth
+    // leaving in view for context) -- also exempted from its own
+    // required-ness on submit, same as a hidden field.
     function currentValues() {
       const values = {};
       for (const f of fieldGetters) values[f.name] = f.getValue();
@@ -153,10 +165,15 @@ function showFormModal(title, fields, opts = {}) {
     }
 
     function updateVisibility() {
-      if (!fieldGetters.some((f) => f.showIf)) return; // no conditional fields, skip the work
+      if (!fieldGetters.some((f) => f.showIf || f.disableIf)) return; // no conditional fields, skip the work
       const values = currentValues();
       for (const f of fieldGetters) {
         if (f.showIf) f.wrap.classList.toggle('modal-field-hidden', !f.showIf(values));
+        if (f.disableIf) {
+          const disabled = f.disableIf(values);
+          f.wrap.classList.toggle('modal-field-disabled', disabled);
+          f.els.forEach((el) => (el.disabled = disabled));
+        }
       }
     }
 
@@ -181,7 +198,8 @@ function showFormModal(title, fields, opts = {}) {
       for (const f of fieldGetters) {
         const value = f.getValue();
         const visible = !f.wrap.classList.contains('modal-field-hidden');
-        if (visible && f.required && (f.isArray ? value.length === 0 : !value)) return;
+        const enabled = !f.wrap.classList.contains('modal-field-disabled');
+        if (visible && enabled && f.required && (f.isArray ? value.length === 0 : !value)) return;
         result[f.name] = value;
       }
       finish(result);
@@ -320,15 +338,52 @@ function flushFocusOnlyElapsed(task) {
   }
 }
 
+// Hard ceiling on how long any single timer -- counting down, counting up,
+// or counting down and past zero into overtime -- is allowed to run before
+// it's automatically stopped (see expireFinishedTimers). A plain countdown
+// is already kept under this via the minutes field's own max (see
+// startTaskTimerPrompt), but count-up and past-zero-overtime timers have no
+// other natural end, so this is what actually bounds those two.
+const MAX_TIMER_MINUTES = 360;
+const MAX_TIMER_SECONDS = MAX_TIMER_MINUTES * 60;
+
 // A timer's remaining time is derived from a fixed checkpoint
 // (remainingSeconds) plus, only while actually running, elapsed wall-clock
 // time since runningSince -- not a plain JS countdown -- so it keeps
 // counting correctly across a page reload (runningSince survives in
-// localStorage as an absolute timestamp) without drifting.
+// localStorage as an absolute timestamp) without drifting. Deliberately
+// unclamped -- it goes negative once a countdown timer with
+// continuePastZero runs past its planned duration, and a count-up timer
+// (totalSeconds 0) is negative from the very first tick, its magnitude
+// being exactly how long it's been running (see timerElapsedSeconds).
 function currentTimerRemaining(timer) {
   if (timer.runningSince == null) return timer.remainingSeconds;
   const elapsed = (Date.now() - timer.runningSince) / 1000;
-  return Math.max(0, timer.remainingSeconds - elapsed);
+  return timer.remainingSeconds - elapsed;
+}
+
+// How long a timer has actually been running, regardless of mode -- for a
+// plain countdown this is just totalSeconds - remaining; the same formula
+// happens to also give a count-up timer's elapsed time (its totalSeconds is
+// 0, so remaining is already -elapsed) and a past-zero countdown's overtime
+// included (remaining already went negative on its own).
+function timerElapsedSeconds(timer) {
+  return timer.totalSeconds - currentTimerRemaining(timer);
+}
+
+// The progress bar (see buildTodoItemRow) normally empties out as a
+// countdown approaches its planned duration. That stops being meaningful
+// once there's no planned duration to count down to -- a count-up timer, or
+// a countdown that's run past zero into overtime -- so it switches to
+// filling up toward the absolute MAX_TIMER_SECONDS cap instead. Callers
+// still clamp the result to [0, 100] themselves (elapsed can start already
+// past totalSeconds on the very first render of a resumed overtime timer).
+function timerProgressPercent(timer) {
+  const remaining = currentTimerRemaining(timer);
+  if (timer.mode === 'countup' || remaining < 0) {
+    return (timerElapsedSeconds(timer) / MAX_TIMER_SECONDS) * 100;
+  }
+  return (remaining / timer.totalSeconds) * 100;
 }
 
 // Snapshots a running timer's current remaining time back into
@@ -350,19 +405,74 @@ function formatTimerDuration(totalSeconds) {
   return parts.join(' ');
 }
 
+// Same idea as formatTimerDuration but spelling out hours too (a count-up or
+// overtime timer can run for hours, where "360 minutes" reads far worse than
+// "6 hours 0 minutes") and always including every unit down to seconds, per
+// the "Total elapsed time is X hours Y minutes Z seconds" wording it's used
+// for (see buildTodoItemRow).
+function formatElapsedDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const parts = [];
+  if (h > 0) parts.push(`${h} hour${h === 1 ? '' : 's'}`);
+  if (h > 0 || m > 0) parts.push(`${m} minute${m === 1 ? '' : 's'}`);
+  parts.push(`${s} second${s === 1 ? '' : 's'}`);
+  return parts.join(' ');
+}
+
 // "Timer..." on the to-do context menu -- prompts for a duration (capped at
 // 360 minutes/6 hours) and, if confirmed, starts it and marks the task
 // active (see setActiveTaskId), same as clicking its "Work on this now"
-// button would.
+// button would. "Count up" swaps it for an open-ended stopwatch instead (the
+// duration field is meaningless then, so it's disabled rather than hidden --
+// still there for context, just inert); "Continue counting down past zero"
+// (on by default) keeps a countdown running as overtime instead of stopping
+// it the moment it hits zero. Both open-ended cases are still bounded by
+// MAX_TIMER_SECONDS (see expireFinishedTimers) -- "no fixed duration" isn't
+// the same as "no limit".
 async function startTaskTimerPrompt(task) {
   const result = await showFormModal(
     'Set a timer',
-    [{ name: 'minutes', label: 'Minutes to work on this task', type: 'number', value: '25', min: 1, max: 360 }],
+    [
+      {
+        name: 'countUp',
+        label: '',
+        type: 'checkboxes',
+        value: [],
+        required: false,
+        options: [{ value: 'countUp', label: 'Count up (no fixed duration -- stops automatically after 6 hours)' }],
+      },
+      {
+        name: 'minutes',
+        label: 'Minutes to work on this task',
+        type: 'number',
+        value: '25',
+        min: 1,
+        max: MAX_TIMER_MINUTES,
+        disableIf: (v) => v.countUp.length > 0,
+      },
+      {
+        name: 'continuePastZero',
+        label: '',
+        type: 'checkboxes',
+        value: ['continuePastZero'],
+        required: false,
+        options: [{ value: 'continuePastZero', label: 'Continue counting down past zero instead of stopping' }],
+        disableIf: (v) => v.countUp.length > 0,
+      },
+    ],
     { okLabel: 'Start' }
   );
   if (!result) return;
-  const minutes = Math.min(360, Math.max(1, Math.round(Number(result.minutes)) || 0));
-  if (!minutes) return;
+  const countUp = result.countUp.length > 0;
+  let totalSeconds = 0;
+  if (!countUp) {
+    const minutes = Math.min(MAX_TIMER_MINUTES, Math.max(1, Math.round(Number(result.minutes)) || 0));
+    if (!minutes) return;
+    totalSeconds = minutes * 60;
+  }
   // If this task was already the active one focus-only (no timer yet -- e.g.
   // "Work on this now" was clicked first, or a previous timer on it was
   // cancelled but it stayed active), that focus-only session's elapsed time
@@ -373,7 +483,13 @@ async function startTaskTimerPrompt(task) {
   // fill in -- if this task was already the active one (e.g. it stayed
   // active after a previous timer on it was cancelled), setActiveTaskId is
   // a same-id no-op and would never start this brand-new timer ticking.
-  task.timer = { totalSeconds: minutes * 60, remainingSeconds: minutes * 60, runningSince: Date.now() };
+  task.timer = {
+    mode: countUp ? 'countup' : 'countdown',
+    continuePastZero: result.continuePastZero.length > 0,
+    totalSeconds,
+    remainingSeconds: totalSeconds,
+    runningSince: Date.now(),
+  };
   saveTasks();
   setActiveTaskId(task.id);
   renderTodo();
@@ -1418,8 +1534,7 @@ function buildTodoItemRow(item, isToday) {
   if (item.task.timer) {
     const bar = document.createElement('div');
     bar.className = 'todo-timer-bar';
-    const percent = (currentTimerRemaining(item.task.timer) / item.task.timer.totalSeconds) * 100;
-    bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    bar.style.width = `${Math.max(0, Math.min(100, timerProgressPercent(item.task.timer)))}%`;
     row.appendChild(bar);
   }
 
@@ -1459,8 +1574,19 @@ function buildTodoItemRow(item, isToday) {
   if (item.task.timer) {
     // Takes over the whole meta line -- the due date this would otherwise
     // show isn't relevant while a timer's actively being worked against
-    // instead.
-    meta.textContent = `${formatTimerDuration(currentTimerRemaining(item.task.timer))} of ${formatTimerDuration(item.task.timer.totalSeconds)}`;
+    // instead. Three cases: a plain countdown still ticking down shows
+    // "X of Y" as before; a count-up timer, or a countdown that's run past
+    // zero into overtime, switch to the elapsed-time wording instead since
+    // there's no meaningful "of Y" left (see startTaskTimerPrompt).
+    const timer = item.task.timer;
+    const remaining = currentTimerRemaining(timer);
+    if (timer.mode === 'countup') {
+      meta.textContent = `Total elapsed time is ${formatElapsedDuration(timerElapsedSeconds(timer))}`;
+    } else if (remaining < 0) {
+      meta.textContent = `Total elapsed time is ${formatElapsedDuration(timerElapsedSeconds(timer))} with ${formatElapsedDuration(timer.totalSeconds)} planned`;
+    } else {
+      meta.textContent = `${formatTimerDuration(remaining)} of ${formatTimerDuration(timer.totalSeconds)}`;
+    }
   } else {
     meta.textContent = item.task.allDay
       ? item.kind === 'tomorrow'
@@ -1583,21 +1709,31 @@ function playTimerChime() {
   }
 }
 
-// A timer that's actually counted all the way down to zero is done, not
-// merely paused at zero -- cancelled the same way the context menu's own
-// Cancel would (including logging its final run's elapsed time, same as
+// A timer stops on its own for one of two reasons:
+//  - A plain countdown (mode 'countdown', continuePastZero off) reaches
+//    zero -- done, not merely paused at zero.
+//  - Any timer -- count-up, or a countdown left to run past zero as
+//    overtime -- hits the absolute MAX_TIMER_SECONDS ceiling, since neither
+//    of those otherwise has a natural end.
+// Either way it's cancelled the same way the context menu's own Cancel
+// would (including logging its final run's elapsed time, same as
 // cancelTaskTimer) and announced with a short chime. Checked against every
 // task with a timer (not just the currently-active one) so one left paused
 // right at zero also gets cleaned up, not just a running one crossing zero
-// live -- though in practice only a running (active) timer ever actually
-// counts down to trigger this. If its task was the active one, expiring
-// also unfocuses it -- unlike a manual cancel, which leaves the task active
-// in plain focus-only mode, a timer running out means the time set aside
-// for it is over, so there's nothing left to stay focused on it for.
+// live -- though in practice only a running (active) timer's remaining/
+// elapsed time actually changes on its own to trigger this. If its task was
+// the active one, expiring also unfocuses it -- unlike a manual cancel,
+// which leaves the task active in plain focus-only mode, a timer stopping
+// this way means the time set aside for it is over, so there's nothing left
+// to stay focused on it for.
 function expireFinishedTimers() {
   let changed = false;
   for (const t of tasks) {
-    if (t.timer && currentTimerRemaining(t.timer) <= 0) {
+    if (!t.timer) continue;
+    const remaining = currentTimerRemaining(t.timer);
+    const ranPastCap = timerElapsedSeconds(t.timer) >= MAX_TIMER_SECONDS;
+    const countdownDone = t.timer.mode !== 'countup' && !t.timer.continuePastZero && remaining <= 0;
+    if (countdownDone || ranPastCap) {
       flushTimerElapsed(t);
       t.timer = null;
       changed = true;

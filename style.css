@@ -691,6 +691,14 @@ main,
   display: none;
 }
 
+.modal-field-disabled {
+  opacity: 0.4;
+}
+.modal-field-disabled .modal-input,
+.modal-field-disabled .modal-checkbox-row {
+  pointer-events: none;
+}
+
 .modal-field label {
   display: block;
   font-size: 11px;
