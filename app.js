@@ -324,19 +324,21 @@ function setActiveTaskId(newId) {
 }
 
 // task.focusLog is per-occurrence -- { [occurrenceDate]: { focusedSeconds,
-// timerSeconds } } -- attributed to whichever occurrence is currently
-// pending for the task (today's, if it has one, otherwise the most recent
-// carried-over one), the same occurrence a "Work on this now" click or
-// timer would actually be advancing. Session lengths are flushed in here
-// rather than measured after the fact, so a session that happens to straddle
-// midnight is simply credited to whatever occurrence is current at flush
-// time -- not worth the bookkeeping needed to split it precisely.
-function addFocusStat(task, kind, seconds) {
+// timerSeconds } }. `occurrenceDate`, if given (a timer session always has
+// one -- see task.timer.occurrenceDate below), is exactly which occurrence
+// to credit; otherwise (a focus-only session, which isn't tied to any one
+// occurrence) it falls back to whichever is currently pending for the task
+// (today's, if it has one, otherwise the most recent carried-over one).
+// Session lengths are flushed in here rather than measured after the fact,
+// so a focus-only session that happens to straddle midnight is simply
+// credited to whatever occurrence is current at flush time -- not worth the
+// bookkeeping needed to split it precisely.
+function addFocusStat(task, kind, seconds, occurrenceDate) {
   if (!(seconds > 0)) return;
-  const occurrenceDate = Recurrence.mostRecentOccurrenceOnOrBefore(task, Recurrence.dateToISO(new Date())) || task.dueDate;
+  const date = occurrenceDate || Recurrence.mostRecentOccurrenceOnOrBefore(task, Recurrence.dateToISO(new Date())) || task.dueDate;
   if (!task.focusLog) task.focusLog = {};
-  if (!task.focusLog[occurrenceDate]) task.focusLog[occurrenceDate] = { focusedSeconds: 0, timerSeconds: 0 };
-  task.focusLog[occurrenceDate][kind] += seconds;
+  if (!task.focusLog[date]) task.focusLog[date] = { focusedSeconds: 0, timerSeconds: 0 };
+  task.focusLog[date][kind] += seconds;
 }
 
 // Logs whatever a currently-running timer has accumulated since it last
@@ -345,10 +347,14 @@ function addFocusStat(task, kind, seconds) {
 // checkpoints remainingSeconds, not the stats log), or the timer being
 // cancelled outright. A no-op for an already-paused timer (runningSince ==
 // null): its elapsed time up to the pause was already flushed when it was
-// paused.
+// paused. Credited to the specific occurrence the timer was started against
+// (task.timer.occurrenceDate) rather than recomputed from today's date, so
+// it can't drift to a different occurrence than the one actually worked --
+// e.g. a timer started against yesterday's still-overdue occurrence stays
+// credited to yesterday even if it's flushed after midnight.
 function flushTimerElapsed(task) {
   if (task.timer && task.timer.runningSince != null) {
-    addFocusStat(task, 'timerSeconds', (Date.now() - task.timer.runningSince) / 1000);
+    addFocusStat(task, 'timerSeconds', (Date.now() - task.timer.runningSince) / 1000, task.timer.occurrenceDate);
   }
 }
 
@@ -410,6 +416,22 @@ function timerProgressPercent(timer) {
   return (remaining / timer.totalSeconds) * 100;
 }
 
+// A recurring task can show up to three rows at once for the same task
+// object (yesterday's still-overdue occurrence, today's, and tomorrow's
+// preview -- see computeTodoDisplayItems/computeNextRecurrenceItems), but a
+// timer only ever belongs to whichever single occurrence it was started
+// against (task.timer.occurrenceDate, see startTaskTimerPrompt) -- this is
+// what buildTodoItemRow uses to only render the countdown on that one row
+// instead of all of them. Falls back to matching a 'today' row for a timer
+// saved before occurrenceDate existed (undefined there), since that's what
+// this app has always effectively meant by "the" occurrence up to now.
+function timerBelongsToItem(item) {
+  const timer = item.task.timer;
+  if (!timer) return false;
+  if (timer.occurrenceDate != null) return timer.occurrenceDate === item.occurrenceDate;
+  return item.kind === 'today';
+}
+
 // Snapshots a running timer's current remaining time back into
 // remainingSeconds and stops it counting -- called right before whatever
 // would otherwise invalidate runningSince's "still ticking" meaning (the
@@ -455,8 +477,13 @@ function formatElapsedDuration(totalSeconds) {
 // (on by default) keeps a countdown running as overtime instead of stopping
 // it the moment it hits zero. Both open-ended cases are still bounded by
 // MAX_TIMER_SECONDS (see expireFinishedTimers) -- "no fixed duration" isn't
-// the same as "no limit".
-async function startTaskTimerPrompt(task) {
+// the same as "no limit". `occurrenceDate` is whichever row's context menu
+// this was opened from -- stamped onto the timer so it displays (and its
+// stats get credited, see flushTimerElapsed) against only that one
+// occurrence, not every row currently showing this task (a recurring task
+// can show up to three at once: yesterday's still-overdue one, today's, and
+// tomorrow's preview).
+async function startTaskTimerPrompt(task, occurrenceDate) {
   const result = await showFormModal(
     'Set a timer',
     [
@@ -512,6 +539,7 @@ async function startTaskTimerPrompt(task) {
       totalSeconds,
       remainingSeconds: totalSeconds,
       runningSince: null,
+      occurrenceDate,
     };
     saveTasks();
     renderTodo();
@@ -534,6 +562,7 @@ async function startTaskTimerPrompt(task) {
     totalSeconds,
     remainingSeconds: totalSeconds,
     runningSince: Date.now(),
+    occurrenceDate,
   };
   saveTasks();
   setActiveTaskId(task.id);
@@ -579,7 +608,7 @@ document.addEventListener('keydown', (e) => {
 // active the same way that button does, so it's gated identically. A timer
 // that already exists can always be cancelled regardless, even if the task
 // somehow stopped being eligible in the meantime.
-function showTodoContextMenu(event, task, canWorkOnNow) {
+function showTodoContextMenu(event, task, canWorkOnNow, occurrenceDate) {
   closeTodoContextMenu();
   const menu = document.createElement('div');
   menu.className = 'todo-context-menu';
@@ -599,7 +628,7 @@ function showTodoContextMenu(event, task, canWorkOnNow) {
   addItem('Task stats…', () => showTaskStatsModal(task));
 
   if (!task.timer) {
-    if (canWorkOnNow) addItem('Timer…', () => startTaskTimerPrompt(task));
+    if (canWorkOnNow) addItem('Timer…', () => startTaskTimerPrompt(task, occurrenceDate));
   } else if (task.id === activeTaskId) {
     addItem('Pause timer', () => {
       setActiveTaskId(null);
@@ -1367,9 +1396,10 @@ function toggleTaskCompletion(task, occurrenceDate) {
 // always false for it too, since it has no completions entry to begin with;
 // see toggleTaskFailedMark instead of toggleTaskCompletion). It stays
 // "overdue" through the one extra day it's shown carried-over (see
-// autoDismissStalePassiveOccurrences), giving the user a chance to instead
-// mark it failed (task.markedFailed) or dismiss it (see dismissOccurrence)
-// -- after that day, if still neither, it's auto-dismissed as quietly done.
+// autoDismissStaleCarriedOverOccurrences, which clears away ANY carried-over
+// occurrence once it's older than that, passive or not), giving the user a
+// chance to instead mark it failed (task.markedFailed) or dismiss it (see
+// dismissOccurrence) before it's cleared away on its own.
 function pastDueStatus(task, occurrenceDate, completed, now) {
   if (task.passive) {
     if (task.markedFailed && task.markedFailed[occurrenceDate]) return { overdue: false, failed: true };
@@ -1512,15 +1542,22 @@ function computeNextRecurrenceItems() {
 
   for (const task of tasks) {
     const todayOccurs = Recurrence.occursOn(task, todayISO);
-    const todayPending = todayOccurs && !task.completions[todayISO];
+    // A failed occurrence (a past-due appointment, or a manually-marked-
+    // failed passive task -- see pastDueStatus) is just as resolved as a
+    // completed one for the purposes of previewing what's next: neither is
+    // still waiting on the user, so there's no reason to hold back the next
+    // occurrence's preview until they explicitly check it off too.
+    let todayPending = false;
     if (todayOccurs) {
-      if (todayPending) {
-        const { overdue, failed } = pastDueStatus(task, todayISO, false, now);
-        items.push({ task, occurrenceDate: todayISO, completed: false, overdue, failed, kind: 'today' });
-      } else {
+      const completed = !!task.completions[todayISO];
+      if (completed) {
         // Still shows (crossed out) alongside whatever's next -- confirms
         // what was just checked off without it just vanishing.
         items.push({ task, occurrenceDate: todayISO, completed: true, overdue: false, kind: 'today' });
+      } else {
+        const { overdue, failed } = pastDueStatus(task, todayISO, false, now);
+        todayPending = !failed;
+        items.push({ task, occurrenceDate: todayISO, completed: false, overdue, failed, kind: 'today' });
       }
     }
 
@@ -1528,10 +1565,14 @@ function computeNextRecurrenceItems() {
     let priorPending = false;
     if (priorDate && !task.dismissed[priorDate]) {
       const completed = !!task.completions[priorDate] || isDismissalPending(task, priorDate);
-      if (completed) scheduleDismissal(task, priorDate); // idempotent -- also covers a dismissal already pending from backfill
-      else priorPending = true;
-      const { overdue, failed } = completed ? { overdue: false, failed: false } : pastDueStatus(task, priorDate, false, now);
-      items.push({ task, occurrenceDate: priorDate, completed, overdue, failed, kind: 'carried-over' });
+      if (completed) {
+        scheduleDismissal(task, priorDate); // idempotent -- also covers a dismissal already pending from backfill
+        items.push({ task, occurrenceDate: priorDate, completed, overdue: false, failed: false, kind: 'carried-over' });
+      } else {
+        const { overdue, failed } = pastDueStatus(task, priorDate, false, now);
+        priorPending = !failed;
+        items.push({ task, occurrenceDate: priorDate, completed, overdue, failed, kind: 'carried-over' });
+      }
     }
 
     // Nothing left pending (today's, if it has one, is done; the prior
@@ -1738,7 +1779,8 @@ function buildTodoItemRow(item, isToday) {
   // stacking (position: absolute, z-index: auto) so it paints underneath
   // the row's actual (position: relative) content regardless of DOM order,
   // per how CSS stacking contexts order positioned-but-unlayered elements.
-  if (item.task.timer) {
+  const timerIsForThisRow = timerBelongsToItem(item);
+  if (timerIsForThisRow) {
     const bar = document.createElement('div');
     bar.className = 'todo-timer-bar';
     bar.style.width = `${Math.max(0, Math.min(100, timerProgressPercent(item.task.timer)))}%`;
@@ -1783,7 +1825,7 @@ function buildTodoItemRow(item, isToday) {
   const meta = document.createElement('div');
   meta.className =
     'todo-item-meta' + (item.overdue && !item.completed ? ' overdue' : '') + (item.failed ? ' failed' : '');
-  if (item.task.timer) {
+  if (timerIsForThisRow) {
     // Takes over the whole meta line -- the due date this would otherwise
     // show isn't relevant while a timer's actively being worked against
     // instead. Three cases: a plain countdown still ticking down shows
@@ -1857,10 +1899,11 @@ function buildTodoItemRow(item, isToday) {
   // Any carried-over (due yesterday or earlier) occurrence can be cleared
   // without going through its checkbox -- a plain overdue task or a failed
   // appointment can be dismissed instead of marked complete, and a passive
-  // one instead of marked failed. Passive occurrences that go two or more
-  // days without either happening are cleared this same way automatically
-  // (see autoDismissStalePassiveOccurrences); this button just lets the user
-  // do it themselves right away instead of waiting out that day.
+  // one instead of marked failed. Any carried-over occurrence left alone for
+  // two or more days is cleared this same way automatically regardless of
+  // state (see autoDismissStaleCarriedOverOccurrences); this button just
+  // lets the user do it themselves right away instead of waiting out that
+  // day.
   if (item.kind === 'carried-over') {
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'todo-focus-btn';
@@ -1881,7 +1924,7 @@ function buildTodoItemRow(item, isToday) {
   // even if it somehow stopped being eligible in the meantime.
   row.oncontextmenu = (e) => {
     e.preventDefault();
-    showTodoContextMenu(e, item.task, canWorkOnNow);
+    showTodoContextMenu(e, item.task, canWorkOnNow, item.occurrenceDate);
   };
 
   // A 'once' task has no recurrence to split, so its double-click skips
@@ -1969,24 +2012,21 @@ function expireFinishedTimers() {
   if (changed) saveTasks();
 }
 
-// A passive task's carried-over occurrence is given exactly one extra day
-// (shown as "yesterday" carried over) to be marked failed before it's
-// assumed to have quietly gone fine and cleared away on its own -- once it's
-// aged past that (its most recent occurrence is two or more days old) with
-// no failed mark, it's dismissed here the same way the button would, so it
-// doesn't linger on the list forever the way an ordinary undismissed
-// carried-over item would. A task that WAS marked failed is a deliberate,
-// visible outcome and is left alone -- it stays until the user dismisses it
-// themselves, same as a failed appointment.
-function autoDismissStalePassiveOccurrences() {
+// Any carried-over occurrence -- done or not, failed or not, recurring or a
+// plain one-off task -- gets exactly one extra day shown (as "yesterday"
+// carried over) before it's quietly cleared away on its own, the same way
+// the Dismiss button would, so nothing lingers on the list forever just
+// because it was never explicitly checked off, marked failed, or dismissed.
+// Once its most recent occurrence is two or more days old, it's gone from
+// here regardless of state -- there's nothing left to act on by then; the
+// user had their day.
+function autoDismissStaleCarriedOverOccurrences() {
   const todayISO = Recurrence.dateToISO(new Date());
   const yesterdayISO = Recurrence.dateToISO(Recurrence.addDays(new Date(), -1));
   let changed = false;
   for (const task of tasks) {
-    if (!task.passive) continue;
     const priorDate = Recurrence.previousOccurrenceBefore(task, todayISO);
     if (!priorDate || task.dismissed[priorDate]) continue;
-    if (task.markedFailed && task.markedFailed[priorDate]) continue;
     if (priorDate < yesterdayISO) {
       task.dismissed[priorDate] = true;
       changed = true;
@@ -1997,7 +2037,7 @@ function autoDismissStalePassiveOccurrences() {
 
 function renderTodo() {
   expireFinishedTimers();
-  autoDismissStalePassiveOccurrences();
+  autoDismissStaleCarriedOverOccurrences();
   updateTodoViewToggleButton();
 
   if (tasks.length === 0) {
