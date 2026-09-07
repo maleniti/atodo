@@ -273,6 +273,18 @@ main {
 .todo-item.not-today { opacity: 0.6; }
 .todo-item.not-today:hover { opacity: 0.85; }
 
+/* The "pending/overdue" and "all tasks" views show a dismissed occurrence
+   alongside ones that aren't (see computeTodoDisplayItems/
+   computeAllTasksItems) -- this crosshatch is the only visual cue telling
+   them apart. background-image only (not the `background` shorthand), and
+   placed after .active/.not-today above, so it always layers on top of
+   whatever background-color those set instead of being reset by them. */
+.todo-item.dismissed {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 8px);
+}
+
 /* A positioned (absolute) element without its own z-index still paints
    above ordinary in-flow content regardless of DOM order -- these three are
    the row's only other direct children, given position: relative (so their

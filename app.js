@@ -1636,18 +1636,26 @@ function computeTodoDisplayItems() {
       if (task.completions[date]) return; // resolved -- not "pending/overdue" anymore
       const { overdue, failed } = pastDueStatus(task, date, false, now);
       if (overdue || failed) {
-        items.push({ task, occurrenceDate: date, completed: false, overdue, failed, kind: 'carried-over' });
+        items.push({ task, occurrenceDate: date, completed: false, overdue, failed, dismissed: !!task.dismissed[date], kind: 'carried-over' });
       }
     });
 
     if (Recurrence.occursOn(task, todayISO)) {
       const completed = !!task.completions[todayISO];
       const { overdue, failed } = pastDueStatus(task, todayISO, completed, now);
-      items.push({ task, occurrenceDate: todayISO, completed, overdue, failed, kind: 'today' });
+      items.push({ task, occurrenceDate: todayISO, completed, overdue, failed, dismissed: !!task.dismissed[todayISO], kind: 'today' });
     }
 
     if (Recurrence.occursOn(task, tomorrowISO)) {
-      items.push({ task, occurrenceDate: tomorrowISO, completed: false, overdue: false, failed: false, kind: 'tomorrow' });
+      items.push({
+        task,
+        occurrenceDate: tomorrowISO,
+        completed: false,
+        overdue: false,
+        failed: false,
+        dismissed: !!task.dismissed[tomorrowISO],
+        kind: 'tomorrow',
+      });
     }
   }
 
@@ -1673,7 +1681,7 @@ function computeAllTasksItems() {
       const completed = !!task.completions[date];
       const { overdue, failed } = completed ? { overdue: false, failed: false } : pastDueStatus(task, date, false, now);
       const kind = date < todayISO ? 'carried-over' : date === todayISO ? 'today' : date === tomorrowISO ? 'tomorrow' : 'upcoming';
-      items.push({ task, occurrenceDate: date, completed, overdue, failed, kind });
+      items.push({ task, occurrenceDate: date, completed, overdue, failed, dismissed: !!task.dismissed[date], kind });
     });
   }
 
@@ -1924,6 +1932,14 @@ function buildTodoItemRow(item, isToday) {
     // Same idea for a passive task's own tint -- once it's marked failed
     // (see toggleTaskFailedMark), .failed's own red styling takes over.
     (item.task.passive && !item.failed ? ' passive' : '') +
+    // The "pending/overdue" and "all tasks" views show a dismissed
+    // occurrence right alongside ones that aren't (see
+    // computeTodoDisplayItems/computeAllTasksItems, both of which ignore
+    // task.dismissed for filtering) -- this is the only visual cue telling
+    // the two apart, since otherwise a dismissed item looks identical to an
+    // active one. "Next recurrence" never shows a dismissed item at all, so
+    // item.dismissed is always false there.
+    (item.dismissed ? ' dismissed' : '') +
     (isToday && !item.completed ? '' : ' not-today');
 
   // A reverse progress bar behind the row's own content -- full at the
