@@ -275,7 +275,7 @@ main {
 .todo-timer-bar {
   position: absolute;
   inset: 0;
-  background: rgba(138, 180, 248, 0.16);
+  background: rgba(57, 255, 20, 0.25);
 }
 
 .todo-item input[type="checkbox"] {
