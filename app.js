@@ -1671,8 +1671,6 @@ function saveTodoViewMode() {
 const todoSectionEl = document.getElementById('todo-section');
 const todoListEl = document.getElementById('todo-list');
 const todoViewportEl = document.getElementById('todo-viewport');
-const todoScrollUpBtn = document.getElementById('todo-scroll-up');
-const todoScrollDownBtn = document.getElementById('todo-scroll-down');
 const todoViewToggleBtn = document.getElementById('todo-view-toggle-btn');
 
 // { sentinel, header } per visible day, in display order -- rebuilt on every
@@ -1731,28 +1729,7 @@ todoViewToggleBtn.onclick = () => {
   renderTodo();
 };
 
-function updateTodoScrollButtons() {
-  const overflowing = todoViewportEl.scrollHeight > todoViewportEl.clientHeight + 1;
-  todoScrollUpBtn.classList.toggle('visible', overflowing);
-  todoScrollDownBtn.classList.toggle('visible', overflowing);
-  if (!overflowing) return;
-  todoScrollUpBtn.disabled = todoViewportEl.scrollTop <= 0;
-  todoScrollDownBtn.disabled = todoViewportEl.scrollTop >= todoViewportEl.scrollHeight - todoViewportEl.clientHeight - 1;
-}
-
-// A one-task step stopped making sense once day headers were added -- each
-// click would land on an arbitrary item mid-day rather than a meaningful
-// boundary. Instead, page by 3/4 of the viewport's own height; the quarter
-// left overlapping keeps the jump from feeling disorienting.
-function todoScrollStep() {
-  return todoViewportEl.clientHeight * 0.75;
-}
-
-todoScrollUpBtn.onclick = () => todoViewportEl.scrollBy({ top: -todoScrollStep(), behavior: 'smooth' });
-todoScrollDownBtn.onclick = () => todoViewportEl.scrollBy({ top: todoScrollStep(), behavior: 'smooth' });
-todoViewportEl.addEventListener('scroll', updateTodoScrollButtons);
 todoViewportEl.addEventListener('scroll', updatePinnedTodoHeader);
-window.addEventListener('resize', updateTodoScrollButtons);
 window.addEventListener('resize', updatePinnedTodoHeader);
 
 function renderTodoEmptyState() {
@@ -2098,7 +2075,6 @@ function renderTodo() {
   if (tasks.length === 0) {
     todoSectionEl.classList.remove('hidden');
     renderTodoEmptyState();
-    updateTodoScrollButtons();
     return;
   }
 
@@ -2202,7 +2178,6 @@ function renderTodo() {
     todoListEl.appendChild(columns);
   }
 
-  updateTodoScrollButtons();
   updatePinnedTodoHeader();
   ensureTimerTicking();
 }

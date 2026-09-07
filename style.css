@@ -161,9 +161,21 @@ main {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: thin; /* Firefox -- no hover-triggered width change available here */
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
-#todo-viewport::-webkit-scrollbar { display: none; } /* Chromium */
+#todo-viewport::-webkit-scrollbar { width: 6px; } /* Chromium */
+#todo-viewport::-webkit-scrollbar-track { background: transparent; }
+#todo-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+#todo-viewport::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+/* Widens on hover over the whole viewport, not just the thumb itself --
+   Chromium has no ::-webkit-scrollbar:hover, so this is the usual
+   workaround (and it's a more forgiving hover target than the thumb's own
+   6px sliver anyway). */
+#todo-viewport:hover::-webkit-scrollbar { width: 10px; }
 
 .todo-day-header {
   display: flex;
@@ -378,42 +390,6 @@ main {
 .todo-focus-btn:hover { background: rgba(255, 255, 255, 0.12); color: #e8eaed; }
 .todo-focus-btn.active { color: #8ab4f8; }
 .todo-focus-btn.active:hover { background: rgba(138, 180, 248, 0.15); }
-
-.scroll-btn {
-  flex: none;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  background: transparent;
-  color: #9aa0a6;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
-  transition: background 0.15s, color 0.15s;
-}
-.scroll-btn.visible { display: flex; }
-.scroll-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
-  color: #e8eaed;
-}
-.scroll-btn:disabled {
-  color: #3c4043;
-  cursor: default;
-  box-shadow: none;
-  border-color: rgba(255, 255, 255, 0.05);
-}
-
-/* To-do list: horizontal bars above/below the viewport. */
-.scroll-btn-h {
-  width: 100%;
-  height: 22px;
-  margin: 4px 0;
-}
 
 .menu-item {
   display: flex;
