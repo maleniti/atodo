@@ -644,10 +644,12 @@ function encodeFrequency(freq) {
 }
 
 // `extra` carries the task form's weekly/monthly sub-fields (weekdays,
-// monthlyMode, monthlyOffset, monthlyWeekday, monthlyOrdinal) -- folded into
-// the decoded frequency only when they're actually relevant to the chosen
-// type, so e.g. leftover monthly fields from switching frequencyType back
-// and forth don't leak into a plain weekly/daily task.
+// monthlyMode, monthlyOffset, monthlyWeekday, monthlyOrdinal,
+// multiWeekdayDays, multiWeekdayOrdinal, multiWeekdayOffsetDirection,
+// multiWeekdayOffsetDays) -- folded into the decoded frequency only when
+// they're actually relevant to the chosen type, so e.g. leftover monthly
+// fields from switching frequencyType back and forth don't leak into a
+// plain weekly/daily task.
 function decodeFrequency(frequencyType, intervalStr, extra = {}) {
   const interval = Math.max(1, parseInt(intervalStr, 10) || 1);
   const base = (() => {
@@ -681,6 +683,13 @@ function decodeFrequency(frequencyType, intervalStr, extra = {}) {
     } else if (extra.monthlyMode === 'weekday') {
       base.weekday = Number(extra.monthlyWeekday);
       base.ordinal = extra.monthlyOrdinal === 'last' ? 'last' : parseInt(extra.monthlyOrdinal, 10);
+    } else if (extra.monthlyMode === 'multi-weekday' || extra.monthlyMode === 'multi-weekday-offset') {
+      base.weekdays = (extra.multiWeekdayDays || []).map(Number).sort((a, b) => a - b);
+      base.ordinal = Math.max(1, parseInt(extra.multiWeekdayOrdinal, 10) || 1);
+      if (extra.monthlyMode === 'multi-weekday-offset') {
+        base.offsetDirection = extra.multiWeekdayOffsetDirection === 'after' ? 'after' : 'before';
+        base.offsetDays = Math.min(6, Math.max(0, parseInt(extra.multiWeekdayOffsetDays, 10) || 0));
+      }
     }
   }
   return base;
@@ -688,6 +697,16 @@ function decodeFrequency(frequencyType, intervalStr, extra = {}) {
 
 const WEEKDAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ORDINAL_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', last: 'last' };
+
+// ORDINAL_LABELS only covers the single-weekday "Nth weekday" mode's range
+// (1-5, or 'last') -- the multi-weekday modes' ordinal isn't capped there,
+// so this falls back to a generic 1st/2nd/3rd/nth suffix for anything else.
+function ordinalLabel(n) {
+  if (ORDINAL_LABELS[n]) return ORDINAL_LABELS[n];
+  const suffixes = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+}
 
 function describeTaskSchedule(task) {
   const freq = task.frequency;
@@ -709,7 +728,14 @@ function describeTaskSchedule(task) {
     } else if (freq.dayMode === 'before-last') {
       label = freq.offset === 0 ? `${base}, last day` : `${base}, ${freq.offset} day(s) before last`;
     } else if (freq.dayMode === 'weekday') {
-      label = `${base}, ${ORDINAL_LABELS[freq.ordinal]} ${WEEKDAY_SHORT_NAMES[freq.weekday]}`;
+      label = `${base}, ${ordinalLabel(freq.ordinal)} ${WEEKDAY_SHORT_NAMES[freq.weekday]}`;
+    } else if (freq.dayMode === 'multi-weekday') {
+      label = `${base}, earliest ${ordinalLabel(freq.ordinal)} of ${freq.weekdays.map((d) => WEEKDAY_SHORT_NAMES[d]).join('/')}`;
+    } else if (freq.dayMode === 'multi-weekday-offset') {
+      label =
+        freq.offsetDays === 0
+          ? `${base}, earliest ${ordinalLabel(freq.ordinal)} of ${freq.weekdays.map((d) => WEEKDAY_SHORT_NAMES[d]).join('/')}`
+          : `${base}, ${freq.offsetDays} day(s) ${freq.offsetDirection} earliest ${ordinalLabel(freq.ordinal)} of ${freq.weekdays.map((d) => WEEKDAY_SHORT_NAMES[d]).join('/')}`;
     } else {
       label = base;
     }
@@ -758,6 +784,13 @@ const MONTHLY_MODE_OPTIONS = [
   { value: 'last', label: 'Last day of month' },
   { value: 'before-last', label: 'N days before last day of month' },
   { value: 'weekday', label: 'Nth weekday of month' },
+  { value: 'multi-weekday', label: 'Earliest Nth occurrence of any of the selected days' },
+  { value: 'multi-weekday-offset', label: 'N days before/after earliest Nth occurrence of any of the selected days' },
+];
+
+const BEFORE_AFTER_OPTIONS = [
+  { value: 'before', label: 'Before' },
+  { value: 'after', label: 'After' },
 ];
 
 const ORDINAL_OPTIONS = [
@@ -771,6 +804,7 @@ const ORDINAL_OPTIONS = [
 
 const isWeeklyFrequencyType = (frequencyType) => frequencyType === 'weekly' || frequencyType === 'custom-weeks';
 const isMonthlyFrequencyType = (frequencyType) => frequencyType === 'monthly' || frequencyType === 'custom-months';
+const isMultiWeekdayMonthlyMode = (monthlyMode) => monthlyMode === 'multi-weekday' || monthlyMode === 'multi-weekday-offset';
 
 // `splitContext` (only ever set together with an existingTask) is
 // `{ occurrenceDate, scope }` -- present when editing a recurring task via
@@ -879,6 +913,51 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
         value: existingTask && existingTask.frequency.ordinal != null ? String(existingTask.frequency.ordinal) : '1',
         options: ORDINAL_OPTIONS,
         showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'weekday',
+      },
+      {
+        name: 'multiWeekdayDays',
+        label: 'Selected days (earliest Nth occurrence of any of these)',
+        type: 'checkboxes',
+        value:
+          existingTask && existingTask.frequency.weekdays && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
+            ? existingTask.frequency.weekdays.map(String)
+            : [],
+        options: WEEKDAY_CHECKBOX_OPTIONS,
+        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && isMultiWeekdayMonthlyMode(v.monthlyMode),
+      },
+      {
+        name: 'multiWeekdayOrdinal',
+        label: 'Which occurrence (N -- e.g. 2 for "earliest 2nd")',
+        type: 'number',
+        value:
+          existingTask && existingTask.frequency.ordinal != null && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
+            ? String(existingTask.frequency.ordinal)
+            : '1',
+        min: 1,
+        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && isMultiWeekdayMonthlyMode(v.monthlyMode),
+      },
+      {
+        name: 'multiWeekdayOffsetDirection',
+        label: 'Before or after that day',
+        type: 'select',
+        value:
+          existingTask && existingTask.frequency.offsetDirection && existingTask.frequency.dayMode === 'multi-weekday-offset'
+            ? existingTask.frequency.offsetDirection
+            : 'before',
+        options: BEFORE_AFTER_OPTIONS,
+        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'multi-weekday-offset',
+      },
+      {
+        name: 'multiWeekdayOffsetDays',
+        label: 'How many days before/after (0-6)',
+        type: 'number',
+        value:
+          existingTask && existingTask.frequency.offsetDays != null && existingTask.frequency.dayMode === 'multi-weekday-offset'
+            ? String(existingTask.frequency.offsetDays)
+            : '0',
+        min: 0,
+        max: 6,
+        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'multi-weekday-offset',
       },
       {
         name: 'endDate',
@@ -1453,10 +1532,15 @@ function computeNextRecurrenceItems() {
 
     // Nothing left pending (today's, if it has one, is done; the prior
     // occurrence, if any, is done/lingering-before-dismissal or dismissed)
-    // -- preview what's next.
+    // -- preview what's next. When the task hasn't had any occurrence at all
+    // yet (recentDate null), search from the day before its due date rather
+    // than assuming the due date itself is a valid occurrence -- it's just
+    // the pattern's anchor point, not necessarily a date the pattern itself
+    // lands on (see nextOccurrenceAfter).
     if (!todayPending && !priorPending) {
       const recentDate = todayOccurs ? todayISO : priorDate;
-      const nextDate = recentDate == null ? task.dueDate : Recurrence.nextOccurrenceAfter(task, recentDate);
+      const searchFrom = recentDate == null ? Recurrence.dateToISO(Recurrence.addDays(new Date(task.dueDate + 'T00:00:00'), -1)) : recentDate;
+      const nextDate = Recurrence.nextOccurrenceAfter(task, searchFrom);
       if (nextDate) {
         items.push({
           task,

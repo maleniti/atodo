@@ -104,6 +104,118 @@ assert.strictEqual(
 );
 assert.strictEqual(R.mostRecentOccurrenceOnOrBefore(fifthTuesday, '2026-03-31'), '2026-03-31');
 
+// -- monthly: earliest Nth occurrence of any of the selected weekdays --------
+// "Earliest 2nd of Mon/Wed/Fri" is NOT the 2nd date overall among every
+// selected weekday's occurrences (that would be the first Friday) -- it's
+// whichever of {2nd Monday, 2nd Wednesday, 2nd Friday} comes first.
+// April 2026 starts on a Wednesday: 2nd Monday the 13th, 2nd Wednesday the
+// 8th, 2nd Friday the 10th -- earliest is the 8th.
+const multiWeekday2nd = {
+  dueDate: '2026-01-01',
+  frequency: { type: 'months', interval: 1, dayMode: 'multi-weekday', weekdays: [1, 3, 5], ordinal: 2 },
+};
+assert.ok(R.occursOn(multiWeekday2nd, '2026-04-08'), 'April starts on Wednesday -- earliest 2nd is that 2nd Wednesday, the 8th');
+assert.ok(!R.occursOn(multiWeekday2nd, '2026-04-10'), 'the 2nd Friday, not the earliest of the three');
+assert.ok(!R.occursOn(multiWeekday2nd, '2026-04-13'), 'the 2nd Monday, not the earliest of the three');
+// January 2026 starts on a Thursday: 2nd Monday the 12th, 2nd Wednesday the
+// 14th, 2nd Friday the 9th -- earliest is the 9th.
+assert.ok(R.occursOn(multiWeekday2nd, '2026-01-09'), 'January starts on Thursday -- earliest 2nd is that 2nd Friday, the 9th');
+assert.strictEqual(R.nextOccurrenceAfter(multiWeekday2nd, '2026-01-09'), '2026-02-09', "February starts on Sunday -- earliest 2nd is also the 2nd Friday, the 9th");
+assert.strictEqual(R.nextOccurrenceAfter(multiWeekday2nd, '2026-02-09'), '2026-03-09', "March starts on Sunday too -- same as February");
+assert.strictEqual(R.mostRecentOccurrenceOnOrBefore(multiWeekday2nd, '2026-04-08'), '2026-04-08');
+
+const multiWeekdayNoMatch = {
+  dueDate: '2026-01-01',
+  frequency: { type: 'months', interval: 1, dayMode: 'multi-weekday', weekdays: [2], ordinal: 5 },
+};
+assert.ok(!R.occursOn(multiWeekdayNoMatch, '2026-01-27'), 'a single selected weekday with no 5th occurrence that month has nothing to be earliest among');
+
+// -- monthly: N days before/after the earliest Nth occurrence ---------------
+// Same April-2026 anchor (the 8th, its earliest 2nd of Mon/Wed/Fri) shifted
+// 6 days before -- crosses into March, which is fine (see occursOn's
+// dedicated multi-weekday-offset branch: the interval/dueDate check is
+// re-evaluated per candidate anchor month, not just the target date's own).
+const multiWeekdayOffsetBefore = {
+  dueDate: '2026-01-01',
+  frequency: {
+    type: 'months',
+    interval: 1,
+    dayMode: 'multi-weekday-offset',
+    weekdays: [1, 3, 5],
+    ordinal: 1,
+    offsetDirection: 'before',
+    offsetDays: 6,
+  },
+};
+// April's earliest 1st of Mon/Wed/Fri is Wed the 1st itself (day 1 is a
+// Wednesday); 6 days before that is March 26.
+assert.ok(R.occursOn(multiWeekdayOffsetBefore, '2026-03-26'), '6 days before April\'s anchor lands in March, which is allowed');
+assert.ok(!R.occursOn(multiWeekdayOffsetBefore, '2026-04-01'), 'the anchor itself is not the occurrence once an offset applies');
+
+// April's 5th Wednesday (the 29th, its only weekday selected here) shifted
+// 6 days after crosses into May.
+const multiWeekdayOffsetAfter = {
+  dueDate: '2026-01-01',
+  frequency: {
+    type: 'months',
+    interval: 1,
+    dayMode: 'multi-weekday-offset',
+    weekdays: [3],
+    ordinal: 5,
+    offsetDirection: 'after',
+    offsetDays: 6,
+  },
+};
+assert.ok(R.occursOn(multiWeekdayOffsetAfter, '2026-05-05'), '6 days after April\'s 5th Wednesday (the 29th) lands in May');
+
+// Every-2-months interval still governs from the anchor month, even when the
+// offset pushes the actual date into the adjacent month: with dueDate
+// anchored to January, March (diffMonths 2) is a valid anchor month but
+// February (diffMonths 1) is not, regardless of which month the offset
+// result actually lands in.
+const multiWeekdayOffsetEveryTwoMonths = {
+  dueDate: '2026-01-01',
+  frequency: {
+    type: 'months',
+    interval: 2,
+    dayMode: 'multi-weekday-offset',
+    weekdays: [1, 3, 5],
+    ordinal: 1,
+    offsetDirection: 'before',
+    offsetDays: 6,
+  },
+};
+assert.ok(R.occursOn(multiWeekdayOffsetEveryTwoMonths, '2026-02-24'), "March's anchor (the 2nd) minus 6 days lands on Feb 24 -- March is a valid anchor month (diffMonths 2)");
+assert.ok(!R.occursOn(multiWeekdayOffsetEveryTwoMonths, '2026-01-27'), "would be February's anchor minus 6 days, but February isn't a valid anchor month (diffMonths 1)");
+
+// -- nextOccurrenceAfter when dueDate itself isn't a valid occurrence -------
+// dueDate is just the pattern's anchor for interval counting -- nothing
+// guarantees the literal entered date itself satisfies the pattern (a task
+// due on a Monday but recurring only on Tue/Wed/Thu/Fri, say). Regression
+// test for a bug where nextOccurrenceAfter, when called with a date before
+// dueDate, blindly returned dueDate itself without checking it actually
+// occurs there.
+const dueDateNotItselfValid = {
+  dueDate: '2026-09-07', // a Monday
+  frequency: { type: 'months', interval: 1, dayMode: 'multi-weekday-offset', weekdays: [2, 3, 4, 5], ordinal: 1, offsetDirection: 'before', offsetDays: 1 },
+};
+assert.ok(!R.occursOn(dueDateNotItselfValid, '2026-09-07'), "due date itself (a Monday) isn't a valid occurrence of this Tue-Fri-anchored pattern");
+assert.strictEqual(
+  R.nextOccurrenceAfter(dueDateNotItselfValid, '2026-09-06'),
+  '2026-09-30',
+  "must not blindly return dueDate itself just because it's the first date on/after afterISO -- September's earliest 1st of Tue-Fri is the 1st itself, one day before is Aug 31 (before dueDate, so not eligible); the next valid one after dueDate is October's anchor (the 1st) minus 1, landing on Sep 30"
+);
+assert.strictEqual(R.mostRecentOccurrenceOnOrBefore(dueDateNotItselfValid, '2026-09-07'), null, 'dueDate has no valid occurrence on or before it yet');
+
+// Same bug, simpler pattern: a weekly task whose selected weekdays don't
+// include dueDate's own weekday.
+const weeklyDueDateMismatch = {
+  dueDate: '2026-09-07', // a Monday
+  frequency: { type: 'weeks', interval: 1, weekdays: [2, 4] }, // Tue/Thu only
+};
+assert.ok(!R.occursOn(weeklyDueDateMismatch, '2026-09-07'), "due date (Monday) isn't one of the selected weekdays");
+assert.strictEqual(R.nextOccurrenceAfter(weeklyDueDateMismatch, '2026-09-06'), '2026-09-08', 'the first real occurrence is that Tuesday, not dueDate itself');
+
 // -- endDate ------------------------------------------------------------
 const dailyWithEnd = { dueDate: '2026-03-10', frequency: { type: 'days', interval: 1 }, endDate: '2026-03-20' };
 assert.ok(R.occursOn(dailyWithEnd, '2026-03-20'), 'occurs on the end date itself');
