@@ -213,7 +213,16 @@ const ACTIVE_TASK_STORAGE_KEY = 'advanced-todo-active-task';
 function loadTasks() {
   try {
     const raw = localStorage.getItem(TASKS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const loaded = JSON.parse(raw);
+      // Backward compatibility: tasks saved before seriesId existed each get
+      // their own fresh one -- they were never part of a split, so there's
+      // no correct value to backfill beyond "distinct from everything else".
+      for (const task of loaded) {
+        if (!task.seriesId) task.seriesId = uid();
+      }
+      return loaded;
+    }
   } catch {
     // fall through to empty
   }
@@ -716,6 +725,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
   } else {
     tasks.push({
       id: uid(),
+      seriesId: uid(),
       name: result.name,
       description: result.description,
       dueDate: result.dueDate,
@@ -770,6 +780,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
   if (scope === 'instance') {
     tasks.push({
       id: uid(),
+      seriesId: originalTask.seriesId,
       name: edited.name,
       description: edited.description,
       dueDate: newOccurrenceDate,
@@ -785,6 +796,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
     if (nextDate) {
       tasks.push({
         id: uid(),
+        seriesId: originalTask.seriesId,
         name: originalTask.name,
         description: originalTask.description,
         dueDate: nextDate,
@@ -800,6 +812,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
   } else if (scope === 'following') {
     tasks.push({
       id: uid(),
+      seriesId: originalTask.seriesId,
       name: edited.name,
       description: edited.description,
       dueDate: newOccurrenceDate,
@@ -843,6 +856,7 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
   if (scope === 'instance' && nextDate) {
     tasks.push({
       id: uid(),
+      seriesId: originalTask.seriesId,
       name: originalTask.name,
       description: originalTask.description,
       dueDate: nextDate,
