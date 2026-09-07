@@ -1254,6 +1254,19 @@ function forEachOccurrenceBefore(task, cutoffISO, fn) {
   }
 }
 
+// Same as forEachOccurrenceBefore, but bounded below too -- starts at
+// whichever is later, task.dueDate or startISO, instead of always scanning
+// from dueDate (which could be years before the range actually of interest,
+// e.g. this month -- see computeAllTasksItems/the "pending/overdue" side of
+// computeTodoDisplayItems).
+function forEachOccurrenceInRange(task, startISO, cutoffISO, fn) {
+  let cursor = task.dueDate > startISO ? task.dueDate : startISO;
+  for (let i = 0; i < 3660 && cursor < cutoffISO; i++) {
+    if (Recurrence.occursOn(task, cursor)) fn(cursor);
+    cursor = Recurrence.dateToISO(Recurrence.addDays(new Date(cursor + 'T00:00:00'), 1));
+  }
+}
+
 // Marks every occurrence of task strictly before cutoffISO as dismissed
 // (task.dismissed, not task.completions -- whether it was ever actually
 // done stays whatever it already was, so an appointment's genuinely missed
@@ -1478,49 +1491,76 @@ function isDismissalPending(task, occurrenceDate) {
   return dismissalTimers.has(`${task.id}:${occurrenceDate}`);
 }
 
-// One item per task for today's own occurrence (if it has one) AND,
-// independently, one for the most recent occurrence strictly before today
-// (if it has one and isn't dismissed) -- shown side by side when both
-// exist, so a still-missed earlier occurrence doesn't get eclipsed by
-// today's own. Plus, after 6pm local time, a preview item for tomorrow's
-// occurrence, shown regardless of today's status.
-//
-// Whether the prior occurrence is dismissed (task.dismissed) is the ONLY
-// thing that decides whether it's shown at all -- see scheduleDismissal/
-// isDismissalPending. Whether it currently *displays* as completed just
-// reflects its own completions entry, or a dismissal already pending for it
-// (about to fire once its short linger elapses, whether that was scheduled
-// by completing it directly or via backfill from completing a later
-// occurrence -- see scheduleOccurrencesDismissalBefore), independent of
-// which triggered that.
+// The first of the current calendar month, as an ISO date -- the lower
+// bound for both the "pending/overdue" and "all tasks" views (see
+// computeTodoDisplayItems/computeAllTasksItems), neither of which reach
+// back further than that.
+function currentMonthStartISO(todayISO) {
+  return `${todayISO.slice(0, 7)}-01`;
+}
+
+// "Pending/overdue" view: every occurrence since the start of the current
+// calendar month that's overdue or failed (see pastDueStatus) -- regardless
+// of task.dismissed, unlike every other view here. This is meant to be a
+// standing audit of everything unresolved this month, not a decluttered
+// day-to-day list, so a dismissal made to tidy up the "next recurrence" view
+// doesn't also hide something from this one. A completed occurrence is
+// dropped instead of shown -- it's resolved, not overdue/failed anymore, so
+// it has nothing to say here. Today's own occurrence (whatever its status)
+// and tomorrow's are always included too, unconditionally -- no 6pm gate
+// the way "next recurrence"'s tomorrow preview has, since this view's job is
+// showing what's due, not previewing ahead.
 function computeTodoDisplayItems() {
   const now = new Date();
   const todayISO = Recurrence.dateToISO(now);
+  const tomorrowISO = Recurrence.dateToISO(Recurrence.addDays(now, 1));
+  const monthStartISO = currentMonthStartISO(todayISO);
   const items = [];
 
   for (const task of tasks) {
+    forEachOccurrenceInRange(task, monthStartISO, todayISO, (date) => {
+      if (task.completions[date]) return; // resolved -- not "pending/overdue" anymore
+      const { overdue, failed } = pastDueStatus(task, date, false, now);
+      if (overdue || failed) {
+        items.push({ task, occurrenceDate: date, completed: false, overdue, failed, kind: 'carried-over' });
+      }
+    });
+
     if (Recurrence.occursOn(task, todayISO)) {
       const completed = !!task.completions[todayISO];
       const { overdue, failed } = pastDueStatus(task, todayISO, completed, now);
       items.push({ task, occurrenceDate: todayISO, completed, overdue, failed, kind: 'today' });
     }
 
-    const priorDate = Recurrence.previousOccurrenceBefore(task, todayISO);
-    if (priorDate && !task.dismissed[priorDate]) {
-      const completed = !!task.completions[priorDate] || isDismissalPending(task, priorDate);
-      if (completed) scheduleDismissal(task, priorDate); // idempotent -- also covers a dismissal already pending from backfill
-      const { overdue, failed } = completed ? { overdue: false, failed: false } : pastDueStatus(task, priorDate, false, now);
-      items.push({ task, occurrenceDate: priorDate, completed, overdue, failed, kind: 'carried-over' });
+    if (Recurrence.occursOn(task, tomorrowISO)) {
+      items.push({ task, occurrenceDate: tomorrowISO, completed: false, overdue: false, failed: false, kind: 'tomorrow' });
     }
   }
 
-  if (now.getHours() >= 18) {
-    const tomorrowISO = Recurrence.dateToISO(Recurrence.addDays(now, 1));
-    for (const task of tasks) {
-      if (Recurrence.occursOn(task, tomorrowISO)) {
-        items.push({ task, occurrenceDate: tomorrowISO, completed: false, overdue: false, kind: 'tomorrow' });
-      }
-    }
+  return items;
+}
+
+// "All tasks" view: every occurrence of every task that falls within the
+// current calendar month, start to end, whatever its state -- done or not,
+// failed or not, dismissed or not. A plain calendar-month listing rather
+// than a todo-workflow view like the other two, so nothing here is filtered
+// by task.dismissed/task.completions the way they are.
+function computeAllTasksItems() {
+  const now = new Date();
+  const todayISO = Recurrence.dateToISO(now);
+  const tomorrowISO = Recurrence.dateToISO(Recurrence.addDays(now, 1));
+  const monthStartISO = currentMonthStartISO(todayISO);
+  const daysInThisMonth = Recurrence.daysInMonth(now.getFullYear(), now.getMonth());
+  const monthEndExclusiveISO = Recurrence.dateToISO(Recurrence.addDays(new Date(now.getFullYear(), now.getMonth(), 1), daysInThisMonth));
+  const items = [];
+
+  for (const task of tasks) {
+    forEachOccurrenceInRange(task, monthStartISO, monthEndExclusiveISO, (date) => {
+      const completed = !!task.completions[date];
+      const { overdue, failed } = completed ? { overdue: false, failed: false } : pastDueStatus(task, date, false, now);
+      const kind = date < todayISO ? 'carried-over' : date === todayISO ? 'today' : date === tomorrowISO ? 'tomorrow' : 'upcoming';
+      items.push({ task, occurrenceDate: date, completed, overdue, failed, kind });
+    });
   }
 
   return items;
@@ -1615,9 +1655,11 @@ function computeNextRecurrenceItems() {
 // of this toggle -- which tasks are actually overdue isn't a display
 // preference.
 const TODO_VIEW_MODE_KEY = 'advanced-todo-view-mode';
+const TODO_VIEW_MODES = ['pending', 'next-recurrence', 'all'];
 
 function loadTodoViewMode() {
-  return localStorage.getItem(TODO_VIEW_MODE_KEY) === 'next-recurrence' ? 'next-recurrence' : 'pending';
+  const stored = localStorage.getItem(TODO_VIEW_MODE_KEY);
+  return TODO_VIEW_MODES.includes(stored) ? stored : 'pending';
 }
 
 let todoViewMode = loadTodoViewMode();
@@ -1658,19 +1700,32 @@ const PENDING_VIEW_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z"/></svg>';
 const NEXT_RECURRENCE_VIEW_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M17 1l4 4-4 4V6H7a4 4 0 0 0-4 4v1H1v-1a6 6 0 0 1 6-6h10V1zm-10 22l-4-4 4-4v3h10a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3z"/></svg>';
+const ALL_TASKS_VIEW_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>';
+
+const TODO_VIEW_MODE_INFO = {
+  pending: {
+    icon: PENDING_VIEW_ICON,
+    title: 'Showing: pending/overdue tasks this month -- click to switch to next recurrence of every task',
+  },
+  'next-recurrence': {
+    icon: NEXT_RECURRENCE_VIEW_ICON,
+    title: 'Showing: next recurrence of every task -- click to switch to all tasks this month',
+  },
+  all: {
+    icon: ALL_TASKS_VIEW_ICON,
+    title: 'Showing: all tasks this month -- click to switch to pending/overdue tasks',
+  },
+};
 
 function updateTodoViewToggleButton() {
-  if (todoViewMode === 'next-recurrence') {
-    todoViewToggleBtn.innerHTML = NEXT_RECURRENCE_VIEW_ICON;
-    todoViewToggleBtn.title = 'Showing: next recurrence of every task -- click to switch to pending/overdue tasks';
-  } else {
-    todoViewToggleBtn.innerHTML = PENDING_VIEW_ICON;
-    todoViewToggleBtn.title = 'Showing: pending/overdue tasks -- click to switch to next recurrence of every task';
-  }
+  const info = TODO_VIEW_MODE_INFO[todoViewMode];
+  todoViewToggleBtn.innerHTML = info.icon;
+  todoViewToggleBtn.title = info.title;
 }
 
 todoViewToggleBtn.onclick = () => {
-  todoViewMode = todoViewMode === 'next-recurrence' ? 'pending' : 'next-recurrence';
+  todoViewMode = TODO_VIEW_MODES[(TODO_VIEW_MODES.indexOf(todoViewMode) + 1) % TODO_VIEW_MODES.length];
   saveTodoViewMode();
   updateTodoViewToggleButton();
   renderTodo();
@@ -2053,7 +2108,12 @@ function renderTodo() {
   // show tasks that aren't due today/tomorrow.
   todoSectionEl.classList.remove('hidden');
 
-  const items = todoViewMode === 'next-recurrence' ? computeNextRecurrenceItems() : computeTodoDisplayItems();
+  const items =
+    todoViewMode === 'next-recurrence'
+      ? computeNextRecurrenceItems()
+      : todoViewMode === 'all'
+        ? computeAllTasksItems()
+        : computeTodoDisplayItems();
 
   // Eligible to be (or stay) the active task: today's occurrence (whether
   // overdue yet or not -- the "Work on this now" button lets the user opt
