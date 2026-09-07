@@ -718,6 +718,7 @@ function describeTaskSchedule(task) {
   }
   const scheduleBase = `${task.dueDate} ${task.allDay ? 'all day' : task.dueTime} · ${label}`;
   const withEnd = task.endDate ? `${scheduleBase} until ${task.endDate}` : scheduleBase;
+  if (task.passive) return `${withEnd} · Passive (reminder only)`;
   if (task.appointment) return `${withEnd} · Appointment (expires)`;
   return withEnd;
 }
@@ -900,6 +901,20 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
         ],
         required: false,
       },
+      {
+        name: 'passive',
+        label: '',
+        type: 'checkboxes',
+        value: existingTask && existingTask.passive ? ['passive'] : [],
+        options: [
+          {
+            value: 'passive',
+            label:
+              "Passive -- a plain reminder, not an actionable task: can't be focused on or timed, and its checkbox marks it failed instead of done. Never auto-resolves once overdue -- stays visible until you mark it failed or, once it's no longer due today, dismiss it.",
+          },
+        ],
+        required: false,
+      },
     ],
     { okLabel: existingTask ? 'Save' : 'Add', deleteLabel: existingTask ? 'Delete' : undefined }
   );
@@ -930,6 +945,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
   const allDay = result.allDay.length > 0;
   const dueTime = allDay ? null : result.dueTime;
   const appointment = result.appointment.length > 0;
+  const passive = result.passive.length > 0;
   const frequency = decodeFrequency(result.frequencyType, result.interval, result);
 
   if (splitContext) {
@@ -943,6 +959,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
       dueTime,
       allDay,
       appointment,
+      passive,
       frequency,
       endDate,
     });
@@ -953,6 +970,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
     existingTask.dueTime = dueTime;
     existingTask.allDay = allDay;
     existingTask.appointment = appointment;
+    existingTask.passive = passive;
     existingTask.frequency = frequency;
     existingTask.endDate = endDate;
   } else {
@@ -965,10 +983,12 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
       dueTime,
       allDay,
       appointment,
+      passive,
       endDate,
       frequency,
       completions: {},
       dismissed: {},
+      markedFailed: {},
     });
   }
   saveTasks();
@@ -993,8 +1013,10 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
 function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDate, scope }, edited) {
   const originalCompletions = originalTask.completions || {};
   const originalDismissed = originalTask.dismissed || {};
+  const originalMarkedFailed = originalTask.markedFailed || {};
   const originalEndDate = originalTask.endDate || null;
   const wasOriginalOccurrenceDone = !!originalCompletions[originalOccurrenceDate];
+  const wasOriginalOccurrenceFailed = !!originalMarkedFailed[originalOccurrenceDate];
   const prevDate = Recurrence.previousOccurrenceBefore(originalTask, newOccurrenceDate);
   const nextDate = Recurrence.nextOccurrenceAfter(originalTask, newOccurrenceDate);
 
@@ -1020,10 +1042,12 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       dueTime: edited.dueTime,
       allDay: edited.allDay,
       appointment: edited.appointment,
+      passive: edited.passive,
       frequency: { type: 'once', interval: 1 },
       endDate: null,
       completions: wasOriginalOccurrenceDone ? { [newOccurrenceDate]: true } : {},
       dismissed: {},
+      markedFailed: wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {},
     });
 
     if (nextDate) {
@@ -1036,10 +1060,12 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         dueTime: originalTask.dueTime,
         allDay: originalTask.allDay,
         appointment: originalTask.appointment,
+        passive: originalTask.passive,
         frequency: originalTask.frequency,
         endDate: originalEndDate,
         completions: { ...originalCompletions },
         dismissed: { ...originalDismissed },
+        markedFailed: { ...originalMarkedFailed },
       });
     }
   } else if (scope === 'following') {
@@ -1052,6 +1078,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       dueTime: edited.dueTime,
       allDay: edited.allDay,
       appointment: edited.appointment,
+      passive: edited.passive,
       frequency: edited.frequency,
       endDate: edited.endDate,
       completions: {
@@ -1059,6 +1086,10 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         ...(wasOriginalOccurrenceDone ? { [newOccurrenceDate]: true } : {}),
       },
       dismissed: { ...originalDismissed },
+      markedFailed: {
+        ...originalMarkedFailed,
+        ...(wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {}),
+      },
     });
   }
 }
@@ -1075,6 +1106,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
 function applySplitDelete(originalTask, occurrenceDate, scope) {
   const originalCompletions = originalTask.completions || {};
   const originalDismissed = originalTask.dismissed || {};
+  const originalMarkedFailed = originalTask.markedFailed || {};
   const originalEndDate = originalTask.endDate || null;
   const prevDate = Recurrence.previousOccurrenceBefore(originalTask, occurrenceDate);
   const nextDate = Recurrence.nextOccurrenceAfter(originalTask, occurrenceDate);
@@ -1096,10 +1128,12 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
       dueTime: originalTask.dueTime,
       allDay: originalTask.allDay,
       appointment: originalTask.appointment,
+      passive: originalTask.passive,
       frequency: originalTask.frequency,
       endDate: originalEndDate,
       completions: { ...originalCompletions },
       dismissed: { ...originalDismissed },
+      markedFailed: { ...originalMarkedFailed },
     });
   }
 }
@@ -1248,10 +1282,45 @@ function toggleTaskCompletion(task, occurrenceDate) {
 // it's no longer active (or never was) and its due date is past, that's
 // terminal: failed is permanent from then on, not something re-activating
 // can undo (canWorkOnNow below excludes a failed task entirely).
+//
+// A "passive" task (a plain reminder, see the form's checkbox) is neither --
+// it's never auto-marked failed just for going past due (`completed` is
+// always false for it too, since it has no completions entry to begin with;
+// see toggleTaskFailedMark instead of toggleTaskCompletion), so it just
+// stays "overdue" indefinitely until the user explicitly marks it failed
+// (task.markedFailed) or dismisses it (see dismissPassiveOccurrence).
 function pastDueStatus(task, occurrenceDate, completed, now) {
+  if (task.passive) {
+    if (task.markedFailed && task.markedFailed[occurrenceDate]) return { overdue: false, failed: true };
+    return { overdue: Recurrence.isOverdue(task, occurrenceDate, now), failed: false };
+  }
   if (completed || !Recurrence.isOverdue(task, occurrenceDate, now)) return { overdue: false, failed: false };
   if (task.appointment && task.id === activeTaskId) return { overdue: false, failed: false };
   return task.appointment ? { overdue: false, failed: true } : { overdue: true, failed: false };
+}
+
+// Toggles whether a passive task's occurrence is marked failed -- the only
+// action available on it besides dismissing (see dismissPassiveOccurrence):
+// a passive task's checkbox means this instead of "mark complete" (see
+// buildTodoItemRow), since it's a plain reminder with no real "done" state.
+function toggleTaskFailedMark(task, occurrenceDate) {
+  if (!task.markedFailed) task.markedFailed = {};
+  if (task.markedFailed[occurrenceDate]) delete task.markedFailed[occurrenceDate];
+  else task.markedFailed[occurrenceDate] = true;
+  saveTasks();
+  renderTodo();
+}
+
+// Immediately clears a passive task's occurrence from the list without
+// marking it failed -- available once it's no longer due today (see
+// buildTodoItemRow), whether or not it's already been marked failed. Unlike
+// scheduleDismissal's short linger (for confirming a just-completed
+// checkbox click before it disappears), this is a direct, deliberate action
+// with nothing to visually confirm, so it takes effect right away.
+function dismissPassiveOccurrence(task, occurrenceDate) {
+  task.dismissed[occurrenceDate] = true;
+  saveTasks();
+  renderTodo();
 }
 
 // Whether an occurrence still needs to show on the to-do list is tracked
@@ -1551,6 +1620,8 @@ function compareTodoDisplayOrder(a, b) {
 const WORK_ON_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 const WORKING_ON_ICON = '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>';
+const DISMISS_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>';
 
 // Builds a single to-do row -- extracted from renderTodo's per-day loop so
 // it can be appended into either of a day's two columns rather than always
@@ -1568,6 +1639,9 @@ function buildTodoItemRow(item, isToday) {
     // crossed out), and once checked off it just looks like any other
     // completed task, not still flagged green.
     (item.task.appointment && !item.completed && !item.failed ? ' appointment' : '') +
+    // Same idea for a passive task's own tint -- once it's marked failed
+    // (see toggleTaskFailedMark), .failed's own red styling takes over.
+    (item.task.passive && !item.failed ? ' passive' : '') +
     (isToday && !item.completed ? '' : ' not-today');
 
   // A reverse progress bar behind the row's own content -- full at the
@@ -1585,16 +1659,21 @@ function buildTodoItemRow(item, isToday) {
 
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
-  checkbox.checked = item.completed;
+  // A passive task has no "done" state to check off -- its box means
+  // "marked failed" instead (see toggleTaskFailedMark), so it reflects
+  // item.failed rather than item.completed (which is always false for it
+  // anyway, see pastDueStatus).
+  checkbox.checked = item.task.passive ? item.failed : item.completed;
   // Styled as a red "X" instead of the usual checkbox (see
   // .todo-checkbox-failed) purely to read as "failed", not to change what
-  // clicking it does -- a failed appointment stays toggleable like any
-  // other carried-over task, it can still be checked off after the fact.
+  // clicking it does -- a failed appointment (or a passive task marked
+  // failed) stays toggleable like any other carried-over task.
   if (item.failed) checkbox.classList.add('todo-checkbox-failed');
   checkbox.disabled = item.kind === 'tomorrow' || item.kind === 'upcoming';
   checkbox.onclick = (e) => {
     e.stopPropagation();
-    toggleTaskCompletion(item.task, item.occurrenceDate);
+    if (item.task.passive) toggleTaskFailedMark(item.task, item.occurrenceDate);
+    else toggleTaskCompletion(item.task, item.occurrenceDate);
   };
   row.appendChild(checkbox);
 
@@ -1676,6 +1755,7 @@ function buildTodoItemRow(item, isToday) {
   // kind of voluntary "work on this now" this button offers, just worded for
   // the timer instead.
   const canWorkOnNow =
+    !item.task.passive &&
     (item.kind === 'today' || (item.kind === 'carried-over' && item.task.appointment)) &&
     !item.completed &&
     !item.failed;
@@ -1691,6 +1771,22 @@ function buildTodoItemRow(item, isToday) {
       renderTodo();
     };
     row.appendChild(workOnBtn);
+  }
+
+  // A passive occurrence that's no longer due today can be cleared without
+  // deciding it was a failure -- "due earlier than today" is exactly what
+  // kind === 'carried-over' already means (see computeTodoDisplayItems),
+  // regardless of whether it's been marked failed in the meantime.
+  if (item.task.passive && item.kind === 'carried-over') {
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'todo-focus-btn';
+    dismissBtn.innerHTML = DISMISS_ICON;
+    dismissBtn.title = 'Dismiss (remove from the list without marking failed)';
+    dismissBtn.onclick = (e) => {
+      e.stopPropagation();
+      dismissPassiveOccurrence(item.task, item.occurrenceDate);
+    };
+    row.appendChild(dismissBtn);
   }
 
   // Always available -- Task stats is a plain read-only view with no
@@ -1811,8 +1907,11 @@ function renderTodo() {
   // Eligible to be (or stay) the active task: today's occurrence (whether
   // overdue yet or not -- the "Work on this now" button lets the user opt
   // into any of today's tasks, not just overdue ones) or a carried-over
-  // overdue one.
-  const activeEligible = items.filter((item) => (item.kind === 'today' || item.kind === 'carried-over') && !item.completed);
+  // overdue one. Passive tasks are never eligible -- they can't be focused
+  // on or timed (see canWorkOnNow in buildTodoItemRow).
+  const activeEligible = items.filter(
+    (item) => !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed
+  );
 
   // Focusing a task is only ever user-initiated (via "Work on this task
   // now" below) -- nothing is auto-activated here. Still clears a stale

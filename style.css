@@ -358,6 +358,7 @@ main {
 /* After .all-day so a task that's both all-day and an appointment (not yet
    due) shows the appointment color. */
 .todo-item.appointment .todo-item-name { color: #81c995; }
+.todo-item.passive .todo-item-name { color: #bcaaa4; }
 
 .todo-focus-btn {
   flex: none;
