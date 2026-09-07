@@ -232,6 +232,14 @@ function loadTasks() {
 let tasks = loadTasks();
 let activeTaskId = localStorage.getItem(ACTIVE_TASK_STORAGE_KEY) || null;
 
+// Wall-clock timestamp since the active task started being focused WITHOUT a
+// timer running -- the focus-only counterpart of a timer's own runningSince.
+// In-memory only (unlike activeTaskId/timers, an interrupted no-timer focus
+// session isn't worth persisting/resuming across a reload): null whenever
+// there's no such session live, i.e. whenever there's no active task or the
+// active task has a timer instead (see flushFocusOnlyElapsed/setActiveTaskId).
+let activeFocusOnlySince = null;
+
 function saveTasks() {
   localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
 }
@@ -255,12 +263,61 @@ function saveActiveTaskId() {
 function setActiveTaskId(newId) {
   if (newId === activeTaskId) return;
   const prevTask = tasks.find((t) => t.id === activeTaskId);
-  if (prevTask && prevTask.timer) freezeTimer(prevTask.timer);
+  if (prevTask) {
+    if (prevTask.timer) {
+      flushTimerElapsed(prevTask); // log this run's elapsed time before freezeTimer erases runningSince
+      freezeTimer(prevTask.timer);
+    } else {
+      flushFocusOnlyElapsed(prevTask);
+    }
+  }
   activeTaskId = newId;
   saveActiveTaskId();
   const nextTask = tasks.find((t) => t.id === activeTaskId);
-  if (nextTask && nextTask.timer) nextTask.timer.runningSince = Date.now();
+  if (nextTask) {
+    if (nextTask.timer) nextTask.timer.runningSince = Date.now();
+    else activeFocusOnlySince = Date.now();
+  }
   saveTasks();
+}
+
+// task.focusLog is per-occurrence -- { [occurrenceDate]: { focusedSeconds,
+// timerSeconds } } -- attributed to whichever occurrence is currently
+// pending for the task (today's, if it has one, otherwise the most recent
+// carried-over one), the same occurrence a "Work on this now" click or
+// timer would actually be advancing. Session lengths are flushed in here
+// rather than measured after the fact, so a session that happens to straddle
+// midnight is simply credited to whatever occurrence is current at flush
+// time -- not worth the bookkeeping needed to split it precisely.
+function addFocusStat(task, kind, seconds) {
+  if (!(seconds > 0)) return;
+  const occurrenceDate = Recurrence.mostRecentOccurrenceOnOrBefore(task, Recurrence.dateToISO(new Date())) || task.dueDate;
+  if (!task.focusLog) task.focusLog = {};
+  if (!task.focusLog[occurrenceDate]) task.focusLog[occurrenceDate] = { focusedSeconds: 0, timerSeconds: 0 };
+  task.focusLog[occurrenceDate][kind] += seconds;
+}
+
+// Logs whatever a currently-running timer has accumulated since it last
+// started/resumed -- called right before anything that would otherwise lose
+// that span: the task losing active status (freezeTimer, which only
+// checkpoints remainingSeconds, not the stats log), or the timer being
+// cancelled outright. A no-op for an already-paused timer (runningSince ==
+// null): its elapsed time up to the pause was already flushed when it was
+// paused.
+function flushTimerElapsed(task) {
+  if (task.timer && task.timer.runningSince != null) {
+    addFocusStat(task, 'timerSeconds', (Date.now() - task.timer.runningSince) / 1000);
+  }
+}
+
+// Logs whatever the active-but-timerless task has accumulated since it (or a
+// since-cancelled timer on it, see cancelTaskTimer) started this focus-only
+// session. A no-op if there's no such session live.
+function flushFocusOnlyElapsed(task) {
+  if (activeFocusOnlySince != null) {
+    addFocusStat(task, 'focusedSeconds', (Date.now() - activeFocusOnlySince) / 1000);
+    activeFocusOnlySince = null;
+  }
 }
 
 // A timer's remaining time is derived from a fixed checkpoint
@@ -306,6 +363,12 @@ async function startTaskTimerPrompt(task) {
   if (!result) return;
   const minutes = Math.min(360, Math.max(1, Math.round(Number(result.minutes)) || 0));
   if (!minutes) return;
+  // If this task was already the active one focus-only (no timer yet -- e.g.
+  // "Work on this now" was clicked first, or a previous timer on it was
+  // cancelled but it stayed active), that focus-only session's elapsed time
+  // needs logging now: setActiveTaskId below is a same-id no-op in that case
+  // and would never otherwise flush it.
+  if (task.id === activeTaskId && !task.timer) flushFocusOnlyElapsed(task);
   // runningSince is set here directly, not left for setActiveTaskId below to
   // fill in -- if this task was already the active one (e.g. it stayed
   // active after a previous timer on it was cancelled), setActiveTaskId is
@@ -316,8 +379,15 @@ async function startTaskTimerPrompt(task) {
   renderTodo();
 }
 
+// Cancelling logs whatever the timer's current run (if any) had already
+// accumulated -- only the elapsed portion, not the whole timer -- rather
+// than just discarding it; see flushTimerElapsed. If the task is still
+// active afterward (cancelling doesn't itself un-focus it, just removes the
+// timer), it keeps being focused, now in plain focus-only mode.
 function cancelTaskTimer(task) {
+  flushTimerElapsed(task);
   task.timer = null;
+  if (task.id === activeTaskId) activeFocusOnlySince = Date.now();
   saveTasks();
   renderTodo();
 }
@@ -364,6 +434,8 @@ function showTodoContextMenu(event, task, canWorkOnNow) {
     };
     menu.appendChild(el);
   }
+
+  addItem('Task stats…', () => showTaskStatsModal(task));
 
   if (!task.timer) {
     if (canWorkOnNow) addItem('Timer…', () => startTaskTimerPrompt(task));
@@ -991,8 +1063,13 @@ function toggleTaskCompletion(task, occurrenceDate) {
     // A running timer stops making sense once its task is done -- cancelled
     // outright rather than just frozen. renderTodo's own "no longer
     // eligible" check un-marks it as active right after this, via
-    // setActiveTaskId, same as completing any other active task already does.
-    if (task.timer) task.timer = null;
+    // setActiveTaskId, same as completing any other active task already does
+    // (which is what flushes this task's own now-empty focus-only session,
+    // so it isn't set up again here).
+    if (task.timer) {
+      flushTimerElapsed(task);
+      task.timer = null;
+    }
   }
   saveTasks();
   renderTodo();
@@ -1317,7 +1394,7 @@ const WORKING_ON_ICON = '<svg viewBox="0 0 24 24" width="14" height="14"><circle
 // Builds a single to-do row -- extracted from renderTodo's per-day loop so
 // it can be appended into either of a day's two columns rather than always
 // straight into todoListEl.
-function buildTodoItemRow(item, isToday, pendingOverdue) {
+function buildTodoItemRow(item, isToday) {
   const row = document.createElement('div');
   row.className =
     'todo-item' +
@@ -1405,32 +1482,28 @@ function buildTodoItemRow(item, isToday, pendingOverdue) {
 
   row.appendChild(text);
 
-  // Focusing is entirely user-initiated -- nothing auto-activates a task
-  // (see renderTodo). A carried-over (already-past) overdue task has no
-  // dedicated button (see canWorkOnNow below, scoped to today's tasks), so
-  // clicking anywhere on its row is the only way to focus it; applies
-  // regardless of how many other tasks are also overdue.
-  if (pendingOverdue.some((i) => i.task.id === item.task.id)) {
-    row.title = 'Click to work on this task now';
-    row.onclick = () => {
-      setActiveTaskId(item.task.id);
-      renderTodo();
-    };
-  }
+  // Focusing is entirely user-initiated, via the "Work on this now" button
+  // below only -- nothing auto-activates a task, and clicking anywhere else
+  // on a row (including an overdue one) never does either, so it can't ever
+  // race with row.ondblclick's edit-task action below. A carried-over
+  // (already-past) task has no such button (see canWorkOnNow below, scoped
+  // to today's tasks) and so currently has no way to become the active task
+  // at all -- that's an accepted gap, not something a plain click on the row
+  // should paper over.
 
   // Lets the user voluntarily mark any of today's tasks as the one they're
   // working on -- not just an overdue one -- and toggle back off again.
   // Only one task can be active at a time (activeTaskId is a single value,
   // not a set), so marking a different task implicitly un-marks whichever
   // one was active before. Scoped to today's tasks only: a carried-over
-  // (already-past) task has no button here, just the whole-row click above.
-  // A carried-over APPOINTMENT is the one exception -- it gets this button
-  // too. Excluding a failed one (!item.failed below) is what makes failing
-  // terminal: it was already active (and stayed exempt from failing) or it
-  // wasn't, but once it's failed, re-activating can't undo that -- only
-  // checking it off can. Shared with the timer context menu below: starting
-  // a timer is the same kind of voluntary "work on this now" this button
-  // offers, just worded for the timer instead.
+  // (already-past) task has no button here at all. A carried-over
+  // APPOINTMENT is the one exception -- it gets this button too. Excluding a
+  // failed one (!item.failed below) is what makes failing terminal: it was
+  // already active (and stayed exempt from failing) or it wasn't, but once
+  // it's failed, re-activating can't undo that -- only checking it off can.
+  // Shared with the timer context menu below: starting a timer is the same
+  // kind of voluntary "work on this now" this button offers, just worded for
+  // the timer instead.
   const canWorkOnNow =
     (item.kind === 'today' || (item.kind === 'carried-over' && item.task.appointment)) &&
     !item.completed &&
@@ -1449,17 +1522,16 @@ function buildTodoItemRow(item, isToday, pendingOverdue) {
     row.appendChild(workOnBtn);
   }
 
-  // Timer... / Pause|Resume timer / Cancel timer -- gated the same as the
-  // "Work on this now" button above (starting one marks the task active,
-  // same restriction), except a task that already has a timer keeps the
-  // option to cancel it even if it somehow stopped being eligible in the
-  // meantime.
-  if (canWorkOnNow || item.task.timer) {
-    row.oncontextmenu = (e) => {
-      e.preventDefault();
-      showTodoContextMenu(e, item.task, canWorkOnNow);
-    };
-  }
+  // Always available -- Task stats is a plain read-only view with no
+  // eligibility requirement. The Timer... / Pause|Resume timer / Cancel
+  // timer items inside are still gated the same as the "Work on this now"
+  // button above (starting one marks the task active, same restriction),
+  // except a task that already has a timer keeps the option to cancel it
+  // even if it somehow stopped being eligible in the meantime.
+  row.oncontextmenu = (e) => {
+    e.preventDefault();
+    showTodoContextMenu(e, item.task, canWorkOnNow);
+  };
 
   // A 'once' task has no recurrence to split, so its double-click skips
   // straight to editing it -- only recurring tasks get the "which
@@ -1517,7 +1589,6 @@ function renderTodo() {
 
   const items = todoViewMode === 'next-recurrence' ? computeNextRecurrenceItems() : computeTodoDisplayItems();
 
-  const pendingOverdue = items.filter((item) => item.overdue && !item.completed);
   // Eligible to be (or stay) the active task: today's occurrence (whether
   // overdue yet or not -- the "Work on this now" button lets the user opt
   // into any of today's tasks, not just overdue ones) or a carried-over
@@ -1595,7 +1666,7 @@ function renderTodo() {
       const column = document.createElement('div');
       column.className = 'todo-day-column';
       for (const item of columnItems) {
-        column.appendChild(buildTodoItemRow(item, isToday, pendingOverdue));
+        column.appendChild(buildTodoItemRow(item, isToday));
       }
       columns.appendChild(column);
     }
@@ -1746,5 +1817,168 @@ document.getElementById('todo-manage-btn').onclick = () => {
 };
 document.getElementById('todo-manage-close').onclick = () => todoManageOverlay.classList.add('hidden');
 document.getElementById('todo-add-btn').onclick = () => openTaskForm(null);
+
+// ---------------------------------------------------------------------------
+// Task stats ("Task stats..." on the to-do context menu).
+// ---------------------------------------------------------------------------
+
+// A recurring task split via "only this occurrence" / "this and following"
+// (see applySplitEdit/applySplitDelete) spreads its history across multiple
+// task records that all share the original's seriesId -- any true total has
+// to look across every one of them, not just whichever record is currently
+// on-screen representing "the task".
+function tasksInSeries(seriesId) {
+  return tasks.filter((t) => t.seriesId === seriesId);
+}
+
+// A series counts as recurring if any fragment still has a repeating
+// frequency, or if it's already been split into more than one record --
+// even an entirely-split series of individually-'once' fragments is still a
+// recurring task's history, not a plain one-off.
+function isRecurringSeries(seriesTasks) {
+  return seriesTasks.length > 1 || seriesTasks.some((t) => t.frequency.type !== 'once');
+}
+
+// Merges every fragment's focusLog into one per-occurrence-date map plus
+// running totals. Fragments' date ranges never overlap (each split truncates
+// the historical portion's endDate right before the next fragment starts),
+// so this never double-counts a date across fragments.
+function aggregateFocusLog(seriesTasks) {
+  const byDate = new Map();
+  let totalFocusedSeconds = 0;
+  let totalTimerSeconds = 0;
+  for (const t of seriesTasks) {
+    for (const [date, entry] of Object.entries(t.focusLog || {})) {
+      const bucket = byDate.get(date) || { focusedSeconds: 0, timerSeconds: 0 };
+      bucket.focusedSeconds += entry.focusedSeconds || 0;
+      bucket.timerSeconds += entry.timerSeconds || 0;
+      byDate.set(date, bucket);
+      totalFocusedSeconds += entry.focusedSeconds || 0;
+      totalTimerSeconds += entry.timerSeconds || 0;
+    }
+  }
+  return { byDate, totalFocusedSeconds, totalTimerSeconds };
+}
+
+function countSeriesCompletions(seriesTasks) {
+  let count = 0;
+  for (const t of seriesTasks) count += Object.values(t.completions || {}).filter(Boolean).length;
+  return count;
+}
+
+// How many occurrences of the series have happened up to and including
+// today, across every fragment -- reuses forEachOccurrenceBefore (see the
+// dismissal logic above), which already respects each fragment's own
+// dueDate/endDate via Recurrence.occursOn.
+function countSeriesOccurrencesToDate(seriesTasks, todayISO) {
+  const cutoff = Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), 1));
+  let count = 0;
+  for (const t of seriesTasks) forEachOccurrenceBefore(t, cutoff, () => count++);
+  return count;
+}
+
+function formatStatsDuration(totalSeconds) {
+  const seconds = Math.round(totalSeconds);
+  if (seconds <= 0) return '0s';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const parts = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (h > 0 || m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
+}
+
+function buildStatRow(label, value) {
+  const row = document.createElement('div');
+  row.className = 'task-stats-row';
+  const labelEl = document.createElement('span');
+  labelEl.className = 'task-stats-label';
+  labelEl.textContent = label;
+  const valueEl = document.createElement('span');
+  valueEl.className = 'task-stats-value';
+  valueEl.textContent = value;
+  row.appendChild(labelEl);
+  row.appendChild(valueEl);
+  return row;
+}
+
+function buildStatsSection(heading) {
+  const section = document.createElement('div');
+  section.className = 'task-stats-section';
+  const headingEl = document.createElement('div');
+  headingEl.className = 'task-stats-heading';
+  headingEl.textContent = heading;
+  section.appendChild(headingEl);
+  return section;
+}
+
+const taskStatsOverlay = document.getElementById('task-stats-overlay');
+const taskStatsTitleEl = document.getElementById('task-stats-title');
+const taskStatsBodyEl = document.getElementById('task-stats-body');
+
+function showTaskStatsModal(task) {
+  taskStatsTitleEl.textContent = `Stats: ${task.name}`;
+  taskStatsBodyEl.innerHTML = '';
+
+  const seriesTasks = tasksInSeries(task.seriesId);
+  const recurring = isRecurringSeries(seriesTasks);
+  const { byDate, totalFocusedSeconds, totalTimerSeconds } = aggregateFocusLog(seriesTasks);
+
+  const totalsSection = buildStatsSection(recurring ? 'Total time focused (all recurrences)' : 'Total time focused');
+  totalsSection.appendChild(buildStatRow('Total', formatStatsDuration(totalFocusedSeconds + totalTimerSeconds)));
+  totalsSection.appendChild(buildStatRow('Just focused', formatStatsDuration(totalFocusedSeconds)));
+  totalsSection.appendChild(buildStatRow('Focused with timer', formatStatsDuration(totalTimerSeconds)));
+  taskStatsBodyEl.appendChild(totalsSection);
+
+  if (!recurring) {
+    taskStatsOverlay.classList.remove('hidden');
+    return;
+  }
+
+  const todayISO = Recurrence.dateToISO(new Date());
+  const completed = countSeriesCompletions(seriesTasks);
+  const occurrences = countSeriesOccurrencesToDate(seriesTasks, todayISO);
+  const percent = occurrences > 0 ? Math.round((completed / occurrences) * 100) : 0;
+
+  const completionSection = buildStatsSection('Completion');
+  completionSection.appendChild(buildStatRow('Completed', String(completed)));
+  completionSection.appendChild(buildStatRow('Recurrences to date', String(occurrences)));
+  completionSection.appendChild(buildStatRow('Completion rate', `${percent}%`));
+  taskStatsBodyEl.appendChild(completionSection);
+
+  const perRecurrenceSection = buildStatsSection('Time per recurrence');
+  const dates = [...byDate.keys()].sort().reverse();
+  if (dates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'task-stats-empty';
+    empty.textContent = 'No focused time logged yet.';
+    perRecurrenceSection.appendChild(empty);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'task-stats-occurrence-list';
+    for (const date of dates) {
+      const entry = byDate.get(date);
+      const item = document.createElement('div');
+      item.className = 'task-stats-occurrence-item';
+      const dateEl = document.createElement('span');
+      dateEl.className = 'task-stats-occurrence-date';
+      dateEl.textContent = date;
+      const timeEl = document.createElement('span');
+      timeEl.className = 'task-stats-occurrence-time';
+      timeEl.textContent = `${formatStatsDuration(entry.focusedSeconds)} focused · ${formatStatsDuration(entry.timerSeconds)} timer`;
+      item.appendChild(dateEl);
+      item.appendChild(timeEl);
+      list.appendChild(item);
+    }
+    perRecurrenceSection.appendChild(list);
+  }
+  taskStatsBodyEl.appendChild(perRecurrenceSection);
+
+  taskStatsOverlay.classList.remove('hidden');
+}
+
+document.getElementById('task-stats-close').onclick = () => taskStatsOverlay.classList.add('hidden');
 
 renderTodo();
