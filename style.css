@@ -778,6 +778,12 @@ option {
 }
 .modal-cancel:hover { background: rgba(255, 255, 255, 0.12); }
 
+.modal-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8eaed;
+}
+.modal-secondary:hover { background: rgba(255, 255, 255, 0.12); }
+
 .modal-ok {
   background: #8ab4f8;
   color: #131314;

@@ -17,6 +17,14 @@ const modalCancel = modalOverlay.querySelector('.modal-cancel');
 // collide with a legitimate field-values result.
 const MODAL_DELETE_RESULT = Symbol('modal-delete');
 
+// Stamped (non-enumerably... actually just as a Symbol key, so it never
+// shows up in Object.keys/JSON.stringify or collides with a real field name)
+// onto the result object when opts.secondaryLabel's button is what was
+// clicked, instead of the main OK/okLabel button -- lets a caller offer two
+// different submit actions over the same set of fields (e.g. "Set" vs.
+// "Start" a timer) without needing a whole second modal.
+const MODAL_SECONDARY_RESULT = Symbol('modal-secondary');
+
 // fields: [{ name, label, value, placeholder, required, min, max }] for
 // text/date/time/number fields (type defaults to 'text', also accepts
 // 'date'/'time'/'number'/'textarea'; min/max only apply to 'number' and are
@@ -26,9 +34,11 @@ const MODAL_DELETE_RESULT = Symbol('modal-delete');
 // select, or [{ name, label, type: 'checkboxes', options: [{value, label}],
 // value: string[] }] for a multi-select (resolves to an array). Fields
 // default to required (non-empty / non-empty-array); pass required: false to
-// allow blank. Resolves { [field.name]: value } on OK, MODAL_DELETE_RESULT if
-// opts.deleteLabel is set and its two-click arm/confirm is completed, or null
-// on Cancel/Escape. opts.okLabel/cancelLabel override the button text.
+// allow blank. Resolves { [field.name]: value } on OK (with result[MODAL_
+// SECONDARY_RESULT] set to true if opts.secondaryLabel's button was clicked
+// instead), MODAL_DELETE_RESULT if opts.deleteLabel is set and its two-click
+// arm/confirm is completed, or null on Cancel/Escape. opts.okLabel/
+// cancelLabel/secondaryLabel override/add button text.
 function showFormModal(title, fields, opts = {}) {
   return new Promise((resolve) => {
     modalTitle.textContent = title;
@@ -37,8 +47,9 @@ function showFormModal(title, fields, opts = {}) {
     modalCancel.textContent = opts.cancelLabel || 'Cancel';
 
     // The overlay's DOM (including .modal-actions) is reused across every
-    // showFormModal() call in the app, so any delete button from a previous
-    // call must be torn down before conditionally adding a fresh one here.
+    // showFormModal() call in the app, so any delete/secondary button from a
+    // previous call must be torn down before conditionally adding a fresh
+    // one here.
     const staleDeleteBtn = modalOverlay.querySelector('.modal-delete');
     if (staleDeleteBtn) staleDeleteBtn.remove();
     if (opts.deleteLabel) {
@@ -62,6 +73,17 @@ function showFormModal(title, fields, opts = {}) {
         deleteBtn.classList.remove('confirm');
       });
       modalCancel.parentElement.insertBefore(deleteBtn, modalCancel);
+    }
+
+    const staleSecondaryBtn = modalOverlay.querySelector('.modal-secondary');
+    if (staleSecondaryBtn) staleSecondaryBtn.remove();
+    let secondaryBtn = null;
+    if (opts.secondaryLabel) {
+      secondaryBtn = document.createElement('button');
+      secondaryBtn.className = 'modal-secondary';
+      secondaryBtn.textContent = opts.secondaryLabel;
+      secondaryBtn.onclick = () => submit(true);
+      modalOk.parentElement.insertBefore(secondaryBtn, modalOk);
     }
 
     const interactiveEls = [];
@@ -185,6 +207,7 @@ function showFormModal(title, fields, opts = {}) {
       modalOverlay.classList.add('hidden');
       modalOk.onclick = null;
       modalCancel.onclick = null;
+      if (secondaryBtn) secondaryBtn.onclick = null;
       interactiveEls.forEach((el) => {
         el.onkeydown = null;
         el.onchange = null;
@@ -193,7 +216,7 @@ function showFormModal(title, fields, opts = {}) {
       resolve(result);
     }
 
-    function submit() {
+    function submit(secondary) {
       const result = {};
       for (const f of fieldGetters) {
         const value = f.getValue();
@@ -202,16 +225,17 @@ function showFormModal(title, fields, opts = {}) {
         if (visible && enabled && f.required && (f.isArray ? value.length === 0 : !value)) return;
         result[f.name] = value;
       }
+      if (secondary) result[MODAL_SECONDARY_RESULT] = true;
       finish(result);
     }
 
-    modalOk.onclick = submit;
+    modalOk.onclick = () => submit(false);
     modalCancel.onclick = () => finish(null);
     interactiveEls.forEach((el) => {
       el.onchange = updateVisibility;
       el.oninput = updateVisibility;
       el.onkeydown = (e) => {
-        if (e.key === 'Enter' && el.tagName !== 'TEXTAREA') submit();
+        if (e.key === 'Enter' && el.tagName !== 'TEXTAREA') submit(false);
         if (e.key === 'Escape') {
           e.stopPropagation(); // don't let other Escape handlers also fire
           finish(null);
@@ -463,7 +487,7 @@ async function startTaskTimerPrompt(task) {
         disableIf: (v) => v.countUp.length > 0,
       },
     ],
-    { okLabel: 'Start' }
+    { okLabel: 'Start', secondaryLabel: 'Set' }
   );
   if (!result) return;
   const countUp = result.countUp.length > 0;
@@ -473,6 +497,27 @@ async function startTaskTimerPrompt(task) {
     if (!minutes) return;
     totalSeconds = minutes * 60;
   }
+
+  // "Set" attaches the timer without starting or focusing anything --
+  // runningSince stays null, exactly like a paused timer (see freezeTimer),
+  // so it just sits there until the user starts it themselves. That's
+  // already exactly what focusing the task does for any task with an
+  // unstarted/paused timer (see setActiveTaskId's nextTask.timer branch --
+  // the same mechanism "Resume timer" on the context menu uses), so no
+  // separate start-on-focus logic is needed here.
+  if (result[MODAL_SECONDARY_RESULT]) {
+    task.timer = {
+      mode: countUp ? 'countup' : 'countdown',
+      continuePastZero: result.continuePastZero.length > 0,
+      totalSeconds,
+      remainingSeconds: totalSeconds,
+      runningSince: null,
+    };
+    saveTasks();
+    renderTodo();
+    return;
+  }
+
   // If this task was already the active one focus-only (no timer yet -- e.g.
   // "Work on this now" was clicked first, or a previous timer on it was
   // cancelled but it stayed active), that focus-only session's elapsed time
@@ -1856,13 +1901,15 @@ function renderTodo() {
 // second, not just on whatever triggered the last render -- rather than
 // duplicate renderTodo's formatting/eligibility logic in a separate
 // second-by-second DOM patch, this just re-runs renderTodo itself once a
-// second while (and only while) the active task actually has a timer,
-// starting/stopping the interval as that stops being true (including once
-// this same call, at the end of every render, re-evaluates it).
+// second while (and only while) the active task's timer is actually running
+// (runningSince set -- a "Set" timer waiting to be started via focus, see
+// startTaskTimerPrompt, has none yet and its frozen display has nothing to
+// tick), starting/stopping the interval as that stops being true (including
+// once this same call, at the end of every render, re-evaluates it).
 let timerTickIntervalId = null;
 function ensureTimerTicking() {
   const activeTask = tasks.find((t) => t.id === activeTaskId);
-  const shouldTick = !!(activeTask && activeTask.timer);
+  const shouldTick = !!(activeTask && activeTask.timer && activeTask.timer.runningSince != null);
   if (shouldTick && !timerTickIntervalId) {
     timerTickIntervalId = setInterval(renderTodo, 1000);
   } else if (!shouldTick && timerTickIntervalId) {
