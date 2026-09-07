@@ -1553,18 +1553,56 @@ function buildTodoItemRow(item, isToday) {
   return row;
 }
 
+// A short, non-looping two-note chime built from plain oscillators -- no
+// audio asset file to bundle/ship, and nothing to loop or stop later.
+// AudioContext is created fresh per chime and closed once it's done playing;
+// wrapped in try/catch since audio can fail to init (no output device,
+// autoplay policy, etc.) and a missing chime shouldn't be fatal to the timer
+// actually expiring.
+function playTimerChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    [880, 660].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = now + i * 0.12;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.3, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.32);
+    });
+    setTimeout(() => ctx.close(), 600);
+  } catch {
+    // No audio output available -- nothing more to do here.
+  }
+}
+
 // A timer that's actually counted all the way down to zero is done, not
-// merely paused at zero -- there's nothing left to pause/resume, so it's
-// cancelled the same way the context menu's own Cancel would. Checked
-// against every task with a timer (not just the currently-active one) so
-// one left paused right at zero also gets cleaned up, not just a running
-// one crossing zero live.
+// merely paused at zero -- cancelled the same way the context menu's own
+// Cancel would (including logging its final run's elapsed time, same as
+// cancelTaskTimer) and announced with a short chime. Checked against every
+// task with a timer (not just the currently-active one) so one left paused
+// right at zero also gets cleaned up, not just a running one crossing zero
+// live -- though in practice only a running (active) timer ever actually
+// counts down to trigger this. If its task was the active one, expiring
+// also unfocuses it -- unlike a manual cancel, which leaves the task active
+// in plain focus-only mode, a timer running out means the time set aside
+// for it is over, so there's nothing left to stay focused on it for.
 function expireFinishedTimers() {
   let changed = false;
   for (const t of tasks) {
     if (t.timer && currentTimerRemaining(t.timer) <= 0) {
+      flushTimerElapsed(t);
       t.timer = null;
       changed = true;
+      playTimerChime();
+      if (t.id === activeTaskId) setActiveTaskId(null);
     }
   }
   if (changed) saveTasks();
