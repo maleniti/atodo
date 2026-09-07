@@ -1376,23 +1376,36 @@ function markOccurrencesDismissedBefore(task, cutoffISO) {
 // later. Goes through the same scheduleDismissal linger as completing an
 // ordinary carried-over item does, rather than dismissing them this
 // instant, so unchecking the completion that triggered this still has a
-// window to cancel it (see unscheduleOccurrencesDismissalBefore).
+// window to cancel it for the single most recent one of them (see
+// restorePriorOccurrenceIfIncomplete) -- any further-back ones this reaches
+// stay dismissed even if that completion gets undone.
 function scheduleOccurrencesDismissalBefore(task, cutoffISO) {
   forEachOccurrenceBefore(task, cutoffISO, (date) => scheduleDismissal(task, date));
 }
 
-// Undoes the above when the completion that triggered it gets unchecked --
-// cancels any of those occurrences' still-pending scheduled dismissals (so
-// one doesn't fire later and re-hide something this just restored), and
-// resets each one's dismissed flag back to whatever its own completed flag
-// already is (never touched here), immediately: a genuinely-incomplete one
-// reappears on the list right away, while one that happened to be
-// separately completed on its own stays exactly as it was.
-function unscheduleOccurrencesDismissalBefore(task, cutoffISO) {
-  forEachOccurrenceBefore(task, cutoffISO, (date) => {
-    cancelScheduledDismissal(task, date);
-    task.dismissed[date] = !!task.completions[date];
-  });
+// Partially undoes the above when the completion that triggered it gets
+// unchecked -- but only for the single most recent prior occurrence (the
+// one carried-over slot that would actually have been visible right before
+// that completion swept it away), not every occurrence all the way back to
+// the task's own due date the way the forward sweep above can reach.
+// Unchecking a completion shouldn't resurrect a long, unrelated history of
+// much older missed days just because they happened to get backfilled at
+// the same time -- those stay dismissed, restorable only by explicitly
+// clicking Show on them (see restoreOccurrence). Only ever called (see
+// toggleTaskCompletion) when *today's* own occurrence is what's being
+// unchecked, never a carried-over one -- unchecking yesterday's shouldn't
+// reach back and restore the day before that either. Cancels that one
+// occurrence's still-pending scheduled dismissal too (so it doesn't fire
+// later and re-hide what this just restored), and resets its dismissed flag
+// back to whatever its own completed flag already is (never touched here),
+// immediately: if it's genuinely still incomplete it reappears on the list
+// right away, while one that happened to be separately completed on its own
+// stays exactly as it was.
+function restorePriorOccurrenceIfIncomplete(task, cutoffISO) {
+  const priorDate = Recurrence.previousOccurrenceBefore(task, cutoffISO);
+  if (!priorDate) return;
+  cancelScheduledDismissal(task, priorDate);
+  task.dismissed[priorDate] = !!task.completions[priorDate];
 }
 
 const editScopeOverlay = document.getElementById('edit-scope-overlay');
@@ -1460,11 +1473,15 @@ function toggleTaskCompletion(task, occurrenceDate) {
     // see isDismissalPending there) -- unchecking within the linger window
     // keeps it shown instead of it still vanishing later on a stale timer.
     cancelScheduledDismissal(task, occurrenceDate);
-    // Mirrors the backfill below in reverse -- if this was still within its
-    // own linger window, or even after it fired, put any earlier occurrence
-    // this had scheduled/marked dismissed back to reflecting its own
-    // (untouched) completed state, so a genuinely missed one reappears.
-    unscheduleOccurrencesDismissalBefore(task, occurrenceDate);
+    // Partially mirrors the backfill below in reverse -- see
+    // restorePriorOccurrenceIfIncomplete for why only the single most recent
+    // prior occurrence, not every one the backfill could have reached, and
+    // only when it's *today's* own occurrence being unchecked, not a
+    // carried-over one -- unchecking, say, yesterday's shouldn't reach back
+    // and restore the day before that.
+    if (occurrenceDate === Recurrence.dateToISO(new Date())) {
+      restorePriorOccurrenceIfIncomplete(task, occurrenceDate);
+    }
   } else {
     task.completions[occurrenceDate] = true;
     // Only this task's "today" or carried-over occurrence is ever checked
