@@ -1036,6 +1036,13 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         required: false,
       },
       {
+        name: 'details',
+        label: 'Details',
+        type: 'textarea',
+        value: existingTask ? existingTask.details : '',
+        required: false,
+      },
+      {
         name: 'dueDate',
         label: 'Due date',
         type: 'date',
@@ -1230,6 +1237,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     }, {
       name: result.name,
       description: result.description,
+      details: result.details,
       dueTime,
       allDay,
       appointment,
@@ -1240,6 +1248,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
   } else if (existingTask) {
     existingTask.name = result.name;
     existingTask.description = result.description;
+    existingTask.details = result.details;
     existingTask.dueDate = result.dueDate;
     existingTask.dueTime = dueTime;
     existingTask.allDay = allDay;
@@ -1255,6 +1264,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       seriesId: seriesOptions.forcedSeriesId || uid(),
       name: result.name,
       description: result.description,
+      details: result.details,
       dueDate: result.dueDate,
       dueTime,
       allDay,
@@ -1320,6 +1330,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       seriesId: originalTask.seriesId,
       name: edited.name,
       description: edited.description,
+      details: edited.details,
       dueDate: newOccurrenceDate,
       dueTime: edited.dueTime,
       allDay: edited.allDay,
@@ -1341,6 +1352,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         seriesId: originalTask.seriesId,
         name: originalTask.name,
         description: originalTask.description,
+        details: originalTask.details,
         dueDate: nextDate,
         dueTime: originalTask.dueTime,
         allDay: originalTask.allDay,
@@ -1360,6 +1372,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       seriesId: originalTask.seriesId,
       name: edited.name,
       description: edited.description,
+      details: edited.details,
       dueDate: newOccurrenceDate,
       dueTime: edited.dueTime,
       allDay: edited.allDay,
@@ -1420,6 +1433,7 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
       seriesId: originalTask.seriesId,
       name: originalTask.name,
       description: originalTask.description,
+      details: originalTask.details,
       dueDate: nextDate,
       dueTime: originalTask.dueTime,
       allDay: originalTask.allDay,
@@ -2064,6 +2078,7 @@ function buildTodoItemRow(item, isToday) {
   // activeOccurrenceDate).
   const isActiveHere = item.task.id === activeTaskId && item.occurrenceDate === activeOccurrenceDate;
   const row = document.createElement('div');
+  row.__task = item.task; // back-reference for refreshPreviewedHighlight's cheap re-tag, see there
   row.className =
     'todo-item' +
     (item.completed ? ' completed' : '') +
@@ -2247,18 +2262,19 @@ function buildTodoItemRow(item, isToday) {
   row.oncontextmenu = (e) => {
     e.preventDefault();
     selectTaskForSidePanel(item.task);
-    renderTodo(); // so .previewed (see the row's className above) shows immediately, not just the side panel itself
     showTodoContextMenu(e, item, canWorkOnNow);
   };
 
   // Plain click (anything not otherwise handled above -- those all
   // stopPropagation their own clicks) just selects this task for the side
   // panel; it never focuses/edits/etc. on its own (see the comment above
-  // canWorkOnNow).
-  row.onclick = () => {
-    selectTaskForSidePanel(item.task);
-    renderTodo();
-  };
+  // canWorkOnNow). Deliberately doesn't renderTodo() itself (selectTaskFor
+  // SidePanel already handles the .previewed accent without a full rebuild,
+  // see refreshPreviewedHighlight) -- replacing this row's own DOM node
+  // mid-gesture broke the browser's double-click detection for
+  // row.ondblclick below, since the second click then lands on a different
+  // element than the first.
+  row.onclick = () => selectTaskForSidePanel(item.task);
 
   row.ondblclick = () => editTaskOccurrence(item.task, item.occurrenceDate);
 
@@ -2507,6 +2523,7 @@ function ensureTimerTicking() {
 const sidePanelEmptyEl = document.getElementById('side-panel-empty');
 const sidePanelContentEl = document.getElementById('side-panel-content');
 const sidePanelTitleEl = document.getElementById('side-panel-title');
+const sidePanelDetailsEl = document.getElementById('side-panel-details');
 const sidePanelToggleBtn = document.getElementById('side-panel-toggle-btn');
 const sidePanelCommentInput = document.getElementById('side-panel-comment-input');
 const sidePanelCommentsEl = document.getElementById('side-panel-comments');
@@ -2518,6 +2535,20 @@ let sidePanelScope = 'task'; // 'task' | 'series'
 function selectTaskForSidePanel(task) {
   sidePanelTask = task;
   renderSidePanel();
+  refreshPreviewedHighlight();
+}
+
+// Retags which rendered .todo-item row(s) carry the .previewed accent
+// without rebuilding the list (renderTodo() does that too, as a side effect
+// of recomputing each row's className from scratch, but a full rebuild on
+// every plain click broke double-click-to-edit -- see row.onclick in
+// buildTodoItemRow). Relies on each row's own __task back-reference.
+function refreshPreviewedHighlight() {
+  document.querySelectorAll('.todo-item.previewed').forEach((el) => el.classList.remove('previewed'));
+  if (!sidePanelTask) return;
+  document.querySelectorAll('.todo-item').forEach((el) => {
+    if (el.__task === sidePanelTask) el.classList.add('previewed');
+  });
 }
 
 function sidePanelRecords() {
@@ -2548,6 +2579,11 @@ function renderSidePanel() {
   sidePanelEmptyEl.classList.add('hidden');
   sidePanelContentEl.classList.remove('hidden');
   sidePanelTitleEl.textContent = sidePanelTask.name;
+  // Tied to the exact record last interacted with, same as the title above,
+  // not aggregated across the task/series toggle -- there's one "Details"
+  // per task record, not a merged history of every fragment's own text.
+  sidePanelDetailsEl.textContent = sidePanelTask.details || '';
+  sidePanelDetailsEl.classList.toggle('hidden', !sidePanelTask.details);
   sidePanelToggleBtn.textContent = sidePanelScope === 'series' ? 'Series' : 'Task';
   sidePanelToggleBtn.title =
     sidePanelScope === 'series'

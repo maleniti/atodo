@@ -98,6 +98,13 @@ main {
   white-space: nowrap;
 }
 
+.side-panel-details {
+  font-size: 12px;
+  color: #9aa0a6;
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+}
+
 .side-panel-comment-input {
   height: 64px;
   padding: 8px;
