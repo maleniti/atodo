@@ -182,6 +182,16 @@ main {
   color: #fff;
 }
 
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-modal {
+  width: 260px;
+}
+
 .todo-section {
   /* No panel background of its own any more -- each .todo-item below carries
      its own beveled-glass background instead, so the list reads as a stack

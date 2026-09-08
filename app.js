@@ -263,6 +263,37 @@ function showFormModal(title, fields, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Auth -- entirely fake for now; there's no backend yet to actually check
+// credentials against or issue real tokens. login()/getMe() have the same
+// async, token-in/token-out shape a real backend's equivalent endpoints
+// will eventually have, so swapping their bodies for real fetch() calls
+// later shouldn't need to touch any caller. Every username/password
+// combination "succeeds" and resolves to the one real user (FAKE_USER_ID).
+// The token itself is a base64'd JSON blob (not a real JWT -- there's no
+// signature, nothing else to actually verify it), just enough structure
+// that a real backend swap only changes what's inside, not how it's used.
+// ---------------------------------------------------------------------------
+
+const AUTH_TOKEN_KEY = 'advanced-todo-auth-token';
+const FAKE_USER_ID = 'nikola';
+
+async function login(username, password) {
+  return { token: btoa(JSON.stringify({ sub: FAKE_USER_ID, issuedAt: Date.now() })) };
+}
+
+async function getMe(token) {
+  const payload = JSON.parse(atob(token));
+  return { id: payload.sub };
+}
+
+// Set once boot()/the login form resolves a user -- every call site below
+// that needs "the current user" (loadTasks/saveTasks) defaults to it rather
+// than requiring every one of the app's many saveTasks() call sites to pass
+// it explicitly, while still accepting an explicit userId for whenever a
+// real backend (and maybe switching accounts) exists.
+let currentUserId = null;
+
+// ---------------------------------------------------------------------------
 // To-do list.
 // ---------------------------------------------------------------------------
 
@@ -270,7 +301,12 @@ const TASKS_STORAGE_KEY = 'advanced-todo-tasks';
 const ACTIVE_TASK_STORAGE_KEY = 'advanced-todo-active-task';
 const ACTIVE_OCCURRENCE_STORAGE_KEY = 'advanced-todo-active-occurrence';
 
-function loadTasks() {
+// SHORTCUT: userId is accepted but ignored -- there's only one real user
+// until a backend exists, so this always reads/writes the same single
+// shared blob regardless of which userId is passed. Upgrading to a real
+// per-user backend means replacing the body here (and in saveTasks) with a
+// fetch() keyed by userId; every caller already passes one.
+function loadTasks(userId = currentUserId) {
   try {
     const raw = localStorage.getItem(TASKS_STORAGE_KEY);
     if (raw) {
@@ -291,7 +327,9 @@ function loadTasks() {
   return [];
 }
 
-let tasks = loadTasks();
+// Populated once startApp() runs (after boot()/login resolves a user), not
+// at script-load time -- there's nothing to load until then.
+let tasks = [];
 let activeTaskId = localStorage.getItem(ACTIVE_TASK_STORAGE_KEY) || null;
 // Which occurrence of activeTaskId is focused -- a recurring task can show
 // up to three rows at once (yesterday's still-overdue one, today's, and
@@ -309,7 +347,8 @@ let activeOccurrenceDate = activeTaskId ? localStorage.getItem(ACTIVE_OCCURRENCE
 // active task has a timer instead (see flushFocusOnlyElapsed/setActiveTaskId).
 let activeFocusOnlySince = null;
 
-function saveTasks() {
+// SHORTCUT: see loadTasks above -- userId is accepted but ignored for now.
+function saveTasks(userId = currentUserId) {
   localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
 }
 
@@ -3039,4 +3078,59 @@ function showTaskStatsModal(task) {
 
 document.getElementById('task-stats-close').onclick = () => taskStatsOverlay.classList.add('hidden');
 
-renderTodo();
+// ---------------------------------------------------------------------------
+// Boot -- gates the app behind the (fake, see login()/getMe() above) login
+// screen. Everything above this point is safe to run unconditionally at
+// script-load time (it's all function/event-listener setup, nothing reads
+// `tasks` yet); only actually loading data and rendering waits for a user.
+// ---------------------------------------------------------------------------
+
+const loginScreenEl = document.getElementById('login-screen');
+const appMainEl = document.getElementById('app-main');
+
+// The one-time "we now know who's logged in" entry point, run either right
+// after boot() finds an existing token or right after the login form
+// resolves a fresh one -- loads that user's tasks and renders for the first
+// time. Everything from here on (every saveTasks()/loadTasks() call
+// elsewhere in the app) already defaults to currentUserId on its own.
+function startApp() {
+  tasks = loadTasks(currentUserId);
+  renderTodo();
+}
+
+function boot() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    loginScreenEl.classList.remove('hidden');
+    return;
+  }
+  appMainEl.classList.remove('hidden');
+  getMe(token).then((user) => {
+    currentUserId = user.id;
+    startApp();
+  });
+}
+
+document.getElementById('login-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const { token } = await login(username, password);
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const user = await getMe(token);
+  currentUserId = user.id;
+  loginScreenEl.classList.add('hidden');
+  appMainEl.classList.remove('hidden');
+  startApp();
+};
+
+// Clears the saved token and reloads -- the easiest way back to the login
+// screen for testing it, and simpler/more robust than manually resetting
+// every piece of in-memory state (tasks, activeTaskId, sidePanelTask, ...)
+// by hand.
+document.getElementById('logout-btn').onclick = () => {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  location.reload();
+};
+
+boot();

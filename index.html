@@ -18,11 +18,33 @@
     </filter>
   </svg>
 
-  <main>
+  <div id="login-screen" class="modal-overlay hidden">
+    <div class="modal login-modal">
+      <div class="modal-title">Log in</div>
+      <form id="login-form">
+        <div class="modal-field">
+          <label for="login-username">Username</label>
+          <input id="login-username" class="modal-input" type="text" autocomplete="username">
+        </div>
+        <div class="modal-field">
+          <label for="login-password">Password</label>
+          <input id="login-password" class="modal-input" type="password" autocomplete="current-password">
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="modal-ok">Log in</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <main id="app-main" class="hidden">
     <div class="todo-column">
       <div class="app-header">
         <h1>To-Do List</h1>
-        <button id="todo-manage-btn" class="menu-btn-small">Manage tasks&hellip;</button>
+        <div class="app-header-actions">
+          <button id="logout-btn" class="menu-btn-small" title="Log out (for testing the login screen)">Log out</button>
+          <button id="todo-manage-btn" class="menu-btn-small">Manage tasks&hellip;</button>
+        </div>
       </div>
 
       <div id="todo-section" class="todo-section hidden">
