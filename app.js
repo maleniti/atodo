@@ -654,81 +654,98 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
   const menu = document.createElement('div');
   menu.className = 'todo-context-menu';
 
-  function addItem(label, onClick) {
-    const el = document.createElement('div');
-    el.className = 'menu-item';
-    el.textContent = label;
-    el.onclick = (e) => {
-      e.stopPropagation();
-      closeTodoContextMenu();
-      onClick();
-    };
-    menu.appendChild(el);
+  // Fixed display order: timer controls, then state actions (done/failed,
+  // focus, show/hide), then edit, then stats -- each its own group,
+  // separated by a divider. Groups are collected first and rendered after,
+  // so an empty group (e.g. no timer eligible) just drops out instead of
+  // leaving a stray/doubled-up separator next to its neighbor.
+  const groups = [[], [], [], []];
+  function addItem(groupIndex, label, onClick) {
+    groups[groupIndex].push({ label, onClick });
   }
-
-  addItem('Task stats…', () => showTaskStatsModal(task));
-
-  const isFutureItem = kind === 'tomorrow' || kind === 'upcoming';
-  if (!isFutureItem) {
-    if (!task.passive && !completed) {
-      addItem('Mark as done', () => toggleTaskCompletion(task, occurrenceDate));
-    }
-    if (task.passive && !failed) {
-      addItem('Mark as failed', () => toggleTaskFailedMark(task, occurrenceDate));
-    }
-
-    if (kind === 'carried-over') {
-      if (task.dismissed[occurrenceDate]) {
-        addItem('Show', () => restoreOccurrence(task, occurrenceDate));
-      } else {
-        addItem('Hide', () => dismissOccurrence(task, occurrenceDate));
-      }
-    }
-
-    if (canWorkOnNow && !isActiveHere) {
-      addItem('Focus', () => {
-        setActiveTaskId(task.id, occurrenceDate);
-        renderTodo();
-      });
-    }
-    if (isActiveHere) {
-      addItem('Unfocus', () => {
-        setActiveTaskId(null);
-        renderTodo();
-      });
-    }
-  }
-
-  addItem('Edit', () => editTaskOccurrence(task, occurrenceDate));
 
   // Gated on timerBelongsToItem(item), not just task.timer -- a task only
   // ever has one timer slot, but it's tagged to a single occurrence (see
   // timerMatchesOccurrence), so a row whose occurrence *isn't* the one the
   // timer belongs to is treated the same as having no timer at all: offering
-  // "Timer…" there would start a fresh one (replacing whatever's parked on
+  // "Timer" there would start a fresh one (replacing whatever's parked on
   // the other occurrence), not touch that other one. Without this, "Cancel
   // timer" on this row could delete a timer that actually belongs to (and is
   // still shown ticking or paused on) a completely different occurrence of
   // the same recurring task.
+  const isFutureItem = kind === 'tomorrow' || kind === 'upcoming';
   const timerIsHere = timerBelongsToItem(item);
   if (isFutureItem) {
     // Nothing below applies to a not-yet-due preview -- see above.
   } else if (!timerIsHere) {
-    if (canWorkOnNow) addItem('Timer…', () => startTaskTimerPrompt(task, occurrenceDate));
+    if (canWorkOnNow) addItem(0, 'Timer', () => startTaskTimerPrompt(task, occurrenceDate));
   } else if (isActiveHere) {
-    addItem('Pause timer', () => {
+    addItem(0, 'Pause timer', () => {
       setActiveTaskId(null);
       renderTodo();
     });
-    addItem('Cancel timer', () => cancelTaskTimer(task));
+    addItem(0, 'Cancel timer', () => cancelTaskTimer(task));
   } else {
     if (canWorkOnNow) {
-      addItem('Resume timer', () => {
+      addItem(0, 'Resume timer', () => {
         setActiveTaskId(task.id, occurrenceDate);
         renderTodo();
       });
     }
-    addItem('Cancel timer', () => cancelTaskTimer(task));
+    addItem(0, 'Cancel timer', () => cancelTaskTimer(task));
+  }
+
+  if (!isFutureItem) {
+    if (!task.passive && !completed) {
+      addItem(1, 'Mark as done', () => toggleTaskCompletion(task, occurrenceDate));
+    }
+    if (task.passive && !failed) {
+      addItem(1, 'Mark as failed', () => toggleTaskFailedMark(task, occurrenceDate));
+    }
+
+    if (canWorkOnNow && !isActiveHere) {
+      addItem(1, 'Focus', () => {
+        setActiveTaskId(task.id, occurrenceDate);
+        renderTodo();
+      });
+    }
+    if (isActiveHere) {
+      addItem(1, 'Unfocus', () => {
+        setActiveTaskId(null);
+        renderTodo();
+      });
+    }
+
+    if (kind === 'carried-over') {
+      if (task.dismissed[occurrenceDate]) {
+        addItem(1, 'Show', () => restoreOccurrence(task, occurrenceDate));
+      } else {
+        addItem(1, 'Hide', () => dismissOccurrence(task, occurrenceDate));
+      }
+    }
+  }
+
+  addItem(2, 'Edit', () => editTaskOccurrence(task, occurrenceDate));
+  addItem(3, 'Task stats', () => showTaskStatsModal(task));
+
+  for (const group of groups) {
+    if (!group.length) continue;
+    if (menu.children.length) {
+      const sep = document.createElement('div');
+      sep.className = 'menu-separator';
+      menu.appendChild(sep);
+    }
+    for (const { label, onClick } of group) {
+      const el = document.createElement('div');
+      el.className = 'menu-item';
+      el.textContent = label;
+      el.onclick = (e) => {
+        e.stopPropagation();
+        closeTodoContextMenu();
+        onClick();
+      };
+      menu.appendChild(el);
+    }
   }
 
   if (!menu.children.length) return;

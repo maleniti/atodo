@@ -416,6 +416,12 @@ main {
 }
 .menu-item:hover { background: rgba(255, 255, 255, 0.08); }
 
+.menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
 /* A to-do task's right-click menu -- positioned wherever the click happened
    (set inline in JS), same glass-panel look as the modals. */
 .todo-context-menu {
