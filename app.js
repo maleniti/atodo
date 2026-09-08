@@ -1743,10 +1743,18 @@ function computeNextRecurrenceItems() {
     const priorDate = Recurrence.previousOccurrenceBefore(task, todayISO);
     let priorPending = false;
     if (priorDate && !task.dismissed[priorDate]) {
-      const completed = !!task.completions[priorDate] || isDismissalPending(task, priorDate);
-      if (completed) {
+      const completed = !!task.completions[priorDate];
+      // A dismissal can be pending here for two different reasons: the
+      // occurrence was genuinely completed (its own linger), or it was
+      // swept up by scheduleOccurrencesDismissalBefore when a *later*
+      // occurrence (today's) got completed, despite never being completed
+      // itself. Only the former should ever display as completed -- the
+      // latter should keep showing its real overdue/failed state right up
+      // until it silently disappears, not flash as done.
+      if (completed || isDismissalPending(task, priorDate)) {
         scheduleDismissal(task, priorDate); // idempotent -- also covers a dismissal already pending from backfill
-        items.push({ task, occurrenceDate: priorDate, completed, overdue: false, failed: false, kind: 'carried-over' });
+        const { overdue, failed } = completed ? { overdue: false, failed: false } : pastDueStatus(task, priorDate, false, now);
+        items.push({ task, occurrenceDate: priorDate, completed, overdue, failed, kind: 'carried-over' });
       } else {
         const { overdue, failed } = pastDueStatus(task, priorDate, false, now);
         priorPending = !failed;
