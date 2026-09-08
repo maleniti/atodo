@@ -104,86 +104,113 @@ function showFormModal(title, fields, opts = {}) {
     }
 
     const interactiveEls = [];
-    const fieldGetters = fields.map((field) => {
+    const fieldGetters = [];
+    // A `fields` entry is normally a single field spec, each getting its own
+    // stacked label+control block. Passing an array instead groups several
+    // specs into one shared row (e.g. "[x] Repeats every [N] [unit]") --
+    // see .modal-field-inline. Grouped fields skip their own block-style
+    // label (there's one shared row, not one per control); a checkbox
+    // field's own inline option label still reads fine there on its own.
+    for (const entry of fields) {
+      const isGroup = Array.isArray(entry);
       const wrap = document.createElement('div');
-      wrap.className = 'modal-field';
+      wrap.className = 'modal-field' + (isGroup ? ' modal-field-inline' : '');
 
-      const label = document.createElement('label');
-      label.textContent = field.label;
-      wrap.appendChild(label);
+      if (!isGroup) {
+        const label = document.createElement('label');
+        label.textContent = entry.label;
+        wrap.appendChild(label);
+      }
 
-      let getValue;
-      let fieldEls;
-      if (field.type === 'select') {
-        const select = document.createElement('select');
-        select.className = 'modal-input';
-        for (const option of field.options) {
-          const optionEl = document.createElement('option');
-          optionEl.value = option.value;
-          optionEl.textContent = option.label;
-          select.appendChild(optionEl);
+      for (const field of isGroup ? entry : [entry]) {
+        // Non-checkbox controls within a group get their own small host
+        // element -- disableIf toggles .modal-field-disabled on THIS, not
+        // the shared row, so disabling e.g. the interval field doesn't also
+        // grey out/disable the checkbox that gates it (they'd otherwise
+        // share one element, since disabling is normally a whole-field, i.e.
+        // whole-row, affair).
+        const host = isGroup && field.type !== 'checkboxes' ? document.createElement('span') : wrap;
+        if (host !== wrap) {
+          host.className = 'modal-field-inline-item';
+          if (field.inlineWidth) host.style.width = field.inlineWidth;
+          wrap.appendChild(host);
         }
-        if (field.value != null) select.value = field.value;
-        wrap.appendChild(select);
-        interactiveEls.push(select);
-        fieldEls = [select];
-        getValue = () => select.value;
-      } else if (field.type === 'checkboxes') {
-        const box = document.createElement('div');
-        box.className = 'modal-checkboxes';
-        const checkboxes = field.options.map((option) => {
-          const row = document.createElement('label');
-          row.className = 'modal-checkbox-row';
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.checked = (field.value || []).includes(option.value);
-          cb.dataset.value = option.value;
-          row.appendChild(cb);
-          const span = document.createElement('span');
-          span.textContent = option.label;
-          row.appendChild(span);
-          box.appendChild(row);
-          interactiveEls.push(cb);
-          return cb;
+
+        let getValue;
+        let fieldEls;
+        if (field.type === 'select') {
+          const select = document.createElement('select');
+          select.className = 'modal-input';
+          for (const option of field.options) {
+            const optionEl = document.createElement('option');
+            optionEl.value = option.value;
+            optionEl.textContent = option.label;
+            select.appendChild(optionEl);
+          }
+          if (field.value != null) select.value = field.value;
+          host.appendChild(select);
+          interactiveEls.push(select);
+          fieldEls = [select];
+          getValue = () => select.value;
+        } else if (field.type === 'checkboxes') {
+          const box = document.createElement('div');
+          box.className = 'modal-checkboxes';
+          const checkboxes = field.options.map((option) => {
+            const row = document.createElement('label');
+            row.className = 'modal-checkbox-row';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = (field.value || []).includes(option.value);
+            cb.dataset.value = option.value;
+            row.appendChild(cb);
+            const span = document.createElement('span');
+            span.textContent = option.label;
+            row.appendChild(span);
+            box.appendChild(row);
+            interactiveEls.push(cb);
+            return cb;
+          });
+          host.appendChild(box);
+          fieldEls = checkboxes;
+          getValue = () => checkboxes.filter((cb) => cb.checked).map((cb) => cb.dataset.value);
+        } else if (field.type === 'textarea') {
+          const textarea = document.createElement('textarea');
+          textarea.className = 'modal-input modal-textarea';
+          textarea.value = field.value || '';
+          textarea.placeholder = field.placeholder || '';
+          host.appendChild(textarea);
+          interactiveEls.push(textarea);
+          fieldEls = [textarea];
+          getValue = () => textarea.value.trim();
+        } else {
+          const input = document.createElement('input');
+          input.className = 'modal-input';
+          input.type = field.type || 'text';
+          input.value = field.value || '';
+          input.placeholder = field.placeholder || '';
+          if (field.min != null) input.min = field.min;
+          if (field.max != null) input.max = field.max;
+          host.appendChild(input);
+          interactiveEls.push(input);
+          fieldEls = [input];
+          getValue = () => input.value.trim();
+        }
+
+        fieldGetters.push({
+          getValue,
+          name: field.name,
+          required: field.required !== false,
+          isArray: field.type === 'checkboxes',
+          wrap,
+          disableTarget: host,
+          els: fieldEls,
+          showIf: field.showIf,
+          disableIf: field.disableIf,
         });
-        wrap.appendChild(box);
-        fieldEls = checkboxes;
-        getValue = () => checkboxes.filter((cb) => cb.checked).map((cb) => cb.dataset.value);
-      } else if (field.type === 'textarea') {
-        const textarea = document.createElement('textarea');
-        textarea.className = 'modal-input modal-textarea';
-        textarea.value = field.value || '';
-        textarea.placeholder = field.placeholder || '';
-        wrap.appendChild(textarea);
-        interactiveEls.push(textarea);
-        fieldEls = [textarea];
-        getValue = () => textarea.value.trim();
-      } else {
-        const input = document.createElement('input');
-        input.className = 'modal-input';
-        input.type = field.type || 'text';
-        input.value = field.value || '';
-        input.placeholder = field.placeholder || '';
-        if (field.min != null) input.min = field.min;
-        if (field.max != null) input.max = field.max;
-        wrap.appendChild(input);
-        interactiveEls.push(input);
-        fieldEls = [input];
-        getValue = () => input.value.trim();
       }
 
       modalFields.appendChild(wrap);
-      return {
-        getValue,
-        name: field.name,
-        required: field.required !== false,
-        isArray: field.type === 'checkboxes',
-        wrap,
-        els: fieldEls,
-        showIf: field.showIf,
-        disableIf: field.disableIf,
-      };
-    });
+    }
 
     // Fields with a `showIf(values)` predicate (e.g. a monthly-only option
     // that's irrelevant unless "Repeats" is set to monthly) are hidden/shown
@@ -210,7 +237,7 @@ function showFormModal(title, fields, opts = {}) {
         if (f.showIf) f.wrap.classList.toggle('modal-field-hidden', !f.showIf(values));
         if (f.disableIf) {
           const disabled = f.disableIf(values);
-          f.wrap.classList.toggle('modal-field-disabled', disabled);
+          f.disableTarget.classList.toggle('modal-field-disabled', disabled);
           f.els.forEach((el) => (el.disabled = disabled));
         }
       }
@@ -238,7 +265,7 @@ function showFormModal(title, fields, opts = {}) {
       for (const f of fieldGetters) {
         const value = f.getValue();
         const visible = !f.wrap.classList.contains('modal-field-hidden');
-        const enabled = !f.wrap.classList.contains('modal-field-disabled');
+        const enabled = !f.disableTarget.classList.contains('modal-field-disabled');
         if (visible && enabled && f.required && (f.isArray ? value.length === 0 : !value)) return;
         result[f.name] = value;
       }
@@ -825,48 +852,20 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
   menu.style.top = `${y}px`;
 }
 
-// A single select value like "custom-days" <-> the stored {type, interval}
-// shape, so "Daily"/"Weekly"/"Monthly" can be plain one-click options while
-// "Every N ..." only needs one extra number field regardless of unit.
-function encodeFrequency(freq) {
-  if (freq.type === 'once') return 'once';
-  if (freq.interval === 1) {
-    if (freq.type === 'days') return 'daily';
-    if (freq.type === 'weeks') return 'weekly';
-    if (freq.type === 'months') return 'monthly';
-  }
-  return 'custom-' + freq.type;
-}
-
 // `extra` carries the task form's weekly/monthly sub-fields (weekdays,
 // monthlyMode, monthlyOffset, monthlyWeekday, monthlyOrdinal,
 // multiWeekdayDays, multiWeekdayOrdinal, multiWeekdayOffsetDirection,
 // multiWeekdayOffsetDays) -- folded into the decoded frequency only when
 // they're actually relevant to the chosen type, so e.g. leftover monthly
-// fields from switching frequencyType back and forth don't leak into a
-// plain weekly/daily task.
-function decodeFrequency(frequencyType, intervalStr, extra = {}) {
+// fields from switching the unit back and forth don't leak into a plain
+// weekly/daily task. `type` is 'days'/'weeks'/'months' directly (the
+// "Repeats every N ..." unit dropdown's own value) -- there's no longer a
+// separate "daily"/"custom-days"-style shortcut to decode, since N is
+// always its own editable field now rather than implied-1-unless-picking-
+// the-"every N" option.
+function decodeFrequency(type, intervalStr, extra = {}) {
   const interval = Math.max(1, parseInt(intervalStr, 10) || 1);
-  const base = (() => {
-    switch (frequencyType) {
-      case 'once':
-        return { type: 'once', interval: 1 };
-      case 'daily':
-        return { type: 'days', interval: 1 };
-      case 'weekly':
-        return { type: 'weeks', interval: 1 };
-      case 'monthly':
-        return { type: 'months', interval: 1 };
-      case 'custom-days':
-        return { type: 'days', interval };
-      case 'custom-weeks':
-        return { type: 'weeks', interval };
-      case 'custom-months':
-        return { type: 'months', interval };
-      default:
-        return { type: 'days', interval: 1 };
-    }
-  })();
+  const base = { type, interval };
 
   if (base.type === 'weeks' && extra.weekdays && extra.weekdays.length > 0) {
     base.weekdays = extra.weekdays.map(Number).sort((a, b) => a - b);
@@ -948,14 +947,12 @@ function describeTaskSchedule(task) {
   return withEnd;
 }
 
+// The "Repeats every N ..." unit dropdown -- see the 'repeats' field group
+// in openTaskForm. No "once" option: that's the group's own checkbox.
 const FREQUENCY_OPTIONS = [
-  { value: 'once', label: 'Once' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'custom-days', label: 'Every N days' },
-  { value: 'custom-weeks', label: 'Every N weeks' },
-  { value: 'custom-months', label: 'Every N months' },
+  { value: 'days', label: 'day(s)' },
+  { value: 'weeks', label: 'week(s)' },
+  { value: 'months', label: 'month(s)' },
 ];
 
 const WEEKDAY_CHECKBOX_OPTIONS = [
@@ -1012,8 +1009,12 @@ const ORDINAL_OPTIONS = [
   { value: 'last', label: 'Last' },
 ];
 
-const isWeeklyFrequencyType = (frequencyType) => frequencyType === 'weekly' || frequencyType === 'custom-weeks';
-const isMonthlyFrequencyType = (frequencyType) => frequencyType === 'monthly' || frequencyType === 'custom-months';
+// Both take the form's whole current values object (not just frequencyType)
+// so they also gate on the 'repeats' checkbox -- otherwise the weekly/
+// monthly sub-fields could stay visible from a leftover unit selection even
+// after unchecking "Repeats every".
+const isWeeklyFrequencyType = (v) => v.repeats.length > 0 && v.frequencyType === 'weeks';
+const isMonthlyFrequencyType = (v) => v.repeats.length > 0 && v.frequencyType === 'months';
 const isMultiWeekdayMonthlyMode = (monthlyMode) => monthlyMode === 'multi-weekday' || monthlyMode === 'multi-weekday-offset';
 
 // `splitContext` (only ever set together with an existingTask) is
@@ -1078,19 +1079,32 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         value: existingTask ? existingTask.dueTime || '18:00' : '18:00',
         showIf: (v) => v.allDay.length === 0,
       },
-      {
-        name: 'frequencyType',
-        label: 'Repeats',
-        type: 'select',
-        value: existingTask ? encodeFrequency(existingTask.frequency) : 'once',
-        options: FREQUENCY_OPTIONS,
-      },
-      {
-        name: 'interval',
-        label: 'N (only used for "Every N ..." above)',
-        value: existingTask ? String(existingTask.frequency.interval || 1) : '1',
-        required: false,
-      },
+      [
+        {
+          name: 'repeats',
+          type: 'checkboxes',
+          value: existingTask && existingTask.frequency.type !== 'once' ? ['repeats'] : [],
+          options: [{ value: 'repeats', label: 'Repeats every' }],
+          required: false,
+        },
+        {
+          name: 'interval',
+          type: 'number',
+          value: existingTask ? String(existingTask.frequency.interval || 1) : '1',
+          min: 1,
+          required: false,
+          inlineWidth: '64px',
+          disableIf: (v) => v.repeats.length === 0,
+        },
+        {
+          name: 'frequencyType',
+          type: 'select',
+          value: existingTask && existingTask.frequency.type !== 'once' ? existingTask.frequency.type : 'days',
+          options: FREQUENCY_OPTIONS,
+          inlineWidth: '100px',
+          disableIf: (v) => v.repeats.length === 0,
+        },
+      ],
       {
         name: 'weekdays',
         label: "Also recur on these days (weekly only; leave blank to just use the due date's weekday)",
@@ -1098,7 +1112,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         value: existingTask && existingTask.frequency.weekdays ? existingTask.frequency.weekdays.map(String) : [],
         options: WEEKDAY_CHECKBOX_OPTIONS,
         required: false,
-        showIf: (v) => isWeeklyFrequencyType(v.frequencyType),
+        showIf: (v) => isWeeklyFrequencyType(v),
       },
       {
         name: 'monthlyMode',
@@ -1106,14 +1120,14 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         type: 'select',
         value: existingTask ? existingTask.frequency.dayMode || 'day' : 'day',
         options: MONTHLY_MODE_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType),
+        showIf: (v) => isMonthlyFrequencyType(v),
       },
       {
         name: 'monthlyOffset',
         label: 'Days before last day of month (0-3)',
         value: existingTask && existingTask.frequency.offset != null ? String(existingTask.frequency.offset) : '0',
         required: false,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'before-last',
+        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'before-last',
       },
       {
         name: 'monthlyWeekday',
@@ -1121,7 +1135,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         type: 'select',
         value: existingTask && existingTask.frequency.weekday != null ? String(existingTask.frequency.weekday) : '1',
         options: WEEKDAY_SELECT_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'weekday',
+        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
       },
       {
         name: 'monthlyOrdinal',
@@ -1129,7 +1143,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         type: 'select',
         value: existingTask && existingTask.frequency.ordinal != null ? String(existingTask.frequency.ordinal) : '1',
         options: ORDINAL_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'weekday',
+        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
       },
       {
         name: 'multiWeekdayDays',
@@ -1140,7 +1154,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
             ? existingTask.frequency.weekdays.map(String)
             : [],
         options: WEEKDAY_CHECKBOX_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && isMultiWeekdayMonthlyMode(v.monthlyMode),
+        showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
       },
       {
         name: 'multiWeekdayOrdinal',
@@ -1151,7 +1165,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
             ? String(existingTask.frequency.ordinal)
             : '1',
         min: 1,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && isMultiWeekdayMonthlyMode(v.monthlyMode),
+        showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
       },
       {
         name: 'multiWeekdayOffsetDirection',
@@ -1162,7 +1176,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
             ? existingTask.frequency.offsetDirection
             : 'before',
         options: BEFORE_AFTER_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'multi-weekday-offset',
+        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
       },
       {
         name: 'multiWeekdayOffsetDays',
@@ -1174,7 +1188,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
             : '0',
         min: 0,
         max: 6,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'multi-weekday-offset',
+        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
       },
       {
         name: 'multiDayDays',
@@ -1185,14 +1199,15 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
             ? existingTask.frequency.days.map(String)
             : [],
         options: MONTH_DAY_CHECKBOX_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'multi-day',
+        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-day',
       },
       {
         name: 'endDate',
-        label: 'End date (optional, recurring tasks only -- last recurrence on or before this date)',
+        label: 'End date (optional -- last recurrence on or before this date)',
         type: 'date',
         value: existingTask && existingTask.endDate ? existingTask.endDate : '',
         required: false,
+        showIf: (v) => v.repeats.length > 0,
       },
       {
         name: 'appointment',
@@ -1253,7 +1268,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
   const dueTime = allDay ? null : result.dueTime;
   const appointment = result.appointment.length > 0;
   const passive = result.passive.length > 0;
-  const frequency = decodeFrequency(result.frequencyType, result.interval, result);
+  const frequency = result.repeats.length > 0 ? decodeFrequency(result.frequencyType, result.interval, result) : { type: 'once', interval: 1 };
 
   if (splitContext) {
     applySplitEdit(existingTask, {

@@ -624,7 +624,7 @@ main {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 18px;
-  width: 280px;
+  width: 420px;
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8);
 }
 
@@ -899,6 +899,32 @@ main,
 .modal-field-disabled .modal-input,
 .modal-field-disabled .modal-checkbox-row {
   pointer-events: none;
+}
+
+/* A group of fields sharing one visual row (e.g. "[x] Repeats every [N]
+   [unit]") instead of each getting its own stacked label+control block --
+   see showFormModal's `fields` array accepting a nested array as one entry. */
+.modal-field-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+/* Wraps just one non-checkbox control within an inline group, so toggling
+   .modal-field-disabled on it (see disableIf) dims/disables only that one
+   control -- not the whole row, which would otherwise also grey out and
+   disable the group's own gating checkbox. Always given an explicit
+   `inlineWidth` (see showFormModal) so this stays a definite size instead
+   of shrink-to-fit: a <select>'s "auto" width naturally shrinks to its
+   content, but an <input>'s doesn't -- it falls back to the browser's
+   default text-field width (historically ~20 characters), which is wide
+   enough to overflow this span and visually overlap whatever sits next to
+   it. Keeping .modal-input's own width: 100% (unchanged from the base rule)
+   and constraining the size here instead sidesteps that inconsistency
+   entirely, for either kind of control.
+*/
+.modal-field-inline-item {
+  flex: none;
 }
 
 .modal-field label {
