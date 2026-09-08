@@ -163,6 +163,12 @@ function occursOn(task, dateISO) {
         const anchor = earliestNthSelectedWeekdayOfMonth(target.getFullYear(), target.getMonth(), task.frequency.weekdays, task.frequency.ordinal);
         return !!anchor && dateToISO(anchor) === dateISO;
       }
+      if (dayMode === 'multi-day') {
+        // Every selected day (1-28, see the form) exists in every month, so
+        // unlike the other dayModes above there's no clamping/anchor logic
+        // needed here -- just a direct membership check.
+        return task.frequency.days.includes(target.getDate());
+      }
       const expectedDay = Math.min(due.getDate(), daysInMonth(target.getFullYear(), target.getMonth()));
       return target.getDate() === expectedDay;
     }

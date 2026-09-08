@@ -130,6 +130,27 @@ const multiWeekdayNoMatch = {
 };
 assert.ok(!R.occursOn(multiWeekdayNoMatch, '2026-01-27'), 'a single selected weekday with no 5th occurrence that month has nothing to be earliest among');
 
+// -- monthly: multiple fixed days of the month (1-28) ------------------------
+// Repeats on the 15th, 16th, and 17th of every month -- a plain membership
+// check against target's day-of-month, no anchor/clamping logic needed since
+// every day 1-28 exists in every month.
+const multiDay = {
+  dueDate: '2026-01-15',
+  frequency: { type: 'months', interval: 1, dayMode: 'multi-day', days: [15, 16, 17] },
+};
+assert.ok(R.occursOn(multiDay, '2026-01-15'), 'the 15th is one of the selected days');
+assert.ok(R.occursOn(multiDay, '2026-01-16'), 'so is the 16th');
+assert.ok(R.occursOn(multiDay, '2026-01-17'), 'so is the 17th');
+assert.ok(!R.occursOn(multiDay, '2026-01-14'), 'the 14th is not selected');
+assert.ok(!R.occursOn(multiDay, '2026-01-18'), 'nor the 18th');
+assert.ok(R.occursOn(multiDay, '2026-02-15'), 'the pattern repeats identically in February');
+assert.ok(R.occursOn(multiDay, '2026-02-17'), 'every day in the shorter month of February still exists (capped at 28)');
+assert.strictEqual(R.nextOccurrenceAfter(multiDay, '2026-01-15'), '2026-01-16', 'next after the 15th is the 16th, same month');
+assert.strictEqual(R.nextOccurrenceAfter(multiDay, '2026-01-17'), '2026-02-15', 'next after the last selected day of the month rolls over to next month');
+assert.strictEqual(R.mostRecentOccurrenceOnOrBefore(multiDay, '2026-01-16'), '2026-01-16');
+assert.strictEqual(R.previousOccurrenceBefore(multiDay, '2026-01-16'), '2026-01-15');
+assert.strictEqual(R.previousOccurrenceBefore(multiDay, '2026-02-15'), '2026-01-17', 'the occurrence right before the 15th of the next month is the previous month\'s last selected day, the 17th');
+
 // -- monthly: N days before/after the earliest Nth occurrence ---------------
 // Same April-2026 anchor (the 8th, its earliest 2nd of Mon/Wed/Fri) shifted
 // 6 days before -- crosses into March, which is fine (see occursOn's

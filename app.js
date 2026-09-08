@@ -885,6 +885,8 @@ function decodeFrequency(frequencyType, intervalStr, extra = {}) {
         base.offsetDirection = extra.multiWeekdayOffsetDirection === 'after' ? 'after' : 'before';
         base.offsetDays = Math.min(6, Math.max(0, parseInt(extra.multiWeekdayOffsetDays, 10) || 0));
       }
+    } else if (extra.monthlyMode === 'multi-day') {
+      base.days = (extra.multiDayDays || []).map(Number).sort((a, b) => a - b);
     }
   }
   return base;
@@ -931,6 +933,8 @@ function describeTaskSchedule(task) {
         freq.offsetDays === 0
           ? `${base}, earliest ${ordinalLabel(freq.ordinal)} of ${freq.weekdays.map((d) => WEEKDAY_SHORT_NAMES[d]).join('/')}`
           : `${base}, ${freq.offsetDays} day(s) ${freq.offsetDirection} earliest ${ordinalLabel(freq.ordinal)} of ${freq.weekdays.map((d) => WEEKDAY_SHORT_NAMES[d]).join('/')}`;
+    } else if (freq.dayMode === 'multi-day') {
+      label = `${base}, on day(s) ${freq.days.join(', ')}`;
     } else {
       label = base;
     }
@@ -981,7 +985,18 @@ const MONTHLY_MODE_OPTIONS = [
   { value: 'weekday', label: 'Nth weekday of month' },
   { value: 'multi-weekday', label: 'Earliest Nth occurrence of any of the selected days' },
   { value: 'multi-weekday-offset', label: 'N days before/after earliest Nth occurrence of any of the selected days' },
+  { value: 'multi-day', label: 'Multiple days of month (1-28)' },
 ];
+
+// Capped at 28 (not 31) so every selected day exists in every month --
+// avoids the ambiguity of what a 30th or 31st should do in a 28/29/30-day
+// month (unlike dayMode 'day', which has an explicit clamp-to-last-day rule
+// for exactly that case; a multi-day list has no single anchor day to
+// clamp, so this just sidesteps the question instead).
+const MONTH_DAY_CHECKBOX_OPTIONS = Array.from({ length: 28 }, (_, i) => ({
+  value: String(i + 1),
+  label: String(i + 1),
+}));
 
 const BEFORE_AFTER_OPTIONS = [
   { value: 'before', label: 'Before' },
@@ -1160,6 +1175,17 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         min: 0,
         max: 6,
         showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'multi-weekday-offset',
+      },
+      {
+        name: 'multiDayDays',
+        label: 'Days of the month (1-28)',
+        type: 'checkboxes',
+        value:
+          existingTask && existingTask.frequency.days && existingTask.frequency.dayMode === 'multi-day'
+            ? existingTask.frequency.days.map(String)
+            : [],
+        options: MONTH_DAY_CHECKBOX_OPTIONS,
+        showIf: (v) => isMonthlyFrequencyType(v.frequencyType) && v.monthlyMode === 'multi-day',
       },
       {
         name: 'endDate',
