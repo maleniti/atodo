@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Builds the advanced-todo image and (re)runs it, detached, on the given
+# port. Safe to re-run any time -- an existing container with the same name
+# is replaced regardless of whether the image actually changed, since a
+# no-op rebuild is cheap and there's no meaningful state to lose (all data
+# lives in the browser's localStorage, not the container).
+set -euo pipefail
+
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <port>" >&2
+  exit 1
+fi
+
+port="$1"
+image="advanced-todo"
+container="advanced-todo"
+
+cd "$(dirname "$0")"
+
+docker build -t "$image" .
+
+if docker ps -a --format '{{.Names}}' | grep -qx "$container"; then
+  docker rm -f "$container" >/dev/null
+fi
+
+docker run -d --name "$container" -p "$port:80" "$image"
+
+echo "advanced-todo running at http://localhost:$port"
