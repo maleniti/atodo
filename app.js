@@ -2,6 +2,23 @@ function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
+// task.log ({ message, timestamp }[]) is the side panel's short activity
+// history -- lazily created like task.focusLog, not present on every task
+// from the start. Recorded per task record (not per taskId/seriesId); the
+// side panel merges every record's log together when it displays "this
+// task" or "this series" (see aggregateSidePanelRecords).
+function logTaskEvent(task, message) {
+  if (!task.log) task.log = [];
+  task.log.push({ message, timestamp: Date.now() });
+}
+
+// task.comments ({ text, timestamp }[]) -- the side panel's user-entered
+// notes, same lazy/per-record storage as task.log above.
+function addTaskComment(task, text) {
+  if (!task.comments) task.comments = [];
+  task.comments.push({ text, timestamp: Date.now() });
+}
+
 // window.prompt() has no native implementation on Linux (Chromium doesn't
 // provide an OS text-input dialog there), so it silently no-ops. This modal
 // replaces it for every case that needs free-text input; confirm() still
@@ -258,11 +275,13 @@ function loadTasks() {
     const raw = localStorage.getItem(TASKS_STORAGE_KEY);
     if (raw) {
       const loaded = JSON.parse(raw);
-      // Backward compatibility: tasks saved before seriesId existed each get
-      // their own fresh one -- they were never part of a split, so there's
-      // no correct value to backfill beyond "distinct from everything else".
+      // Backward compatibility: tasks saved before seriesId/taskId existed
+      // each get their own fresh one -- they were never part of a split, so
+      // there's no correct value to backfill beyond "distinct from
+      // everything else".
       for (const task of loaded) {
         if (!task.seriesId) task.seriesId = uid();
+        if (!task.taskId) task.taskId = uid();
       }
       return loaded;
     }
@@ -327,6 +346,7 @@ function setActiveTaskId(newId, occurrenceDate) {
     } else {
       flushFocusOnlyElapsed(prevTask);
     }
+    logTaskEvent(prevTask, 'Unfocused');
   }
   activeTaskId = newId;
   activeOccurrenceDate = newId ? occurrenceDate : null;
@@ -342,6 +362,7 @@ function setActiveTaskId(newId, occurrenceDate) {
     // occurrence that no longer shows as focused.
     if (timerMatchesOccurrence(nextTask.timer, activeOccurrenceDate)) nextTask.timer.runningSince = Date.now();
     else activeFocusOnlySince = Date.now();
+    logTaskEvent(nextTask, 'Focused');
   }
   saveTasks();
 }
@@ -570,6 +591,7 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
       runningSince: null,
       occurrenceDate,
     };
+    logTaskEvent(task, 'Timer set');
     saveTasks();
     renderTodo();
     return;
@@ -596,6 +618,7 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
     runningSince: Date.now(),
     occurrenceDate,
   };
+  logTaskEvent(task, 'Timer set');
   saveTasks();
   setActiveTaskId(task.id, occurrenceDate);
   renderTodo();
@@ -609,6 +632,7 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
 function cancelTaskTimer(task) {
   flushTimerElapsed(task);
   task.timer = null;
+  logTaskEvent(task, 'Timer cancelled');
   if (task.id === activeTaskId) activeFocusOnlySince = Date.now();
   saveTasks();
   renderTodo();
@@ -1184,9 +1208,11 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     existingTask.passive = passive;
     existingTask.frequency = frequency;
     existingTask.endDate = endDate;
+    logTaskEvent(existingTask, 'Edited');
   } else {
     tasks.push({
       id: uid(),
+      taskId: uid(),
       seriesId: seriesOptions.forcedSeriesId || uid(),
       name: result.name,
       description: result.description,
@@ -1222,6 +1248,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
 //    (no separate "original settings continue" task -- there's nothing left
 //    of the old pattern after this point).
 function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDate, scope }, edited) {
+  const originalTaskId = originalTask.taskId;
   const originalCompletions = originalTask.completions || {};
   const originalDismissed = originalTask.dismissed || {};
   const originalMarkedFailed = originalTask.markedFailed || {};
@@ -1243,9 +1270,14 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
     tasks = tasks.filter((t) => t.id !== originalTask.id); // this was the series' very first occurrence -- nothing historical to keep
   }
 
+  // Every fragment created here keeps the ORIGINAL task's taskId -- it's
+  // still the same logical task, however many records its history now
+  // spans (see the "task" side of the series/task distinction in the
+  // manage-tasks modal and the side panel's per-task aggregation).
   if (scope === 'instance') {
-    tasks.push({
+    const editedFragment = {
       id: uid(),
+      taskId: originalTaskId,
       seriesId: originalTask.seriesId,
       name: edited.name,
       description: edited.description,
@@ -1259,11 +1291,14 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       completions: wasOriginalOccurrenceDone ? { [newOccurrenceDate]: true } : {},
       dismissed: {},
       markedFailed: wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {},
-    });
+    };
+    tasks.push(editedFragment);
+    logTaskEvent(editedFragment, 'Recurrence edited (only this occurrence)');
 
     if (nextDate) {
       tasks.push({
         id: uid(),
+        taskId: originalTaskId,
         seriesId: originalTask.seriesId,
         name: originalTask.name,
         description: originalTask.description,
@@ -1280,8 +1315,9 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       });
     }
   } else if (scope === 'following') {
-    tasks.push({
+    const editedFragment = {
       id: uid(),
+      taskId: originalTaskId,
       seriesId: originalTask.seriesId,
       name: edited.name,
       description: edited.description,
@@ -1301,7 +1337,9 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         ...originalMarkedFailed,
         ...(wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {}),
       },
-    });
+    };
+    tasks.push(editedFragment);
+    logTaskEvent(editedFragment, 'Recurrence edited (this and following occurrences)');
   }
 }
 
@@ -1315,12 +1353,14 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
 //    continuation task -- there's nothing left of the series past this
 //    point.
 function applySplitDelete(originalTask, occurrenceDate, scope) {
+  const originalTaskId = originalTask.taskId;
   const originalCompletions = originalTask.completions || {};
   const originalDismissed = originalTask.dismissed || {};
   const originalMarkedFailed = originalTask.markedFailed || {};
   const originalEndDate = originalTask.endDate || null;
   const prevDate = Recurrence.previousOccurrenceBefore(originalTask, occurrenceDate);
   const nextDate = Recurrence.nextOccurrenceAfter(originalTask, occurrenceDate);
+  const originalKept = !!prevDate;
 
   if (prevDate) {
     originalTask.endDate = prevDate; // truncate the historical portion to end right before this occurrence
@@ -1329,9 +1369,15 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
     tasks = tasks.filter((t) => t.id !== originalTask.id); // this was the series' very first occurrence -- nothing historical to keep
   }
 
+  // Whichever fragment still carries this taskId forward afterward gets the
+  // log line -- the new continuation task if there is one, otherwise the
+  // truncated original if it's still around, otherwise there's nothing left
+  // of this taskId to log against at all.
+  let loggedFragment = originalKept ? originalTask : null;
   if (scope === 'instance' && nextDate) {
-    tasks.push({
+    const continuation = {
       id: uid(),
+      taskId: originalTaskId,
       seriesId: originalTask.seriesId,
       name: originalTask.name,
       description: originalTask.description,
@@ -1345,7 +1391,15 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
       completions: { ...originalCompletions },
       dismissed: { ...originalDismissed },
       markedFailed: { ...originalMarkedFailed },
-    });
+    };
+    tasks.push(continuation);
+    loggedFragment = continuation;
+  }
+  if (loggedFragment) {
+    logTaskEvent(
+      loggedFragment,
+      scope === 'instance' ? 'Recurrence occurrence deleted' : 'Recurrence and following occurrences deleted'
+    );
   }
 }
 
@@ -1499,8 +1553,10 @@ function toggleTaskCompletion(task, occurrenceDate) {
     if (occurrenceDate === Recurrence.dateToISO(new Date())) {
       restorePriorOccurrenceIfIncomplete(task, occurrenceDate);
     }
+    logTaskEvent(task, 'Marked not done');
   } else {
     task.completions[occurrenceDate] = true;
+    logTaskEvent(task, 'Marked done');
     // Only this task's "today" or carried-over occurrence is ever checked
     // off this way (see the checkbox's disabled condition below), so
     // occurrenceDate is always on or before today here -- dismiss any
@@ -1524,6 +1580,7 @@ function toggleTaskCompletion(task, occurrenceDate) {
       task.timer = null;
     }
   }
+  selectTaskForSidePanel(task);
   saveTasks();
   renderTodo();
 }
@@ -1567,8 +1624,14 @@ function pastDueStatus(task, occurrenceDate, completed, now) {
 // buildTodoItemRow), since it's a plain reminder with no real "done" state.
 function toggleTaskFailedMark(task, occurrenceDate) {
   if (!task.markedFailed) task.markedFailed = {};
-  if (task.markedFailed[occurrenceDate]) delete task.markedFailed[occurrenceDate];
-  else task.markedFailed[occurrenceDate] = true;
+  if (task.markedFailed[occurrenceDate]) {
+    delete task.markedFailed[occurrenceDate];
+    logTaskEvent(task, 'Marked not failed');
+  } else {
+    task.markedFailed[occurrenceDate] = true;
+    logTaskEvent(task, 'Marked failed');
+  }
+  selectTaskForSidePanel(task);
   saveTasks();
   renderTodo();
 }
@@ -1583,6 +1646,7 @@ function toggleTaskFailedMark(task, occurrenceDate) {
 // effect right away.
 function dismissOccurrence(task, occurrenceDate) {
   task.dismissed[occurrenceDate] = true;
+  selectTaskForSidePanel(task);
   saveTasks();
   renderTodo();
 }
@@ -1593,6 +1657,7 @@ function dismissOccurrence(task, occurrenceDate) {
 // once this clears the flag).
 function restoreOccurrence(task, occurrenceDate) {
   delete task.dismissed[occurrenceDate];
+  selectTaskForSidePanel(task);
   saveTasks();
   renderTodo();
 }
@@ -1982,6 +2047,11 @@ function buildTodoItemRow(item, isToday) {
     // active one. "Next recurrence" never shows a dismissed item at all, so
     // item.dismissed is always false there.
     (item.dismissed ? ' dismissed' : '') +
+    // Whichever task's notes/history are currently showing in the side
+    // panel (see selectTaskForSidePanel) -- reference equality against the
+    // exact record last interacted with, not just a matching id, since a
+    // recurring task's own separate occurrences are still separate rows.
+    (item.task === sidePanelTask ? ' previewed' : '') +
     (isToday && !item.completed ? '' : ' not-today');
 
   // A reverse progress bar behind the row's own content -- full at the
@@ -2101,6 +2171,7 @@ function buildTodoItemRow(item, isToday) {
     workOnBtn.onclick = (e) => {
       e.stopPropagation();
       setActiveTaskId(isActiveHere ? null : item.task.id, item.occurrenceDate);
+      selectTaskForSidePanel(item.task);
       renderTodo();
     };
     row.appendChild(workOnBtn);
@@ -2136,7 +2207,18 @@ function buildTodoItemRow(item, isToday) {
   // not-yet-due tomorrow/upcoming preview row).
   row.oncontextmenu = (e) => {
     e.preventDefault();
+    selectTaskForSidePanel(item.task);
+    renderTodo(); // so .previewed (see the row's className above) shows immediately, not just the side panel itself
     showTodoContextMenu(e, item, canWorkOnNow);
+  };
+
+  // Plain click (anything not otherwise handled above -- those all
+  // stopPropagation their own clicks) just selects this task for the side
+  // panel; it never focuses/edits/etc. on its own (see the comment above
+  // canWorkOnNow).
+  row.onclick = () => {
+    selectTaskForSidePanel(item.task);
+    renderTodo();
   };
 
   row.ondblclick = () => editTaskOccurrence(item.task, item.occurrenceDate);
@@ -2201,6 +2283,7 @@ function expireFinishedTimers() {
     if (countdownDone || ranPastCap) {
       flushTimerElapsed(t);
       t.timer = null;
+      logTaskEvent(t, 'Timer elapsed');
       changed = true;
       playTimerChime();
       if (t.id === activeTaskId) setActiveTaskId(null);
@@ -2347,6 +2430,7 @@ function renderTodo() {
 
   updatePinnedTodoHeader();
   ensureTimerTicking();
+  renderSidePanel();
 }
 
 // A running timer's remaining time needs to visibly count down every
@@ -2369,6 +2453,124 @@ function ensureTimerTicking() {
     timerTickIntervalId = null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Side panel -- notes and activity history for whichever task was last
+// interacted with (see selectTaskForSidePanel, called from the to-do list's
+// click/right-click/checkbox/focus/dismiss handlers). Scoped to either just
+// that one logical task (every record sharing its taskId -- e.g. every
+// fragment of a recurring task that's been split via edit-scope) or its
+// whole series (every record sharing its seriesId, which can span multiple
+// distinct taskIds once tasks have been merged together in the manage-tasks
+// modal) -- see sidePanelScope/sidePanelRecords.
+// ---------------------------------------------------------------------------
+
+const sidePanelEmptyEl = document.getElementById('side-panel-empty');
+const sidePanelContentEl = document.getElementById('side-panel-content');
+const sidePanelTitleEl = document.getElementById('side-panel-title');
+const sidePanelToggleBtn = document.getElementById('side-panel-toggle-btn');
+const sidePanelCommentInput = document.getElementById('side-panel-comment-input');
+const sidePanelCommentsEl = document.getElementById('side-panel-comments');
+const sidePanelLogEl = document.getElementById('side-panel-log');
+
+let sidePanelTask = null; // the specific task record last interacted with
+let sidePanelScope = 'task'; // 'task' | 'series'
+
+function selectTaskForSidePanel(task) {
+  sidePanelTask = task;
+  renderSidePanel();
+}
+
+function sidePanelRecords() {
+  if (!sidePanelTask) return [];
+  return sidePanelScope === 'series'
+    ? tasksInSeries(sidePanelTask.seriesId)
+    : tasks.filter((t) => t.taskId === sidePanelTask.taskId);
+}
+
+function buildSidePanelEmptyRow(text) {
+  const empty = document.createElement('div');
+  empty.className = 'todo-manage-empty';
+  empty.textContent = text;
+  return empty;
+}
+
+function renderSidePanel() {
+  // The selected record can vanish out from under the panel (deleted, or
+  // merged away -- tasksInSeries/taskId lookups above would just silently
+  // return nothing for it), so this doubles as the panel's own cleanup.
+  if (!sidePanelTask || !tasks.includes(sidePanelTask)) {
+    sidePanelTask = null;
+    sidePanelEmptyEl.classList.remove('hidden');
+    sidePanelContentEl.classList.add('hidden');
+    return;
+  }
+
+  sidePanelEmptyEl.classList.add('hidden');
+  sidePanelContentEl.classList.remove('hidden');
+  sidePanelTitleEl.textContent = sidePanelTask.name;
+  sidePanelToggleBtn.textContent = sidePanelScope === 'series' ? 'Series' : 'Task';
+  sidePanelToggleBtn.title =
+    sidePanelScope === 'series'
+      ? 'Showing the whole series -- click to show just this task'
+      : 'Showing just this task -- click to show its whole series';
+
+  const records = sidePanelRecords();
+
+  const comments = records.flatMap((t) => t.comments || []).sort((a, b) => b.timestamp - a.timestamp);
+  sidePanelCommentsEl.innerHTML = '';
+  if (comments.length === 0) {
+    sidePanelCommentsEl.appendChild(buildSidePanelEmptyRow('No notes yet.'));
+  } else {
+    for (const c of comments) {
+      const item = document.createElement('div');
+      item.className = 'side-panel-comment-item';
+      const time = document.createElement('div');
+      time.className = 'side-panel-comment-time';
+      time.textContent = new Date(c.timestamp).toLocaleString();
+      const text = document.createElement('div');
+      text.className = 'side-panel-comment-text';
+      text.textContent = c.text;
+      item.appendChild(time);
+      item.appendChild(text);
+      sidePanelCommentsEl.appendChild(item);
+    }
+  }
+
+  const logEntries = records.flatMap((t) => t.log || []).sort((a, b) => b.timestamp - a.timestamp);
+  sidePanelLogEl.innerHTML = '';
+  if (logEntries.length === 0) {
+    sidePanelLogEl.appendChild(buildSidePanelEmptyRow('No activity yet.'));
+  } else {
+    for (const entry of logEntries) {
+      const item = document.createElement('div');
+      item.className = 'side-panel-log-item';
+      const msg = document.createElement('span');
+      msg.textContent = entry.message;
+      const time = document.createElement('span');
+      time.className = 'side-panel-log-time';
+      time.textContent = new Date(entry.timestamp).toLocaleString();
+      item.appendChild(msg);
+      item.appendChild(time);
+      sidePanelLogEl.appendChild(item);
+    }
+  }
+}
+
+sidePanelToggleBtn.onclick = () => {
+  sidePanelScope = sidePanelScope === 'series' ? 'task' : 'series';
+  renderSidePanel();
+};
+
+document.getElementById('side-panel-comment-add').onclick = () => {
+  if (!sidePanelTask) return;
+  const text = sidePanelCommentInput.value.trim();
+  if (!text) return;
+  addTaskComment(sidePanelTask, text);
+  sidePanelCommentInput.value = '';
+  saveTasks();
+  renderSidePanel();
+};
 
 const todoManageOverlay = document.getElementById('todo-manage-overlay');
 const todoManageMonthsEl = document.getElementById('todo-manage-months');
@@ -2508,19 +2710,32 @@ function renderTodoManageMonths() {
       .sort((a, b) => a.members[0].name.localeCompare(b.members[0].name));
 
     for (const { seriesId, members } of seriesInMonth) {
+      // White: a single task record (whether a plain one-off or an unbroken
+      // recurring task). Blue: more than one record, but all of them are
+      // fragments of the SAME logical task (one taskId) -- a recurring task
+      // that's been split via edit-scope but never merged with anything
+      // else. Green: more than one record spanning multiple distinct
+      // taskIds -- this series is itself a merge of separately-created
+      // tasks (see the drag & drop handling below).
+      const distinctTaskIds = new Set(members.map((t) => t.taskId));
+      const colorClass =
+        members.length <= 1 ? 'series-row-single' : distinctTaskIds.size === 1 ? 'series-row-multi' : 'series-row-mixed';
+
       const row = document.createElement('div');
-      row.className = 'series-row ' + (members.length > 1 ? 'series-row-multi' : 'series-row-single');
+      row.className = 'series-row ' + colorClass;
       if (seriesId === manageSelectedSeriesId) row.classList.add('selected');
       row.textContent = members[0].name;
       row.onclick = () => selectSeriesInManage(seriesId);
 
-      // Only a single-task series can be dragged into another one -- pulling
-      // a task out of an already-multi-task series has to go through an
-      // explicit "Remove from series" first, not a casual drag.
-      if (members.length === 1) {
+      // Only a series representing a single logical task -- white or blue,
+      // i.e. exactly one taskId, however many records it's split into --
+      // can be dragged into another one. A green (already-mixed) series
+      // can't be pulled in as a further unit; peeling a task back out of it
+      // still has to go through the explicit "Remove from series" button.
+      if (distinctTaskIds.size === 1) {
         row.draggable = true;
         row.ondragstart = (e) => {
-          e.dataTransfer.setData('text/plain', members[0].id);
+          e.dataTransfer.setData('text/plain', seriesId);
           e.dataTransfer.effectAllowed = 'move';
         };
       }
@@ -2619,10 +2834,14 @@ document.getElementById('series-edit-add-new-btn').onclick = async () => {
   await openTaskForm(null, null, null, { forcedSeriesId: manageSelectedSeriesId, nameDefault });
 };
 
-// Dropping a dragged single-task series (see renderTodoManageMonths) onto
-// the right-hand pane pulls that task into whichever series is currently
-// open there -- the only way to move a task between series, per the "only a
-// single-task series can be pulled into another one" rule.
+// Dropping a dragged white/blue series (see renderTodoManageMonths -- a
+// single logical task, whether it's one record or several split fragments)
+// onto the right-hand pane pulls every one of its records into whichever
+// series is currently open there, all at once -- the only way to move a
+// task between series, per the "only a single-taskId series can be pulled
+// into another one" rule. A green (already-mixed) series is never a drag
+// source to begin with, so there's no drop path that could merge two
+// already-merged series together.
 todoManageRightEl.addEventListener('dragover', (e) => {
   if (!manageSelectedSeriesId) return;
   e.preventDefault();
@@ -2634,13 +2853,14 @@ todoManageRightEl.addEventListener('drop', (e) => {
   e.preventDefault();
   todoManageRightEl.classList.remove('drag-over');
   if (!manageSelectedSeriesId) return;
-  const taskId = e.dataTransfer.getData('text/plain');
-  const task = tasks.find((t) => t.id === taskId);
-  // Re-checks single-task-ness at drop time, not just at drag start -- the
-  // dragged task could have gained series-mates in between (e.g. another
-  // drop already claimed it).
-  if (!task || tasksInSeries(task.seriesId).length !== 1 || task.seriesId === manageSelectedSeriesId) return;
-  task.seriesId = manageSelectedSeriesId;
+  const sourceSeriesId = e.dataTransfer.getData('text/plain');
+  if (!sourceSeriesId || sourceSeriesId === manageSelectedSeriesId) return;
+  const sourceMembers = tasksInSeries(sourceSeriesId);
+  // Re-checks single-taskId-ness at drop time, not just at drag start --
+  // the dragged series could have changed in between (e.g. another drop
+  // already claimed part of it).
+  if (sourceMembers.length === 0 || new Set(sourceMembers.map((t) => t.taskId)).size !== 1) return;
+  for (const task of sourceMembers) task.seriesId = manageSelectedSeriesId;
   saveTasks();
   renderTodo();
   refreshTodoManageModal();

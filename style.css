@@ -1,4 +1,10 @@
 * { box-sizing: border-box; }
+/* !important is deliberate here: this is a plain "unconditionally hide"
+   utility applied alongside plenty of other classes that set their own
+   `display` (.modal-overlay, .side-panel-content, ...) -- without it,
+   source order or a same-specificity component rule elsewhere in this file
+   could silently win and leave the element visible. */
+.hidden { display: none !important; }
 html, body {
   margin: 0;
   /* Tells Chromium/Firefox to render native controls we don't fully style
@@ -41,8 +47,9 @@ main {
   flex-direction: row;
 }
 
-/* The to-do list itself, on the left -- .side-panel below is the other 25%,
-   reserved for future functionality. */
+/* The to-do list itself, on the left -- .side-panel below is the other
+   25%, showing notes/activity for whichever task was last interacted
+   with. */
 .todo-column {
   flex: 0 0 75%;
   min-width: 0;
@@ -55,6 +62,109 @@ main {
   flex: 0 0 25%;
   min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+.side-panel-empty {
+  color: #80868b;
+  font-size: 13px;
+  padding: 8px 4px;
+}
+
+.side-panel-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.side-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.side-panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-panel-comment-input {
+  height: 64px;
+  padding: 8px;
+  resize: vertical;
+  font-family: inherit;
+  margin-bottom: 6px;
+  flex: none;
+}
+
+.side-panel-section-heading {
+  flex: none;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #9aa0a6;
+  margin: 14px 0 6px;
+}
+.side-panel-section-heading:first-of-type {
+  margin-top: 4px;
+}
+
+.side-panel-comments,
+.side-panel-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.side-panel-comments::-webkit-scrollbar, .side-panel-log::-webkit-scrollbar { width: 6px; } /* Chromium */
+.side-panel-comments::-webkit-scrollbar-track, .side-panel-log::-webkit-scrollbar-track { background: transparent; }
+.side-panel-comments::-webkit-scrollbar-thumb, .side-panel-log::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+.side-panel-comments::-webkit-scrollbar-thumb:hover, .side-panel-log::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.side-panel-comment-item {
+  padding: 6px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.side-panel-comment-time {
+  font-size: 10px;
+  color: #80868b;
+  margin-bottom: 2px;
+}
+.side-panel-comment-text {
+  font-size: 12px;
+  color: #e8eaed;
+  white-space: pre-wrap;
+}
+
+.side-panel-log-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 2px;
+  font-size: 11px;
+  color: #9aa0a6;
+}
+.side-panel-log-time {
+  flex: none;
+  color: #80868b;
 }
 
 .app-header {
@@ -88,7 +198,6 @@ main {
   display: flex;
   flex-direction: column;
 }
-.todo-section.hidden { display: none; }
 
 .todo-view-toggle-btn {
   position: absolute;
@@ -265,6 +374,21 @@ main {
   background-image:
     repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 8px),
     repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 8px);
+}
+
+/* Whichever task's notes/history are currently showing in the side panel
+   (see selectTaskForSidePanel) gets a thin accent ring -- box-shadow (not
+   border/outline) so it still follows the row's own rounded corners, and
+   restates .todo-item's own box-shadow list alongside it since box-shadow
+   doesn't compose across separate rules the way background-image does. */
+.todo-item.previewed {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    inset -1px 0 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 2px #fdd663;
 }
 
 /* A positioned (absolute) element without its own z-index still paints
@@ -471,7 +595,6 @@ main {
   align-items: center;
   justify-content: center;
 }
-.modal-overlay.hidden { display: none; }
 /* The generic single-form modal (#modal-overlay) is used for transient
    forms like the add/edit-task form, which can open on top of the to-do
    manager list (#todo-manage-overlay) -- always keep it topmost. */
@@ -572,10 +695,14 @@ main,
 }
 .series-row:hover { background: rgba(255, 255, 255, 0.06); }
 .series-row.selected { background: rgba(138, 180, 248, 0.16); }
-/* A series with more than one task record (already split/merged) reads as
-   blue -- a single-record series stays plain white/default so the two are
-   distinguishable at a glance without opening either. */
+/* A series with a single task record (one-off, or an unbroken recurring
+   task) stays plain white/default. One with multiple records but all the
+   SAME taskId -- a recurring task split via edit-scope, never merged with
+   anything else -- reads as blue. One with multiple records spanning
+   multiple taskIds -- a merge of separately-created tasks -- reads as
+   green. Distinguishable at a glance without opening any of them. */
 .series-row-multi { color: #8ab4f8; }
+.series-row-mixed { color: #81c995; }
 .series-row[draggable="true"] { cursor: grab; }
 
 .todo-manage-right {

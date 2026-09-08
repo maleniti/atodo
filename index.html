@@ -33,8 +33,21 @@
       </div>
     </div>
 
-    <!-- Reserved for future functionality -- intentionally empty for now. -->
-    <div class="side-panel"></div>
+    <div class="side-panel">
+      <div id="side-panel-empty" class="side-panel-empty">Click a task to see its notes and history.</div>
+      <div id="side-panel-content" class="side-panel-content hidden">
+        <div class="side-panel-header">
+          <div id="side-panel-title" class="side-panel-title"></div>
+          <button id="side-panel-toggle-btn" class="menu-btn-small"></button>
+        </div>
+        <textarea id="side-panel-comment-input" class="modal-input side-panel-comment-input" placeholder="Add a note about this task&hellip;"></textarea>
+        <button id="side-panel-comment-add" class="menu-btn-small">Add note</button>
+        <div class="side-panel-section-heading">Notes</div>
+        <div id="side-panel-comments" class="side-panel-comments"></div>
+        <div class="side-panel-section-heading">Activity</div>
+        <div id="side-panel-log" class="side-panel-log"></div>
+      </div>
+    </div>
   </main>
 
   <div id="modal-overlay" class="modal-overlay hidden">
