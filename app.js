@@ -948,7 +948,7 @@ const isMultiWeekdayMonthlyMode = (monthlyMode) => monthlyMode === 'multi-weekda
 // `initialDueDate` only applies to a brand-new task (no existingTask) --
 // used by each to-do day header's own "+" button so the form opens
 // pre-filled with that day's date instead of always defaulting to today.
-async function openTaskForm(existingTask, splitContext, initialDueDate) {
+async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOptions = {}) {
   const formTitle = splitContext
     ? splitContext.scope === 'instance'
       ? 'Edit this occurrence'
@@ -964,7 +964,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
   const result = await showFormModal(
     formTitle,
     [
-      { name: 'name', label: 'Name', value: existingTask ? existingTask.name : '' },
+      { name: 'name', label: 'Name', value: existingTask ? existingTask.name : seriesOptions.nameDefault || '' },
       {
         name: 'description',
         label: 'Description',
@@ -1132,7 +1132,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
 
   if (result === MODAL_DELETE_RESULT) {
     // Editing "all occurrences" has no splitContext (see the double-click
-    // handler below and the manage list's own edit button) and deletes the
+    // handler below and the series editor's own edit button) and deletes the
     // whole task. Editing a single occurrence or "this and following"
     // instead deletes only that slice of the series, per applySplitDelete.
     if (!splitContext) {
@@ -1141,7 +1141,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
       applySplitDelete(existingTask, splitContext.occurrenceDate, splitContext.scope);
       saveTasks();
       renderTodo();
-      renderTodoManageList();
+      refreshTodoManageModal();
     }
     return;
   }
@@ -1187,7 +1187,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
   } else {
     tasks.push({
       id: uid(),
-      seriesId: uid(),
+      seriesId: seriesOptions.forcedSeriesId || uid(),
       name: result.name,
       description: result.description,
       dueDate: result.dueDate,
@@ -1204,7 +1204,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate) {
   }
   saveTasks();
   renderTodo();
-  renderTodoManageList();
+  refreshTodoManageModal();
 }
 
 // Splits a recurring task's series around newOccurrenceDate -- the split
@@ -1478,7 +1478,7 @@ function deleteTask(taskId) {
   if (activeTaskId === taskId) setActiveTaskId(null);
   saveTasks();
   renderTodo();
-  renderTodoManageList();
+  refreshTodoManageModal();
 }
 
 function toggleTaskCompletion(task, occurrenceDate) {
@@ -2371,124 +2371,289 @@ function ensureTimerTicking() {
 }
 
 const todoManageOverlay = document.getElementById('todo-manage-overlay');
-const todoManageListEl = document.getElementById('todo-manage-list');
-const todoManageViewToggleBtn = document.getElementById('todo-manage-view-toggle-btn');
+const todoManageMonthsEl = document.getElementById('todo-manage-months');
+const seriesEditEmptyEl = document.getElementById('series-edit-empty');
+const seriesEditPanelEl = document.getElementById('series-edit-panel');
+const seriesEditNameInput = document.getElementById('series-edit-name-input');
+const seriesEditListEl = document.getElementById('series-edit-list');
+const todoManageRightEl = document.querySelector('.todo-manage-right');
 
-// A recurring task whose series has ended (endDate passed) and whose last
-// occurrence (on/before endDate) is marked done -- nothing more will ever
-// come of it, so "active only" hides it to declutter a long-lived list.
-function isTaskDoneAndEnded(task, todayISO) {
-  if (!task.endDate || task.endDate >= todayISO) return false;
-  const lastOccurrence = Recurrence.mostRecentOccurrenceOnOrBefore(task, todayISO);
-  return !!lastOccurrence && !!task.completions[lastOccurrence];
+// Two clicks to delete (arm -> confirm), instead of a native confirm()
+// dialog -- shared by every per-task row that offers deleting. Moving off
+// `row` disarms it back to the trash-can icon.
+function appendDeleteButton(row, onConfirm) {
+  const deleteBtn = document.createElement('button');
+  const trashIcon =
+    '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+  const confirmIcon =
+    '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M11 7h2v8h-2zM11 16h2v2h-2z"/></svg>';
+  deleteBtn.title = 'Delete';
+  deleteBtn.innerHTML = trashIcon;
+  let deleteArmed = false;
+  deleteBtn.onclick = () => {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      deleteBtn.innerHTML = confirmIcon;
+      deleteBtn.title = 'Click again to delete';
+      deleteBtn.classList.add('confirm');
+    } else {
+      onConfirm();
+    }
+  };
+  row.addEventListener('mouseleave', () => {
+    if (!deleteArmed) return;
+    deleteArmed = false;
+    deleteBtn.innerHTML = trashIcon;
+    deleteBtn.title = 'Delete';
+    deleteBtn.classList.remove('confirm');
+  });
+  row.appendChild(deleteBtn);
 }
 
-const ALL_TASKS_ICON =
-  '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>';
-const ACTIVE_ONLY_ICON =
-  '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>';
+function monthKeyOf(dateISO) {
+  return dateISO.slice(0, 7); // 'YYYY-MM'
+}
 
-let todoManageViewMode = 'all'; // not persisted -- resets to "all" each session
+function addMonthsToKey(monthKey, n) {
+  const [y, m] = monthKey.split('-').map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
 
-function updateTodoManageViewToggleButton() {
-  if (todoManageViewMode === 'active') {
-    todoManageViewToggleBtn.innerHTML = ACTIVE_ONLY_ICON;
-    todoManageViewToggleBtn.title = 'Showing: active tasks only (hiding completed tasks past their end date) -- click to show all tasks';
-  } else {
-    todoManageViewToggleBtn.innerHTML = ALL_TASKS_ICON;
-    todoManageViewToggleBtn.title = 'Showing: all tasks -- click to hide completed tasks past their end date';
+function formatMonthLabel(monthKey) {
+  const [y, m] = monthKey.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+// Whether `task` lands on any date within monthKey, without enumerating
+// every day in it -- the first occurrence on/after the month's first day
+// either falls inside the month or it doesn't.
+function taskOccursInMonth(task, monthKey) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const startISO = `${monthKey}-01`;
+  const endISO = `${monthKey}-${String(Recurrence.daysInMonth(year, month - 1)).padStart(2, '0')}`;
+  if (Recurrence.occursOn(task, startISO)) return true;
+  const dayBeforeStart = Recurrence.dateToISO(Recurrence.addDays(new Date(startISO + 'T00:00:00'), -1));
+  const occ = Recurrence.nextOccurrenceAfter(task, dayBeforeStart);
+  return !!occ && occ <= endISO;
+}
+
+// Safety net matching recurrence.js's own MAX_SCAN_DAYS -- an implausible
+// endDate shouldn't make the month scan below iterate for centuries.
+const MAX_SCAN_MONTHS = 1200;
+
+// monthKey -> Set(seriesId) for every series with at least one occurrence
+// landing in that month. Each task is only scanned across its own relevant
+// span -- its due date's month through its end date's month, or through the
+// current month if it's still open-ended -- rather than some arbitrary
+// global range.
+function computeSeriesMonthGroups() {
+  const currentMonthKey = monthKeyOf(Recurrence.dateToISO(new Date()));
+  const monthsMap = new Map();
+
+  for (const task of tasks) {
+    const startMonth = monthKeyOf(task.dueDate);
+    const endMonth = task.endDate
+      ? monthKeyOf(task.endDate)
+      : startMonth > currentMonthKey
+        ? startMonth
+        : currentMonthKey;
+
+    let cursor = startMonth;
+    for (let i = 0; i < MAX_SCAN_MONTHS && cursor <= endMonth; i++) {
+      if (taskOccursInMonth(task, cursor)) {
+        if (!monthsMap.has(cursor)) monthsMap.set(cursor, new Set());
+        monthsMap.get(cursor).add(task.seriesId);
+      }
+      cursor = addMonthsToKey(cursor, 1);
+    }
   }
+
+  return monthsMap;
 }
 
-todoManageViewToggleBtn.onclick = () => {
-  todoManageViewMode = todoManageViewMode === 'active' ? 'all' : 'active';
-  renderTodoManageList();
-};
+// Which series (if any) is open in the right-hand editor pane.
+let manageSelectedSeriesId = null;
 
-function renderTodoManageList() {
-  updateTodoManageViewToggleButton();
-  todoManageListEl.innerHTML = '';
+function selectSeriesInManage(seriesId) {
+  manageSelectedSeriesId = seriesId;
+  renderTodoManageMonths();
+  renderSeriesEditorPane();
+}
 
-  const todayISO = Recurrence.dateToISO(new Date());
-  const visibleTasks =
-    todoManageViewMode === 'active' ? tasks.filter((t) => !isTaskDoneAndEnded(t, todayISO)) : tasks;
+function renderTodoManageMonths() {
+  const monthsMap = computeSeriesMonthGroups();
+  const monthKeys = [...monthsMap.keys()].sort().reverse();
+  todoManageMonthsEl.innerHTML = '';
 
-  if (tasks.length === 0) {
+  if (monthKeys.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'todo-manage-empty';
     empty.textContent = 'No tasks yet.';
-    todoManageListEl.appendChild(empty);
-    return;
-  }
-  if (visibleTasks.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'todo-manage-empty';
-    empty.textContent = 'No active tasks -- everything is completed and past its end date.';
-    todoManageListEl.appendChild(empty);
+    todoManageMonthsEl.appendChild(empty);
     return;
   }
 
-  for (const task of visibleTasks) {
-    const row = document.createElement('div');
-    row.className = 'todo-manage-item';
+  for (const monthKey of monthKeys) {
+    const group = document.createElement('div');
+    group.className = 'series-month-group';
 
-    const info = document.createElement('div');
-    info.className = 'todo-manage-item-info';
-    const name = document.createElement('div');
-    name.className = 'todo-manage-item-name';
-    name.textContent = task.name;
-    info.appendChild(name);
-    const meta = document.createElement('div');
-    meta.className = 'todo-manage-item-meta';
-    meta.textContent = describeTaskSchedule(task);
-    info.appendChild(meta);
-    row.appendChild(info);
+    const header = document.createElement('div');
+    header.className = 'series-month-header';
+    header.textContent = formatMonthLabel(monthKey);
+    group.appendChild(header);
 
-    const editBtn = document.createElement('button');
-    editBtn.title = 'Edit';
-    editBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
-    editBtn.onclick = () => openTaskForm(task);
-    row.appendChild(editBtn);
+    const seriesInMonth = [...monthsMap.get(monthKey)]
+      .map((seriesId) => ({ seriesId, members: tasksInSeries(seriesId) }))
+      .sort((a, b) => a.members[0].name.localeCompare(b.members[0].name));
 
-    // Two clicks to delete (arm -> confirm), instead of a native confirm()
-    // dialog. Moving off the row disarms it back to the trash-can icon.
-    const deleteBtn = document.createElement('button');
-    const trashIcon =
-      '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
-    const confirmIcon =
-      '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M11 7h2v8h-2zM11 16h2v2h-2z"/></svg>';
-    deleteBtn.title = 'Delete';
-    deleteBtn.innerHTML = trashIcon;
-    let deleteArmed = false;
-    deleteBtn.onclick = () => {
-      if (!deleteArmed) {
-        deleteArmed = true;
-        deleteBtn.innerHTML = confirmIcon;
-        deleteBtn.title = 'Click again to delete';
-        deleteBtn.classList.add('confirm');
-      } else {
-        deleteTask(task.id);
+    for (const { seriesId, members } of seriesInMonth) {
+      const row = document.createElement('div');
+      row.className = 'series-row ' + (members.length > 1 ? 'series-row-multi' : 'series-row-single');
+      if (seriesId === manageSelectedSeriesId) row.classList.add('selected');
+      row.textContent = members[0].name;
+      row.onclick = () => selectSeriesInManage(seriesId);
+
+      // Only a single-task series can be dragged into another one -- pulling
+      // a task out of an already-multi-task series has to go through an
+      // explicit "Remove from series" first, not a casual drag.
+      if (members.length === 1) {
+        row.draggable = true;
+        row.ondragstart = (e) => {
+          e.dataTransfer.setData('text/plain', members[0].id);
+          e.dataTransfer.effectAllowed = 'move';
+        };
       }
-    };
-    row.addEventListener('mouseleave', () => {
-      if (!deleteArmed) return;
-      deleteArmed = false;
-      deleteBtn.innerHTML = trashIcon;
-      deleteBtn.title = 'Delete';
-      deleteBtn.classList.remove('confirm');
-    });
-    row.appendChild(deleteBtn);
 
-    todoManageListEl.appendChild(row);
+      group.appendChild(row);
+    }
+
+    todoManageMonthsEl.appendChild(group);
   }
 }
 
+function buildSeriesMemberRow(task) {
+  const row = document.createElement('div');
+  row.className = 'todo-manage-item';
+
+  const info = document.createElement('div');
+  info.className = 'todo-manage-item-info';
+  const name = document.createElement('div');
+  name.className = 'todo-manage-item-name';
+  name.textContent = task.name;
+  info.appendChild(name);
+  const meta = document.createElement('div');
+  meta.className = 'todo-manage-item-meta';
+  meta.textContent = describeTaskSchedule(task);
+  info.appendChild(meta);
+  row.appendChild(info);
+
+  const editBtn = document.createElement('button');
+  editBtn.title = 'Edit';
+  editBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+  editBtn.onclick = () => openTaskForm(task);
+  row.appendChild(editBtn);
+
+  // Leaving the series is nothing but getting a fresh seriesId -- the task
+  // itself, and everything else about it, is untouched.
+  const removeBtn = document.createElement('button');
+  removeBtn.title = 'Remove from series';
+  removeBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M5 11v2h9v-2H5zm11-4-1.41 1.41L17.17 11H10v2h7.17l-2.58 2.59L16 17l5-5-5-5z"/></svg>';
+  removeBtn.onclick = () => {
+    task.seriesId = uid();
+    saveTasks();
+    renderTodo();
+    refreshTodoManageModal();
+  };
+  row.appendChild(removeBtn);
+
+  appendDeleteButton(row, () => deleteTask(task.id)); // deleteTask itself calls refreshTodoManageModal
+
+  return row;
+}
+
+function renderSeriesEditorPane() {
+  const members = manageSelectedSeriesId ? tasksInSeries(manageSelectedSeriesId) : [];
+  if (members.length === 0) {
+    manageSelectedSeriesId = null; // the selected series was emptied out (last member deleted/moved away)
+    seriesEditEmptyEl.classList.remove('hidden');
+    seriesEditPanelEl.classList.add('hidden');
+    return;
+  }
+
+  seriesEditEmptyEl.classList.add('hidden');
+  seriesEditPanelEl.classList.remove('hidden');
+
+  const sorted = members.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  // Prefills with whatever the first member is currently called -- just a
+  // starting point for the rename field, not a stored "series name".
+  seriesEditNameInput.value = sorted[0].name;
+  seriesEditListEl.innerHTML = '';
+  for (const task of sorted) seriesEditListEl.appendChild(buildSeriesMemberRow(task));
+}
+
+// The one hook every task-data mutation (add/edit/delete/split/rename/
+// reassign) calls to keep both halves of the modal in sync -- which months
+// have activity and the blue/white series coloring can both change from any
+// of them.
+function refreshTodoManageModal() {
+  renderTodoManageMonths();
+  renderSeriesEditorPane();
+}
+
+document.getElementById('series-edit-rename-btn').onclick = () => {
+  if (!manageSelectedSeriesId) return;
+  const newName = seriesEditNameInput.value.trim();
+  if (!newName) return;
+  for (const task of tasksInSeries(manageSelectedSeriesId)) task.name = newName;
+  saveTasks();
+  renderTodo();
+  refreshTodoManageModal();
+};
+
+document.getElementById('series-edit-add-new-btn').onclick = async () => {
+  if (!manageSelectedSeriesId) return;
+  const nameDefault = seriesEditNameInput.value.trim();
+  await openTaskForm(null, null, null, { forcedSeriesId: manageSelectedSeriesId, nameDefault });
+};
+
+// Dropping a dragged single-task series (see renderTodoManageMonths) onto
+// the right-hand pane pulls that task into whichever series is currently
+// open there -- the only way to move a task between series, per the "only a
+// single-task series can be pulled into another one" rule.
+todoManageRightEl.addEventListener('dragover', (e) => {
+  if (!manageSelectedSeriesId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  todoManageRightEl.classList.add('drag-over');
+});
+todoManageRightEl.addEventListener('dragleave', () => todoManageRightEl.classList.remove('drag-over'));
+todoManageRightEl.addEventListener('drop', (e) => {
+  e.preventDefault();
+  todoManageRightEl.classList.remove('drag-over');
+  if (!manageSelectedSeriesId) return;
+  const taskId = e.dataTransfer.getData('text/plain');
+  const task = tasks.find((t) => t.id === taskId);
+  // Re-checks single-task-ness at drop time, not just at drag start -- the
+  // dragged task could have gained series-mates in between (e.g. another
+  // drop already claimed it).
+  if (!task || tasksInSeries(task.seriesId).length !== 1 || task.seriesId === manageSelectedSeriesId) return;
+  task.seriesId = manageSelectedSeriesId;
+  saveTasks();
+  renderTodo();
+  refreshTodoManageModal();
+});
+
 document.getElementById('todo-manage-btn').onclick = () => {
-  renderTodoManageList();
+  refreshTodoManageModal();
   todoManageOverlay.classList.remove('hidden');
 };
-document.getElementById('todo-manage-close').onclick = () => todoManageOverlay.classList.add('hidden');
+document.getElementById('todo-manage-close').onclick = () => {
+  todoManageOverlay.classList.add('hidden');
+  manageSelectedSeriesId = null;
+};
 document.getElementById('todo-add-btn').onclick = () => openTaskForm(null);
 
 // ---------------------------------------------------------------------------

@@ -53,12 +53,24 @@
       <button id="todo-manage-close" class="modal-close-btn" title="Close">
         <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <div class="modal-title-row">
-        <div class="modal-title">To-do list</div>
-        <button id="todo-manage-view-toggle-btn" class="todo-view-toggle-btn" title="Switch view"></button>
+      <div class="modal-title">To-do list</div>
+      <div class="todo-manage-panes">
+        <div class="todo-manage-left">
+          <div id="todo-manage-months"></div>
+          <button id="todo-add-btn" class="menu-btn-small">+ Add task</button>
+        </div>
+        <div class="todo-manage-right">
+          <div id="series-edit-empty" class="todo-manage-empty">Select a series on the left to edit it.</div>
+          <div id="series-edit-panel" class="hidden">
+            <div class="series-edit-name-row">
+              <input id="series-edit-name-input" class="modal-input" type="text" placeholder="Series name">
+              <button id="series-edit-rename-btn" class="menu-btn-small">Rename all</button>
+            </div>
+            <div id="series-edit-list"></div>
+            <button id="series-edit-add-new-btn" class="menu-btn-small">+ Add new task</button>
+          </div>
+        </div>
       </div>
-      <div id="todo-manage-list"></div>
-      <button id="todo-add-btn" class="menu-btn-small">+ Add task</button>
     </div>
   </div>
 

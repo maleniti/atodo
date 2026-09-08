@@ -112,24 +112,6 @@ main {
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-/* In the to-do manage modal, the toggle sits inline next to the title
-   instead of the corner -- that corner slot is the modal's own Close
-   button there (.modal-close-btn), to avoid the two being mistaken for
-   each other. */
-#todo-manage-view-toggle-btn {
-  position: static;
-}
-
-.modal-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-.modal-title-row .modal-title {
-  margin-bottom: 0;
-}
-
 .modal-close-btn {
   position: absolute;
   top: 8px;
@@ -535,23 +517,80 @@ main,
 
 .todo-manage-modal {
   position: relative;
-  width: 380px;
+  width: 640px;
 }
 
-#todo-manage-list {
-  max-height: 280px;
+.todo-manage-panes {
+  display: flex;
+  gap: 14px;
+}
+
+.todo-manage-left {
+  width: 220px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#todo-manage-months {
+  max-height: 360px;
   overflow-y: auto;
-  margin-bottom: 10px;
   scrollbar-width: thin; /* Firefox */
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
-#todo-manage-list::-webkit-scrollbar { width: 6px; } /* Chromium */
-#todo-manage-list::-webkit-scrollbar-track { background: transparent; }
-#todo-manage-list::-webkit-scrollbar-thumb {
+#todo-manage-months::-webkit-scrollbar { width: 6px; } /* Chromium */
+#todo-manage-months::-webkit-scrollbar-track { background: transparent; }
+#todo-manage-months::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 3px;
 }
-#todo-manage-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+#todo-manage-months::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+
+.series-month-group {
+  margin-bottom: 8px;
+}
+
+.series-month-header {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #9aa0a6;
+  padding: 4px 6px 2px;
+}
+
+.series-row {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #e8eaed;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.series-row:hover { background: rgba(255, 255, 255, 0.06); }
+.series-row.selected { background: rgba(138, 180, 248, 0.16); }
+/* A series with more than one task record (already split/merged) reads as
+   blue -- a single-record series stays plain white/default so the two are
+   distinguishable at a glance without opening either. */
+.series-row-multi { color: #8ab4f8; }
+.series-row[draggable="true"] { cursor: grab; }
+
+.todo-manage-right {
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding-left: 14px;
+  border-radius: 0 4px 4px 0;
+  transition: background 0.15s;
+}
+/* Feedback while dragging a single-task series row (see .series-row above)
+   over the pane it can be dropped into. */
+.todo-manage-right.drag-over {
+  background: rgba(138, 180, 248, 0.08);
+}
 
 .edit-scope-modal {
   width: 320px;
@@ -621,6 +660,30 @@ main,
   position: relative;
   width: 320px;
 }
+
+.series-edit-name-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.series-edit-name-row .modal-input {
+  flex: 1;
+}
+
+#series-edit-list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+#series-edit-list::-webkit-scrollbar { width: 6px; } /* Chromium */
+#series-edit-list::-webkit-scrollbar-track { background: transparent; }
+#series-edit-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+#series-edit-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
 
 .task-stats-section {
   margin-bottom: 14px;
