@@ -1798,40 +1798,45 @@ function isDismissalPending(task, occurrenceDate) {
   return dismissalTimers.has(`${task.id}:${occurrenceDate}`);
 }
 
-// The first of the current calendar month, as an ISO date -- the lower
-// bound for both the "pending/overdue" and "all tasks" views (see
-// computeTodoDisplayItems/computeAllTasksItems), neither of which reach
-// back further than that.
-function currentMonthStartISO(todayISO) {
-  return `${todayISO.slice(0, 7)}-01`;
-}
-
-// "Pending/overdue" view: every occurrence since the start of the current
-// calendar month that's overdue or failed (see pastDueStatus) -- regardless
-// of task.dismissed, unlike every other view here. This is meant to be a
-// standing audit of everything unresolved this month, not a decluttered
+// "Pending/overdue" view: every occurrence since the start of viewedMonthKey
+// that's overdue or failed (see pastDueStatus) -- regardless of
+// task.dismissed, unlike every other view here. This is meant to be a
+// standing audit of everything unresolved in that month, not a decluttered
 // day-to-day list, so a dismissal made to tidy up the "next recurrence" view
 // doesn't also hide something from this one. A completed occurrence is
 // dropped instead of shown -- it's resolved, not overdue/failed anymore, so
-// it has nothing to say here. Today's own occurrence (whatever its status)
-// and tomorrow's are always included too, unconditionally -- no 6pm gate
-// the way "next recurrence"'s tomorrow preview has, since this view's job is
+// it has nothing to say here.
+//
+// Only makes sense relative to *real* today, so browsing to a past month
+// scans that whole month (everything in it is already over), a future month
+// scans nothing (nothing in it can be overdue yet), and only the actual
+// current month gets today's/tomorrow's occurrence unconditionally, no 6pm
+// gate the way "next recurrence"'s tomorrow preview has -- this view's job is
 // showing what's due, not previewing ahead.
-function computeTodoDisplayItems() {
+function computeTodoDisplayItems(viewedMonthKey) {
   const now = new Date();
   const todayISO = Recurrence.dateToISO(now);
   const tomorrowISO = Recurrence.dateToISO(Recurrence.addDays(now, 1));
-  const monthStartISO = currentMonthStartISO(todayISO);
+  const monthStartISO = `${viewedMonthKey}-01`;
+  const currentMonthKey = monthKeyOf(todayISO);
+  const isCurrentMonth = viewedMonthKey === currentMonthKey;
+  const scanCutoffISO = isCurrentMonth
+    ? todayISO
+    : viewedMonthKey < currentMonthKey
+      ? `${addMonthsToKey(viewedMonthKey, 1)}-01`
+      : monthStartISO; // future month -- empty range, nothing can be overdue yet
   const items = [];
 
   for (const task of tasks) {
-    forEachOccurrenceInRange(task, monthStartISO, todayISO, (date) => {
+    forEachOccurrenceInRange(task, monthStartISO, scanCutoffISO, (date) => {
       if (task.completions[date]) return; // resolved -- not "pending/overdue" anymore
       const { overdue, failed } = pastDueStatus(task, date, false, now);
       if (overdue || failed) {
         items.push({ task, occurrenceDate: date, completed: false, overdue, failed, dismissed: !!task.dismissed[date], kind: 'carried-over' });
       }
     });
+
+    if (!isCurrentMonth) continue;
 
     if (Recurrence.occursOn(task, todayISO)) {
       const completed = !!task.completions[todayISO];
@@ -1855,18 +1860,19 @@ function computeTodoDisplayItems() {
   return items;
 }
 
-// "All tasks" view: every occurrence of every task that falls within the
-// current calendar month, start to end, whatever its state -- done or not,
-// failed or not, dismissed or not. A plain calendar-month listing rather
-// than a todo-workflow view like the other two, so nothing here is filtered
-// by task.dismissed/task.completions the way they are.
-function computeAllTasksItems() {
+// "All tasks" view: every occurrence of every task that falls within
+// viewedMonthKey, start to end, whatever its state -- done or not, failed or
+// not, dismissed or not. A plain calendar-month listing rather than a
+// todo-workflow view like the other two, so nothing here is filtered by
+// task.dismissed/task.completions the way they are.
+function computeAllTasksItems(viewedMonthKey) {
   const now = new Date();
   const todayISO = Recurrence.dateToISO(now);
   const tomorrowISO = Recurrence.dateToISO(Recurrence.addDays(now, 1));
-  const monthStartISO = currentMonthStartISO(todayISO);
-  const daysInThisMonth = Recurrence.daysInMonth(now.getFullYear(), now.getMonth());
-  const monthEndExclusiveISO = Recurrence.dateToISO(Recurrence.addDays(new Date(now.getFullYear(), now.getMonth(), 1), daysInThisMonth));
+  const [viewedYear, viewedMonth] = viewedMonthKey.split('-').map(Number);
+  const monthStartISO = `${viewedMonthKey}-01`;
+  const daysInViewedMonth = Recurrence.daysInMonth(viewedYear, viewedMonth - 1);
+  const monthEndExclusiveISO = Recurrence.dateToISO(Recurrence.addDays(new Date(viewedYear, viewedMonth - 1, 1), daysInViewedMonth));
   const items = [];
 
   for (const task of tasks) {
@@ -1994,7 +2000,9 @@ function saveTodoViewMode() {
 const todoSectionEl = document.getElementById('todo-section');
 const todoListEl = document.getElementById('todo-list');
 const todoViewportEl = document.getElementById('todo-viewport');
-const todoViewToggleBtn = document.getElementById('todo-view-toggle-btn');
+const todoViewToggleEl = document.getElementById('todo-view-toggle');
+const todoViewToggleThumb = todoViewToggleEl.querySelector('.todo-view-toggle-thumb');
+const todoViewToggleOpts = Array.from(todoViewToggleEl.querySelectorAll('.todo-view-toggle-opt'));
 
 // { sentinel, header } per visible day, in display order -- rebuilt on every
 // renderTodo(). See updatePinnedTodoHeader.
@@ -2025,30 +2033,81 @@ const ALL_TASKS_VIEW_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>';
 
 const TODO_VIEW_MODE_INFO = {
-  pending: {
-    icon: PENDING_VIEW_ICON,
-    title: 'Showing: pending/overdue tasks this month -- click to switch to next recurrence of every task',
-  },
-  'next-recurrence': {
-    icon: NEXT_RECURRENCE_VIEW_ICON,
-    title: 'Showing: next recurrence of every task -- click to switch to all tasks this month',
-  },
-  all: {
-    icon: ALL_TASKS_VIEW_ICON,
-    title: 'Showing: all tasks this month -- click to switch to pending/overdue tasks',
-  },
+  pending: { icon: PENDING_VIEW_ICON },
+  'next-recurrence': { icon: NEXT_RECURRENCE_VIEW_ICON },
+  all: { icon: ALL_TASKS_VIEW_ICON },
 };
 
+// Icons are static per option, so this only needs to run once -- unlike the
+// active state/thumb position below, which change on every renderTodo().
+todoViewToggleOpts.forEach((btn) => {
+  btn.innerHTML = TODO_VIEW_MODE_INFO[btn.dataset.mode].icon;
+});
+
 function updateTodoViewToggleButton() {
-  const info = TODO_VIEW_MODE_INFO[todoViewMode];
-  todoViewToggleBtn.innerHTML = info.icon;
-  todoViewToggleBtn.title = info.title;
+  const activeIndex = TODO_VIEW_MODES.indexOf(todoViewMode);
+  todoViewToggleOpts.forEach((btn, i) => btn.classList.toggle('active', i === activeIndex));
+  // Percentage-based, not measured off the buttons' own rendered boxes --
+  // those come back 0 while #todo-section is still .hidden (e.g. the very
+  // first renderTodo()), but this doesn't depend on layout having happened
+  // yet, only on the CSS that sizes .todo-view-toggle-thumb to exactly one
+  // option's width (see there).
+  todoViewToggleThumb.style.transform = `translateX(${activeIndex * 100}%)`;
 }
 
-todoViewToggleBtn.onclick = () => {
-  todoViewMode = TODO_VIEW_MODES[(TODO_VIEW_MODES.indexOf(todoViewMode) + 1) % TODO_VIEW_MODES.length];
-  saveTodoViewMode();
-  updateTodoViewToggleButton();
+todoViewToggleOpts.forEach((btn) => {
+  btn.onclick = () => {
+    if (todoViewMode === btn.dataset.mode) return;
+    todoViewMode = btn.dataset.mode;
+    saveTodoViewMode();
+    renderTodo();
+  };
+});
+
+// Which calendar month "pending/overdue" and "all tasks" currently display
+// (see computeTodoDisplayItems/computeAllTasksItems) -- not persisted, and
+// deliberately never consulted by anything that determines real overdue
+// status or which occurrence is active/timed, only by what the list shows.
+// "Next recurrence" ignores this entirely: it's one upcoming occurrence per
+// task, not a month range, so there's nothing for it to page through (see
+// updateTodoMonthNav).
+let viewedMonthKey = monthKeyOf(Recurrence.dateToISO(new Date()));
+
+const todoMonthNavEl = document.getElementById('todo-month-nav');
+const todoMonthPrevBtn = document.getElementById('todo-month-prev');
+const todoMonthNextBtn = document.getElementById('todo-month-next');
+const todoMonthLabelEl = document.getElementById('todo-month-label');
+
+todoMonthPrevBtn.innerHTML =
+  '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M15.4 7.4L14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></svg>';
+todoMonthNextBtn.innerHTML =
+  '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8.6 7.4L10 6l6 6-6 6-1.4-1.4L13.2 12z"/></svg>';
+
+// Hidden entirely in "next recurrence" mode -- that view shows one upcoming
+// occurrence per task (plus yesterday's still-undismissed one) regardless of
+// which month either lands in, so there's no month range for it to page
+// through at all.
+function updateTodoMonthNav() {
+  const isNextRecurrence = todoViewMode === 'next-recurrence';
+  todoMonthNavEl.classList.toggle('hidden', isNextRecurrence);
+  if (isNextRecurrence) return;
+  todoMonthLabelEl.textContent = formatMonthLabel(viewedMonthKey);
+  const isCurrentMonth = viewedMonthKey === monthKeyOf(Recurrence.dateToISO(new Date()));
+  todoMonthLabelEl.title = isCurrentMonth ? '' : 'Jump to current month';
+}
+
+todoMonthPrevBtn.onclick = () => {
+  viewedMonthKey = addMonthsToKey(viewedMonthKey, -1);
+  renderTodo();
+};
+todoMonthNextBtn.onclick = () => {
+  viewedMonthKey = addMonthsToKey(viewedMonthKey, 1);
+  renderTodo();
+};
+todoMonthLabelEl.onclick = () => {
+  const currentMonthKey = monthKeyOf(Recurrence.dateToISO(new Date()));
+  if (viewedMonthKey === currentMonthKey) return;
+  viewedMonthKey = currentMonthKey;
   renderTodo();
 };
 
@@ -2415,6 +2474,7 @@ function renderTodo() {
   expireFinishedTimers();
   autoDismissStaleCarriedOverOccurrences();
   updateTodoViewToggleButton();
+  updateTodoMonthNav();
 
   if (tasks.length === 0) {
     todoSectionEl.classList.remove('hidden');
@@ -2432,15 +2492,24 @@ function renderTodo() {
     todoViewMode === 'next-recurrence'
       ? computeNextRecurrenceItems()
       : todoViewMode === 'all'
-        ? computeAllTasksItems()
-        : computeTodoDisplayItems();
+        ? computeAllTasksItems(viewedMonthKey)
+        : computeTodoDisplayItems(viewedMonthKey);
 
   // Eligible to be (or stay) the active task: today's occurrence (whether
   // overdue yet or not -- the "Work on this now" button lets the user opt
   // into any of today's tasks, not just overdue ones) or a carried-over
   // overdue one. Passive tasks are never eligible -- they can't be focused
   // on or timed (see canWorkOnNow in buildTodoItemRow).
-  const activeEligible = items.filter(
+  //
+  // Deliberately NOT just `items` filtered -- those are scoped to whichever
+  // month is currently being *browsed* (viewedMonthKey), but eligibility has
+  // to stay pinned to the real current month regardless. Otherwise paging
+  // away to look at another month while a task is actively being timed would
+  // make it look ineligible and clear the timer (see setActiveTaskId below).
+  // "Next recurrence" has no such month scoping to begin with, so its own
+  // items are already correct as-is.
+  const eligibilityItems = todoViewMode === 'next-recurrence' ? items : computeTodoDisplayItems(monthKeyOf(Recurrence.dateToISO(new Date())));
+  const activeEligible = eligibilityItems.filter(
     (item) => !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed
   );
 

@@ -48,7 +48,19 @@
       </div>
 
       <div id="todo-section" class="todo-section hidden">
-        <button id="todo-view-toggle-btn" class="todo-view-toggle-btn" title="Switch view"></button>
+        <div class="todo-toolbar">
+          <div id="todo-month-nav" class="todo-month-nav">
+            <button type="button" id="todo-month-prev" class="todo-month-nav-btn" title="Previous month"></button>
+            <span id="todo-month-label" class="todo-month-label"></span>
+            <button type="button" id="todo-month-next" class="todo-month-nav-btn" title="Next month"></button>
+          </div>
+          <div id="todo-view-toggle" class="todo-view-toggle">
+            <div class="todo-view-toggle-thumb"></div>
+            <button type="button" class="todo-view-toggle-opt" data-mode="pending" title="Pending &amp; overdue tasks this month"></button>
+            <button type="button" class="todo-view-toggle-opt" data-mode="next-recurrence" title="Next recurrence of every task"></button>
+            <button type="button" class="todo-view-toggle-opt" data-mode="all" title="All tasks this month"></button>
+          </div>
+        </div>
         <div id="todo-viewport">
           <div id="todo-list"></div>
         </div>
