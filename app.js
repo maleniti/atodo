@@ -353,6 +353,29 @@ function showFormModal(title, fields, opts = {}) {
 
 const AUTH_TOKEN_KEY = 'advanced-todo-auth-token';
 const FAKE_USER_ID = 'nikola';
+const FAKE_USER_NICKNAME = 'Nikola';
+
+// User profile (nickname + avatar) -- the only per-user settings that exist
+// so far, editable via the Settings modal. Same fake-single-user storage
+// shortcut as loadTasks/saveTasks below: userId is accepted (for whenever a
+// real backend/multiple accounts exist) but ignored, always reading/writing
+// the one shared blob. Seeded from FAKE_USER_NICKNAME/no avatar the first
+// time there's nothing saved yet.
+const USER_PROFILE_STORAGE_KEY = 'advanced-todo-user-profile';
+
+function loadUserProfile(userId = currentUserId) {
+  try {
+    const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // fall through to default
+  }
+  return { nickname: FAKE_USER_NICKNAME, avatar: null };
+}
+
+function saveUserProfile(profile, userId = currentUserId) {
+  localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+}
 
 async function login(username, password) {
   return { token: btoa(JSON.stringify({ sub: FAKE_USER_ID, issuedAt: Date.now() })) };
@@ -360,7 +383,8 @@ async function login(username, password) {
 
 async function getMe(token) {
   const payload = JSON.parse(atob(token));
-  return { id: payload.sub };
+  const profile = loadUserProfile(payload.sub);
+  return { id: payload.sub, nickname: profile.nickname, avatar: profile.avatar };
 }
 
 // Set once boot()/the login form resolves a user -- every call site below
@@ -369,6 +393,11 @@ async function getMe(token) {
 // it explicitly, while still accepting an explicit userId for whenever a
 // real backend (and maybe switching accounts) exists.
 let currentUserId = null;
+// Display-only (see renderAppTitle/renderUserAvatar) -- kept in sync with
+// the saved profile by saveSettingsFromModal, not re-read from storage on
+// every render.
+let currentUserNickname = null;
+let currentUserAvatar = null; // data URL, or null for the initials fallback
 
 // ---------------------------------------------------------------------------
 // To-do list.
@@ -3194,10 +3223,6 @@ todoManageRightEl.addEventListener('drop', (e) => {
   refreshTodoManageModal();
 });
 
-document.getElementById('todo-manage-btn').onclick = () => {
-  refreshTodoManageModal();
-  todoManageOverlay.classList.remove('hidden');
-};
 document.getElementById('todo-manage-close').onclick = () => {
   todoManageOverlay.classList.add('hidden');
   manageSelectedSeriesId = null;
@@ -3368,6 +3393,170 @@ function showTaskStatsModal(task) {
 document.getElementById('task-stats-close').onclick = () => taskStatsOverlay.classList.add('hidden');
 
 // ---------------------------------------------------------------------------
+// User avatar menu -- the header's Manage tasks/Settings/Log out button
+// trio is folded into a single avatar button + dropdown here, so the header
+// itself only ever shows the avatar.
+// ---------------------------------------------------------------------------
+
+const userAvatarBtn = document.getElementById('user-avatar-btn');
+const userAvatarImg = document.getElementById('user-avatar-img');
+const userAvatarInitials = document.getElementById('user-avatar-initials');
+const userMenuDropdown = document.getElementById('user-menu-dropdown');
+
+// Up to the first two words' initials (e.g. "Nikola Novak" -> "NN", "Nikola"
+// -> "N"), or the placeholder "JD" (as in "John Doe") when there's no
+// nickname at all to derive anything from -- the fallback avatar content
+// whenever no custom image has been uploaded.
+function initialsFor(nickname) {
+  const words = (nickname || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'JD';
+  return words
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+}
+
+function renderUserAvatar() {
+  const hasImage = !!currentUserAvatar;
+  userAvatarImg.src = currentUserAvatar || '';
+  userAvatarImg.classList.toggle('hidden', !hasImage);
+  userAvatarInitials.textContent = initialsFor(currentUserNickname);
+  userAvatarInitials.classList.toggle('hidden', hasImage);
+}
+
+function closeUserMenu() {
+  userMenuDropdown.classList.add('hidden');
+}
+
+// stopPropagation so the toggle below doesn't immediately re-close it via
+// the document-level listener the same click bubbles up to.
+userAvatarBtn.onclick = (e) => {
+  e.stopPropagation();
+  userMenuDropdown.classList.toggle('hidden');
+};
+document.addEventListener('click', closeUserMenu);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeUserMenu();
+});
+
+document.getElementById('user-menu-manage-tasks').onclick = (e) => {
+  e.stopPropagation();
+  closeUserMenu();
+  refreshTodoManageModal();
+  todoManageOverlay.classList.remove('hidden');
+};
+document.getElementById('user-menu-settings').onclick = (e) => {
+  e.stopPropagation();
+  closeUserMenu();
+  openSettingsModal();
+};
+document.getElementById('user-menu-logout').onclick = (e) => {
+  e.stopPropagation();
+  closeUserMenu();
+  // Clears the saved token and reloads -- the easiest way back to the login
+  // screen for testing it, and simpler/more robust than manually resetting
+  // every piece of in-memory state (tasks, activeTaskId, sidePanelTask, ...)
+  // by hand.
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  location.reload();
+};
+
+// ---------------------------------------------------------------------------
+// Settings modal -- nickname + avatar, the only editable profile fields.
+// Not built on the generic showFormModal: the avatar picker needs a live
+// image preview and a separate "Remove" action that plain form fields don't
+// support.
+// ---------------------------------------------------------------------------
+
+const settingsOverlay = document.getElementById('settings-overlay');
+const settingsNicknameInput = document.getElementById('settings-nickname-input');
+const settingsAvatarPreviewImg = document.getElementById('settings-avatar-preview-img');
+const settingsAvatarPreviewInitials = document.getElementById('settings-avatar-preview-initials');
+const settingsAvatarFileInput = document.getElementById('settings-avatar-file-input');
+
+const AVATAR_SIZE = 128; // px, square
+
+// Square-crops and downscales any uploaded image before it's ever stored --
+// an avatar is only ever shown at a few dozen pixels, so keeping a
+// multi-megapixel photo's full data URL around would bloat localStorage
+// (shared with every task/comment) for no visible benefit.
+function readAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not read image'));
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = AVATAR_SIZE;
+        canvas.height = AVATAR_SIZE;
+        canvas
+          .getContext('2d')
+          .drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// undefined = unchanged from currentUserAvatar, null = removed, string = a
+// freshly uploaded image -- staged here until Save, so Cancel can discard it
+// without having touched currentUserAvatar/storage at all.
+let settingsPendingAvatar;
+
+function renderSettingsAvatarPreview() {
+  const avatar = settingsPendingAvatar === undefined ? currentUserAvatar : settingsPendingAvatar;
+  const hasImage = !!avatar;
+  settingsAvatarPreviewImg.src = avatar || '';
+  settingsAvatarPreviewImg.classList.toggle('hidden', !hasImage);
+  settingsAvatarPreviewInitials.textContent = initialsFor(settingsNicknameInput.value);
+  settingsAvatarPreviewInitials.classList.toggle('hidden', hasImage);
+}
+
+function openSettingsModal() {
+  settingsNicknameInput.value = currentUserNickname || '';
+  settingsPendingAvatar = undefined;
+  renderSettingsAvatarPreview();
+  settingsOverlay.classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+  settingsOverlay.classList.add('hidden');
+}
+
+settingsNicknameInput.oninput = renderSettingsAvatarPreview;
+
+document.getElementById('settings-avatar-upload-btn').onclick = () => settingsAvatarFileInput.click();
+settingsAvatarFileInput.onchange = async () => {
+  const file = settingsAvatarFileInput.files[0];
+  settingsAvatarFileInput.value = ''; // so re-selecting the same file still fires onchange next time
+  if (!file) return;
+  settingsPendingAvatar = await readAvatarFile(file);
+  renderSettingsAvatarPreview();
+};
+document.getElementById('settings-avatar-remove-btn').onclick = () => {
+  settingsPendingAvatar = null;
+  renderSettingsAvatarPreview();
+};
+
+document.getElementById('settings-cancel').onclick = closeSettingsModal;
+document.getElementById('settings-close').onclick = closeSettingsModal;
+document.getElementById('settings-save').onclick = () => {
+  const nickname = settingsNicknameInput.value.trim();
+  const avatar = settingsPendingAvatar === undefined ? currentUserAvatar : settingsPendingAvatar;
+  currentUserNickname = nickname;
+  currentUserAvatar = avatar;
+  saveUserProfile({ nickname, avatar });
+  renderAppTitle();
+  renderUserAvatar();
+  closeSettingsModal();
+};
+
+// ---------------------------------------------------------------------------
 // Boot -- gates the app behind the (fake, see login()/getMe() above) login
 // screen. Everything above this point is safe to run unconditionally at
 // script-load time (it's all function/event-listener setup, nothing reads
@@ -3376,6 +3565,13 @@ document.getElementById('task-stats-close').onclick = () => taskStatsOverlay.cla
 
 const loginScreenEl = document.getElementById('login-screen');
 const appMainEl = document.getElementById('app-main');
+const appTitleEl = document.getElementById('app-title');
+
+// Falls back to the generic title if a user's nickname isn't known yet (e.g.
+// briefly, before getMe() resolves) -- see startApp().
+function renderAppTitle() {
+  appTitleEl.textContent = currentUserNickname ? `${currentUserNickname}'s To-Do List` : 'To-Do List';
+}
 
 // The one-time "we now know who's logged in" entry point, run either right
 // after boot() finds an existing token or right after the login form
@@ -3384,6 +3580,8 @@ const appMainEl = document.getElementById('app-main');
 // elsewhere in the app) already defaults to currentUserId on its own.
 function startApp() {
   tasks = loadTasks(currentUserId);
+  renderAppTitle();
+  renderUserAvatar();
   renderTodo();
 }
 
@@ -3396,6 +3594,8 @@ function boot() {
   appMainEl.classList.remove('hidden');
   getMe(token).then((user) => {
     currentUserId = user.id;
+    currentUserNickname = user.nickname;
+    currentUserAvatar = user.avatar;
     startApp();
   });
 }
@@ -3408,18 +3608,11 @@ document.getElementById('login-form').onsubmit = async (e) => {
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   const user = await getMe(token);
   currentUserId = user.id;
+  currentUserNickname = user.nickname;
+  currentUserAvatar = user.avatar;
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
   startApp();
-};
-
-// Clears the saved token and reloads -- the easiest way back to the login
-// screen for testing it, and simpler/more robust than manually resetting
-// every piece of in-memory state (tasks, activeTaskId, sidePanelTask, ...)
-// by hand.
-document.getElementById('logout-btn').onclick = () => {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  location.reload();
 };
 
 boot();

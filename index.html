@@ -40,10 +40,20 @@
   <main id="app-main" class="hidden">
     <div class="todo-column">
       <div class="app-header">
-        <h1>To-Do List</h1>
+        <h1 id="app-title">To-Do List</h1>
         <div class="app-header-actions">
-          <button id="logout-btn" class="menu-btn-small" title="Log out (for testing the login screen)">Log out</button>
-          <button id="todo-manage-btn" class="menu-btn-small">Manage tasks&hellip;</button>
+          <div class="user-menu">
+            <button id="user-avatar-btn" class="user-avatar-btn" title="Account menu">
+              <img id="user-avatar-img" class="user-avatar-img hidden" alt="">
+              <span id="user-avatar-initials" class="user-avatar-initials"></span>
+            </button>
+            <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
+              <div id="user-menu-manage-tasks" class="menu-item">Manage tasks&hellip;</div>
+              <div id="user-menu-settings" class="menu-item">Settings&hellip;</div>
+              <div class="menu-separator"></div>
+              <div id="user-menu-logout" class="menu-item" title="Log out (for testing the login screen)">Log out</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -145,6 +155,35 @@
       </button>
       <div class="modal-title" id="task-stats-title"></div>
       <div id="task-stats-body"></div>
+    </div>
+  </div>
+
+  <div id="settings-overlay" class="modal-overlay hidden">
+    <div class="modal settings-modal">
+      <button id="settings-close" class="modal-close-btn" title="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-title">Settings</div>
+      <div class="modal-field">
+        <label for="settings-nickname-input">Nickname</label>
+        <input id="settings-nickname-input" class="modal-input" type="text" placeholder="e.g. Nikola">
+      </div>
+      <div class="modal-field">
+        <label>Avatar</label>
+        <div class="settings-avatar-row">
+          <div class="user-avatar-btn settings-avatar-preview">
+            <img id="settings-avatar-preview-img" class="user-avatar-img hidden" alt="">
+            <span id="settings-avatar-preview-initials" class="user-avatar-initials"></span>
+          </div>
+          <button id="settings-avatar-upload-btn" type="button" class="menu-btn-small">Upload image&hellip;</button>
+          <button id="settings-avatar-remove-btn" type="button" class="menu-btn-small">Remove</button>
+          <input id="settings-avatar-file-input" type="file" accept="image/*" class="hidden">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="settings-cancel" class="modal-cancel">Cancel</button>
+        <button id="settings-save" class="modal-ok">Save</button>
+      </div>
     </div>
   </div>
 
