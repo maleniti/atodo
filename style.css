@@ -993,6 +993,22 @@ main,
 .modal-field-inline-item {
   flex: none;
 }
+/* Pulls an item closer to its predecessor than the row's normal 12px gap
+   (see .modal-field-inline) -- e.g. the ordinal suffix ("st"/"nd"/...)
+   hugging its number input instead of sitting a full gap away, so "1st"
+   reads as one unit rather than "1" and "st" looking like separate fields. */
+.modal-field-inline-item-tight {
+  margin-left: -9px;
+}
+
+/* A non-interactive text fragment inside an inline group (e.g. "occurrence",
+   or the "st"/"nd"/"rd"/"th" suffix computed from a neighboring field's
+   value) -- see showFormModal's field.type === 'static'. */
+.modal-static-text {
+  font-size: 12px;
+  color: #e8eaed;
+  white-space: nowrap;
+}
 
 .modal-field label {
   display: block;

@@ -105,6 +105,20 @@ function showFormModal(title, fields, opts = {}) {
 
     const interactiveEls = [];
     const fieldGetters = [];
+    // Reactive plain-text pieces within an inline group (e.g. the "st/nd/rd/
+    // th occurrence" ordinal suffix next to the "which occurrence" number
+    // input) -- see field.type === 'static' below. Not a fieldGetters entry:
+    // no name/value, just text that's recomputed from the live form values
+    // and a host that can be shown/hidden like any other grouped item.
+    const staticEls = [];
+    // wrap -> every item host created within that group, so a group whose
+    // items are ALL individually hidden by their own showIf (e.g. every
+    // multi-weekday-only item, when monthlyMode is 'day') can also collapse
+    // its shared row -- see the groupWraps pass in updateVisibility. A group
+    // with no per-item showIf at all (e.g. the plain "Repeats every" row)
+    // never has all its hosts hidden, so it's always left visible, same as
+    // before this existed.
+    const groupWraps = new Map();
     // A `fields` entry is normally a single field spec, each getting its own
     // stacked label+control block. Passing an array instead groups several
     // specs into one shared row (e.g. "[x] Repeats every [N] [unit]") --
@@ -115,6 +129,7 @@ function showFormModal(title, fields, opts = {}) {
       const isGroup = Array.isArray(entry);
       const wrap = document.createElement('div');
       wrap.className = 'modal-field' + (isGroup ? ' modal-field-inline' : '');
+      if (isGroup) groupWraps.set(wrap, []);
 
       if (!isGroup) {
         const label = document.createElement('label');
@@ -133,7 +148,25 @@ function showFormModal(title, fields, opts = {}) {
         if (host !== wrap) {
           host.className = 'modal-field-inline-item';
           if (field.inlineWidth) host.style.width = field.inlineWidth;
+          // Pulls this item closer to the one before it than the row's
+          // normal .modal-field-inline gap (e.g. the ordinal suffix hugging
+          // its number input instead of sitting a full gap away from it).
+          if (field.tightGap) host.classList.add('modal-field-inline-item-tight');
           wrap.appendChild(host);
+        }
+        if (groupWraps.has(wrap)) groupWraps.get(wrap).push(host);
+
+        if (field.type === 'static') {
+          // A non-interactive text fragment inside an inline group (e.g. the
+          // word "occurrence", or a suffix computed from another field's
+          // current value) -- see field.text below and its recomputation in
+          // updateVisibility. Skips the fieldGetters bookkeeping entirely:
+          // there's no value to collect on submit.
+          const span = document.createElement('span');
+          span.className = 'modal-static-text';
+          host.appendChild(span);
+          staticEls.push({ el: span, text: field.text, host, showIf: field.showIf });
+          continue;
         }
 
         let getValue;
@@ -202,6 +235,13 @@ function showFormModal(title, fields, opts = {}) {
           required: field.required !== false,
           isArray: field.type === 'checkboxes',
           wrap,
+          // showIf hides `hideTarget` -- the field's own host within a group,
+          // so one item in an inline row (e.g. "3 days before/after") can be
+          // hidden without hiding the whole shared row. Outside a group,
+          // host === wrap, so this is the same as hiding the whole field, as
+          // before. disableIf always targets just the individual host (dim
+          // one control, not the row it shares with others).
+          hideTarget: host,
           disableTarget: host,
           els: fieldEls,
           showIf: field.showIf,
@@ -231,15 +271,25 @@ function showFormModal(title, fields, opts = {}) {
     }
 
     function updateVisibility() {
-      if (!fieldGetters.some((f) => f.showIf || f.disableIf)) return; // no conditional fields, skip the work
+      if (!fieldGetters.some((f) => f.showIf || f.disableIf) && staticEls.length === 0) return; // no conditional/reactive fields, skip the work
       const values = currentValues();
       for (const f of fieldGetters) {
-        if (f.showIf) f.wrap.classList.toggle('modal-field-hidden', !f.showIf(values));
+        if (f.showIf) f.hideTarget.classList.toggle('modal-field-hidden', !f.showIf(values));
         if (f.disableIf) {
           const disabled = f.disableIf(values);
           f.disableTarget.classList.toggle('modal-field-disabled', disabled);
           f.els.forEach((el) => (el.disabled = disabled));
         }
+      }
+      for (const s of staticEls) {
+        if (s.text) s.el.textContent = s.text(values);
+        if (s.showIf) s.host.classList.toggle('modal-field-hidden', !s.showIf(values));
+      }
+      // A group's own row collapses once every item in it is individually
+      // hidden (e.g. all of a multi-weekday-only row's items, when
+      // monthlyMode is 'day') -- otherwise it'd linger as an empty flex row.
+      for (const [wrap, hosts] of groupWraps) {
+        wrap.classList.toggle('modal-field-hidden', hosts.every((host) => host.classList.contains('modal-field-hidden')));
       }
     }
 
@@ -264,7 +314,7 @@ function showFormModal(title, fields, opts = {}) {
       const result = {};
       for (const f of fieldGetters) {
         const value = f.getValue();
-        const visible = !f.wrap.classList.contains('modal-field-hidden');
+        const visible = !f.hideTarget.classList.contains('modal-field-hidden');
         const enabled = !f.disableTarget.classList.contains('modal-field-disabled');
         if (visible && enabled && f.required && (f.isArray ? value.length === 0 : !value)) return;
         result[f.name] = value;
@@ -879,7 +929,7 @@ function decodeFrequency(type, intervalStr, extra = {}) {
       base.ordinal = extra.monthlyOrdinal === 'last' ? 'last' : parseInt(extra.monthlyOrdinal, 10);
     } else if (extra.monthlyMode === 'multi-weekday' || extra.monthlyMode === 'multi-weekday-offset') {
       base.weekdays = (extra.multiWeekdayDays || []).map(Number).sort((a, b) => a - b);
-      base.ordinal = Math.max(1, parseInt(extra.multiWeekdayOrdinal, 10) || 1);
+      base.ordinal = Math.min(5, Math.max(1, parseInt(extra.multiWeekdayOrdinal, 10) || 1));
       if (extra.monthlyMode === 'multi-weekday-offset') {
         base.offsetDirection = extra.multiWeekdayOffsetDirection === 'after' ? 'after' : 'before';
         base.offsetDays = Math.min(6, Math.max(0, parseInt(extra.multiWeekdayOffsetDays, 10) || 0));
@@ -894,14 +944,22 @@ function decodeFrequency(type, intervalStr, extra = {}) {
 const WEEKDAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ORDINAL_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', last: 'last' };
 
+// The bare "st"/"nd"/"rd"/"th" suffix for a number, ignoring ORDINAL_LABELS'
+// 1-5/'last' special-casing -- used inline right after a number input (e.g.
+// "[[3]] rd occurrence"), where the digits themselves are already visible in
+// the input and only the suffix needs to be supplied as text.
+function ordinalSuffix(n) {
+  const suffixes = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0];
+}
+
 // ORDINAL_LABELS only covers the single-weekday "Nth weekday" mode's range
 // (1-5, or 'last') -- the multi-weekday modes' ordinal isn't capped there,
 // so this falls back to a generic 1st/2nd/3rd/nth suffix for anything else.
 function ordinalLabel(n) {
   if (ORDINAL_LABELS[n]) return ORDINAL_LABELS[n];
-  const suffixes = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+  return n + ordinalSuffix(n);
 }
 
 function describeTaskSchedule(task) {
@@ -1156,40 +1214,63 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         options: WEEKDAY_CHECKBOX_OPTIONS,
         showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
       },
-      {
-        name: 'multiWeekdayOrdinal',
-        label: 'Which occurrence (N -- e.g. 2 for "earliest 2nd")',
-        type: 'number',
-        value:
-          existingTask && existingTask.frequency.ordinal != null && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
-            ? String(existingTask.frequency.ordinal)
-            : '1',
-        min: 1,
-        showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
-      },
-      {
-        name: 'multiWeekdayOffsetDirection',
-        label: 'Before or after that day',
-        type: 'select',
-        value:
-          existingTask && existingTask.frequency.offsetDirection && existingTask.frequency.dayMode === 'multi-weekday-offset'
-            ? existingTask.frequency.offsetDirection
-            : 'before',
-        options: BEFORE_AFTER_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
-      },
-      {
-        name: 'multiWeekdayOffsetDays',
-        label: 'How many days before/after (0-6)',
-        type: 'number',
-        value:
-          existingTask && existingTask.frequency.offsetDays != null && existingTask.frequency.dayMode === 'multi-weekday-offset'
-            ? String(existingTask.frequency.offsetDays)
-            : '0',
-        min: 0,
-        max: 6,
-        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
-      },
+      // Merged into one row -- "[N] days [Before/After] [N]<suffix>
+      // occurrence" -- rather than three stacked label+control blocks, which
+      // otherwise pushed the modal taller than the screen once
+      // 'multi-weekday-offset' was selected. The ordinal suffix ("st"/"nd"/
+      // "rd"/"th") is a `static` text field recomputed live from the ordinal
+      // input's own current value (see showFormModal's staticEls handling).
+      // The offset fields' showIf hides just their own item within the row
+      // (not the whole row -- see hideTarget), so plain 'multi-weekday' mode
+      // still shows only the ordinal + "occurrence" part.
+      [
+        {
+          name: 'multiWeekdayOffsetDays',
+          type: 'number',
+          value:
+            existingTask && existingTask.frequency.offsetDays != null && existingTask.frequency.dayMode === 'multi-weekday-offset'
+              ? String(existingTask.frequency.offsetDays)
+              : '0',
+          min: 0,
+          max: 6,
+          inlineWidth: '56px',
+          showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
+        },
+        {
+          type: 'static',
+          text: () => 'days',
+          showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
+        },
+        {
+          name: 'multiWeekdayOffsetDirection',
+          type: 'select',
+          value:
+            existingTask && existingTask.frequency.offsetDirection && existingTask.frequency.dayMode === 'multi-weekday-offset'
+              ? existingTask.frequency.offsetDirection
+              : 'before',
+          options: BEFORE_AFTER_OPTIONS,
+          inlineWidth: '90px',
+          showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
+        },
+        {
+          name: 'multiWeekdayOrdinal',
+          type: 'number',
+          value:
+            existingTask && existingTask.frequency.ordinal != null && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
+              ? String(existingTask.frequency.ordinal)
+              : '1',
+          min: 1,
+          max: 5,
+          inlineWidth: '56px',
+          showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
+        },
+        {
+          type: 'static',
+          text: (v) => `${ordinalSuffix(parseInt(v.multiWeekdayOrdinal, 10) || 1)} occurrence`,
+          tightGap: true,
+          showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
+        },
+      ],
       {
         name: 'multiDayDays',
         label: 'Days of the month (1-28)',
