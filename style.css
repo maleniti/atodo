@@ -203,16 +203,25 @@ main {
 }
 
 .side-panel-log-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
   padding: 3px 2px;
   font-size: 11px;
   color: #9aa0a6;
 }
+/* The message + timestamp row -- its own flex row so the description below
+   (series scope only, see buildSidePanelLogRow) can sit close underneath
+   instead of also being squeezed onto this line. */
+.side-panel-log-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
 .side-panel-log-time {
   flex: none;
+  color: #80868b;
+}
+.side-panel-log-description {
+  margin-top: 2px;
   color: #80868b;
 }
 

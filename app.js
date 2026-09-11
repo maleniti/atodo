@@ -2870,6 +2870,40 @@ function buildSidePanelCommentRow(task, comment) {
   return item;
 }
 
+// `task` is the specific record `entry` was logged against -- shown inline
+// (name + its own due/recurrence date) only when the panel is merging
+// multiple records together (series scope): in single-task scope every
+// entry already obviously belongs to the one task on screen, so naming it
+// again on every row would just be noise. Description is its own row(s)
+// below rather than crammed onto the first line since it can run long/wrap,
+// and (like the task name) is only shown in series scope, and only when
+// there actually is one.
+function buildSidePanelLogRow(task, entry, showTaskInfo) {
+  const item = document.createElement('div');
+  item.className = 'side-panel-log-item';
+
+  const topRow = document.createElement('div');
+  topRow.className = 'side-panel-log-top-row';
+  const msg = document.createElement('span');
+  msg.className = 'side-panel-log-message';
+  msg.textContent = showTaskInfo ? `${task.name}, ${task.dueDate} -- ${entry.message}` : entry.message;
+  const time = document.createElement('span');
+  time.className = 'side-panel-log-time';
+  time.textContent = formatDateTime(entry.timestamp);
+  topRow.appendChild(msg);
+  topRow.appendChild(time);
+  item.appendChild(topRow);
+
+  if (showTaskInfo && task.description) {
+    const description = document.createElement('div');
+    description.className = 'side-panel-log-description';
+    description.textContent = task.description;
+    item.appendChild(description);
+  }
+
+  return item;
+}
+
 function renderSidePanel() {
   // The selected record can vanish out from under the panel (deleted, or
   // merged away -- tasksInSeries/taskId lookups above would just silently
@@ -2916,22 +2950,15 @@ function renderSidePanel() {
     }
   }
 
-  const logEntries = records.flatMap((t) => t.log || []).sort((a, b) => b.timestamp - a.timestamp);
+  const logEntries = records
+    .flatMap((t) => (t.log || []).map((entry) => ({ task: t, entry })))
+    .sort((a, b) => b.entry.timestamp - a.entry.timestamp);
   sidePanelLogEl.innerHTML = '';
   if (logEntries.length === 0) {
     sidePanelLogEl.appendChild(buildSidePanelEmptyRow('No activity yet.'));
   } else {
-    for (const entry of logEntries) {
-      const item = document.createElement('div');
-      item.className = 'side-panel-log-item';
-      const msg = document.createElement('span');
-      msg.textContent = entry.message;
-      const time = document.createElement('span');
-      time.className = 'side-panel-log-time';
-      time.textContent = formatDateTime(entry.timestamp);
-      item.appendChild(msg);
-      item.appendChild(time);
-      sidePanelLogEl.appendChild(item);
+    for (const { task, entry } of logEntries) {
+      sidePanelLogEl.appendChild(buildSidePanelLogRow(task, entry, sidePanelScope === 'series'));
     }
   }
 }
