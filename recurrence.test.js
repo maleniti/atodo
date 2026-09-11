@@ -189,11 +189,14 @@ const multiWeekdayOffsetAfter = {
 };
 assert.ok(R.occursOn(multiWeekdayOffsetAfter, '2026-05-05'), '6 days after April\'s 5th Wednesday (the 29th) lands in May');
 
-// Every-2-months interval still governs from the anchor month, even when the
-// offset pushes the actual date into the adjacent month: with dueDate
-// anchored to January, March (diffMonths 2) is a valid anchor month but
-// February (diffMonths 1) is not, regardless of which month the offset
-// result actually lands in.
+// Every-2-months interval counts from the true first occurrence's month, not
+// blindly from dueDate's own month: January 1's own earliest 1st-of-Mon/Wed/Fri
+// is Jan 2 (a Friday), and 6 days before that (Dec 27, 2025) is before
+// dueDate -- so January doesn't count as month zero. February becomes month
+// zero instead (its anchor, Feb 2, minus 6 days is Jan 27, which IS on/after
+// dueDate), and the interval steps from there: Feb, Apr, Jun, ... -- so
+// March's anchor-minus-6 (Feb 24) is NOT a valid occurrence (odd number of
+// months after Feb), but April's (Mar 26) is.
 const multiWeekdayOffsetEveryTwoMonths = {
   dueDate: '2026-01-01',
   frequency: {
@@ -206,8 +209,38 @@ const multiWeekdayOffsetEveryTwoMonths = {
     offsetDays: 6,
   },
 };
-assert.ok(R.occursOn(multiWeekdayOffsetEveryTwoMonths, '2026-02-24'), "March's anchor (the 2nd) minus 6 days lands on Feb 24 -- March is a valid anchor month (diffMonths 2)");
-assert.ok(!R.occursOn(multiWeekdayOffsetEveryTwoMonths, '2026-01-27'), "would be February's anchor minus 6 days, but February isn't a valid anchor month (diffMonths 1)");
+assert.ok(R.occursOn(multiWeekdayOffsetEveryTwoMonths, '2026-01-27'), "February's anchor (the 2nd) minus 6 days lands on Jan 27 -- this is the true first occurrence, since January itself doesn't qualify as month zero");
+assert.ok(!R.occursOn(multiWeekdayOffsetEveryTwoMonths, '2026-02-24'), "March's anchor minus 6 days (Feb 24) is skipped -- March is 1 month after the true anchor month (February), not a multiple of the 2-month interval");
+assert.ok(R.occursOn(multiWeekdayOffsetEveryTwoMonths, '2026-03-26'), "April's anchor minus 6 days (Mar 26) -- April is 2 months after February, the true anchor month");
+assert.strictEqual(R.nextOccurrenceAfter(multiWeekdayOffsetEveryTwoMonths, '2026-01-27'), '2026-03-26');
+
+// Regression test: a monthly-interval task whose pattern's dueDate-month
+// candidate falls BEFORE dueDate must not skip an extra `interval` months --
+// the first real occurrence should be the very next candidate on/after
+// dueDate, and later occurrences step `interval` months from THAT one, not
+// from dueDate's own calendar month. dueDate Sep 9, 2026 recurring every 3
+// months "3 days before the first Monday": September's first Monday is the
+// 7th, 3 days before is Sep 4 -- before dueDate, so September isn't month
+// zero. October's first Monday is the 5th, 3 days before is Oct 2 -- the
+// true first occurrence, with October as month zero (not December, 3 months
+// after September, which is what a dueDate-month-anchored count would wrongly
+// produce).
+const monthlyOffsetFirstOccurrenceAfterDueDate = {
+  dueDate: '2026-09-09',
+  frequency: {
+    type: 'months',
+    interval: 3,
+    dayMode: 'multi-weekday-offset',
+    weekdays: [1],
+    ordinal: 1,
+    offsetDirection: 'before',
+    offsetDays: 3,
+  },
+};
+assert.ok(R.occursOn(monthlyOffsetFirstOccurrenceAfterDueDate, '2026-10-02'), "October's first Monday (the 5th) minus 3 days is the true first occurrence");
+assert.ok(!R.occursOn(monthlyOffsetFirstOccurrenceAfterDueDate, '2026-12-04'), "December's first Monday minus 3 days must NOT occur -- that would be 3 months after September, but September was never a valid anchor month");
+assert.strictEqual(R.nextOccurrenceAfter(monthlyOffsetFirstOccurrenceAfterDueDate, '2026-09-09'), '2026-10-02');
+assert.strictEqual(R.nextOccurrenceAfter(monthlyOffsetFirstOccurrenceAfterDueDate, '2026-10-02'), '2027-01-01', 'the next occurrence is 3 months after October, the true anchor month -- January\'s first Monday (the 4th) minus 3 days');
 
 // -- nextOccurrenceAfter when dueDate itself isn't a valid occurrence -------
 // dueDate is just the pattern's anchor for interval counting -- nothing

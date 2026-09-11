@@ -58,6 +58,70 @@ function monthsBetween(isoA, isoB) {
   return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
 }
 
+function lastWeekdayOfMonth(year, monthIndex, weekday) {
+  const totalDays = daysInMonth(year, monthIndex);
+  const lastDate = new Date(year, monthIndex, totalDays);
+  const diff = (lastDate.getDay() - weekday + 7) % 7;
+  return new Date(year, monthIndex, totalDays - diff);
+}
+
+// The date `task`'s monthly pattern would land on in the given month, judged
+// only against that month in isolation (no interval/dueDate check) -- used
+// solely to figure out, for a single month, whether it's early or late
+// relative to dueDate. Not meaningful as "the" occurrence for dayModes whose
+// real occurrence can land in an adjacent month (multi-weekday-offset) --
+// see monthlyRecurrenceAnchorMonth, its only caller, for why that's fine.
+function monthlyPatternDateInMonth(task, year, monthIndex) {
+  const dayMode = task.frequency.dayMode || 'day';
+  switch (dayMode) {
+    case 'last':
+      return new Date(year, monthIndex, daysInMonth(year, monthIndex));
+    case 'before-last': {
+      const offset = Math.min(3, Math.max(0, task.frequency.offset || 0));
+      return new Date(year, monthIndex, daysInMonth(year, monthIndex) - offset);
+    }
+    case 'weekday': {
+      const { weekday, ordinal } = task.frequency;
+      return ordinal === 'last'
+        ? lastWeekdayOfMonth(year, monthIndex, weekday)
+        : earliestNthSelectedWeekdayOfMonth(year, monthIndex, [weekday], ordinal);
+    }
+    case 'multi-weekday':
+      return earliestNthSelectedWeekdayOfMonth(year, monthIndex, task.frequency.weekdays, task.frequency.ordinal);
+    case 'multi-weekday-offset': {
+      const anchor = earliestNthSelectedWeekdayOfMonth(year, monthIndex, task.frequency.weekdays, task.frequency.ordinal);
+      if (!anchor) return null;
+      const sign = task.frequency.offsetDirection === 'after' ? 1 : -1;
+      return addDays(anchor, sign * task.frequency.offsetDays);
+    }
+    case 'multi-day': {
+      const days = task.frequency.days;
+      return days && days.length ? new Date(year, monthIndex, Math.max(...days)) : null;
+    }
+    default: {
+      const due = new Date(task.dueDate + 'T00:00:00');
+      return new Date(year, monthIndex, Math.min(due.getDate(), daysInMonth(year, monthIndex)));
+    }
+  }
+}
+
+// The month `interval`-stepping should count from -- normally dueDate's own
+// month, EXCEPT that several dayModes' pattern doesn't necessarily land on or
+// after dueDate within dueDate's own month (e.g. "3 days before the first
+// Monday" when dueDate falls after that month's computed date). Treating
+// dueDate's month as month zero in that case would make the true first
+// occurrence -- whichever month's pattern date is actually the first one
+// on/after dueDate -- wrongly skipped, jumping `interval` months past dueDate
+// instead of landing on the very next candidate. So: if dueDate's own month's
+// pattern date hasn't happened yet as of dueDate, the following month is
+// month zero instead, and interval-stepping (in occursOn) counts from there.
+function monthlyRecurrenceAnchorMonth(task) {
+  const due = new Date(task.dueDate + 'T00:00:00');
+  const candidate = monthlyPatternDateInMonth(task, due.getFullYear(), due.getMonth());
+  if (candidate && candidate >= due) return new Date(due.getFullYear(), due.getMonth(), 1);
+  return new Date(due.getFullYear(), due.getMonth() + 1, 1);
+}
+
 // Does `task` have an occurrence exactly on `dateISO`?
 //
 // task.frequency shapes:
@@ -127,12 +191,14 @@ function occursOn(task, dateISO) {
       // month whose anchor could plausibly land on `target` -- its own
       // month, and the one before/after it (offsetDays is capped at 6, so
       // nothing further away can ever reach `target`).
+      const recurrenceAnchorMonthISO = dateToISO(monthlyRecurrenceAnchorMonth(task));
+
       if (dayMode === 'multi-weekday-offset') {
         const { weekdays, ordinal, offsetDirection, offsetDays } = task.frequency;
         const sign = offsetDirection === 'after' ? 1 : -1;
         for (const monthDelta of [0, -1, 1]) {
           const anchorMonth = new Date(target.getFullYear(), target.getMonth() + monthDelta, 1);
-          const anchorDiffMonths = monthsBetween(task.dueDate, dateToISO(anchorMonth));
+          const anchorDiffMonths = monthsBetween(recurrenceAnchorMonthISO, dateToISO(anchorMonth));
           if (anchorDiffMonths < 0 || anchorDiffMonths % interval !== 0) continue;
           const anchor = earliestNthSelectedWeekdayOfMonth(anchorMonth.getFullYear(), anchorMonth.getMonth(), weekdays, ordinal);
           if (!anchor) continue;
@@ -141,7 +207,7 @@ function occursOn(task, dateISO) {
         return false;
       }
 
-      const diffMonths = monthsBetween(task.dueDate, dateISO);
+      const diffMonths = monthsBetween(recurrenceAnchorMonthISO, dateISO);
       if (diffMonths < 0 || diffMonths % interval !== 0) return false;
       const due = new Date(task.dueDate + 'T00:00:00');
 
