@@ -355,22 +355,25 @@ const AUTH_TOKEN_KEY = 'advanced-todo-auth-token';
 const FAKE_USER_ID = 'nikola';
 const FAKE_USER_NICKNAME = 'Nikola';
 
-// User profile (nickname + avatar) -- the only per-user settings that exist
-// so far, editable via the Settings modal. Same fake-single-user storage
-// shortcut as loadTasks/saveTasks below: userId is accepted (for whenever a
-// real backend/multiple accounts exist) but ignored, always reading/writing
-// the one shared blob. Seeded from FAKE_USER_NICKNAME/no avatar the first
-// time there's nothing saved yet.
+// User profile (nickname + avatar + time format) -- the only per-user
+// settings that exist so far, editable via the Settings modal. Same
+// fake-single-user storage shortcut as loadTasks/saveTasks below: userId is
+// accepted (for whenever a real backend/multiple accounts exist) but
+// ignored, always reading/writing the one shared blob. Defaults are merged
+// under whatever's actually saved, both to seed the very first run and so an
+// older saved profile missing a field (e.g. timeFormat, added after nickname/
+// avatar already existed) doesn't end up with `undefined` for it.
 const USER_PROFILE_STORAGE_KEY = 'advanced-todo-user-profile';
+const DEFAULT_USER_PROFILE = { nickname: FAKE_USER_NICKNAME, avatar: null, timeFormat: '24' };
 
 function loadUserProfile(userId = currentUserId) {
   try {
     const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { ...DEFAULT_USER_PROFILE, ...JSON.parse(raw) };
   } catch {
     // fall through to default
   }
-  return { nickname: FAKE_USER_NICKNAME, avatar: null };
+  return { ...DEFAULT_USER_PROFILE };
 }
 
 function saveUserProfile(profile, userId = currentUserId) {
@@ -384,7 +387,7 @@ async function login(username, password) {
 async function getMe(token) {
   const payload = JSON.parse(atob(token));
   const profile = loadUserProfile(payload.sub);
-  return { id: payload.sub, nickname: profile.nickname, avatar: profile.avatar };
+  return { id: payload.sub, nickname: profile.nickname, avatar: profile.avatar, timeFormat: profile.timeFormat };
 }
 
 // Set once boot()/the login form resolves a user -- every call site below
@@ -393,11 +396,13 @@ async function getMe(token) {
 // it explicitly, while still accepting an explicit userId for whenever a
 // real backend (and maybe switching accounts) exists.
 let currentUserId = null;
-// Display-only (see renderAppTitle/renderUserAvatar) -- kept in sync with
-// the saved profile by saveSettingsFromModal, not re-read from storage on
-// every render.
+// Kept in sync with the saved profile by the Settings modal's Save button,
+// not re-read from storage on every render -- see renderAppTitle/
+// renderUserAvatar (nickname/avatar) and formatTimeOfDay/formatDateTime
+// (timeFormat), the only things that read these.
 let currentUserNickname = null;
 let currentUserAvatar = null; // data URL, or null for the initials fallback
+let currentUserTimeFormat = '24'; // '12' | '24' -- see formatTimeOfDay/formatDateTime
 
 // ---------------------------------------------------------------------------
 // To-do list.
@@ -973,6 +978,28 @@ function decodeFrequency(type, intervalStr, extra = {}) {
 const WEEKDAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ORDINAL_LABELS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', last: 'last' };
 
+// task.dueTime is always stored as a plain 24-hour "HH:MM" string regardless
+// of display preference -- this is the one place that reformats it for
+// display, per currentUserTimeFormat (see Settings). Every other on-screen
+// due time in the app (to-do list rows, describeTaskSchedule) goes through
+// this rather than showing task.dueTime directly.
+function formatTimeOfDay(hhmm) {
+  if (currentUserTimeFormat !== '12') return hhmm;
+  const [h, m] = hhmm.split(':').map(Number);
+  const period = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+// Same idea as formatTimeOfDay but for a full Date/timestamp (comment and
+// activity-log entries, which store a real Date.now() rather than a plain
+// "HH:MM" string) -- toLocaleString's own date formatting is left alone,
+// only the hour cycle is forced one way or the other instead of following
+// whatever the browser's locale would otherwise pick.
+function formatDateTime(timestamp) {
+  return new Date(timestamp).toLocaleString(undefined, { hour12: currentUserTimeFormat === '12' });
+}
+
 // The bare "st"/"nd"/"rd"/"th" suffix for a number, ignoring ORDINAL_LABELS'
 // 1-5/'last' special-casing -- used inline right after a number input (e.g.
 // "[[3]] rd occurrence"), where the digits themselves are already visible in
@@ -1027,7 +1054,7 @@ function describeTaskSchedule(task) {
   } else {
     label = '';
   }
-  const scheduleBase = `${task.dueDate} ${task.allDay ? 'all day' : task.dueTime} · ${label}`;
+  const scheduleBase = `${task.dueDate} ${task.allDay ? 'all day' : formatTimeOfDay(task.dueTime)} · ${label}`;
   const withEnd = task.endDate ? `${scheduleBase} until ${task.endDate}` : scheduleBase;
   if (task.passive) return `${withEnd} · Passive (reminder only)`;
   if (task.appointment) return `${withEnd} · Appointment (expires)`;
@@ -2396,12 +2423,12 @@ function buildTodoItemRow(item, isToday) {
             ? `Overdue since ${item.occurrenceDate}`
             : 'All day'
       : item.kind === 'tomorrow'
-        ? `Tomorrow, ${item.task.dueTime}`
+        ? `Tomorrow, ${formatTimeOfDay(item.task.dueTime)}`
         : item.failed
-          ? `Failed -- was due ${item.occurrenceDate} ${item.task.dueTime}`
+          ? `Failed -- was due ${item.occurrenceDate} ${formatTimeOfDay(item.task.dueTime)}`
           : item.overdue && !item.completed
-            ? `Overdue since ${item.occurrenceDate} ${item.task.dueTime}`
-            : `Due ${item.task.dueTime}`;
+            ? `Overdue since ${item.occurrenceDate} ${formatTimeOfDay(item.task.dueTime)}`
+            : `Due ${formatTimeOfDay(item.task.dueTime)}`;
   }
   text.appendChild(meta);
 
@@ -2812,7 +2839,7 @@ function buildSidePanelCommentRow(task, comment) {
   topRow.className = 'side-panel-comment-top-row';
   const time = document.createElement('div');
   time.className = 'side-panel-comment-time';
-  time.textContent = new Date(comment.timestamp).toLocaleString();
+  time.textContent = formatDateTime(comment.timestamp);
   topRow.appendChild(time);
 
   if (sidePanelEditMode) {
@@ -2901,7 +2928,7 @@ function renderSidePanel() {
       msg.textContent = entry.message;
       const time = document.createElement('span');
       time.className = 'side-panel-log-time';
-      time.textContent = new Date(entry.timestamp).toLocaleString();
+      time.textContent = formatDateTime(entry.timestamp);
       item.appendChild(msg);
       item.appendChild(time);
       sidePanelLogEl.appendChild(item);
@@ -3470,6 +3497,7 @@ document.getElementById('user-menu-logout').onclick = (e) => {
 
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsNicknameInput = document.getElementById('settings-nickname-input');
+const settingsTimeFormatSelect = document.getElementById('settings-time-format-select');
 const settingsAvatarPreviewImg = document.getElementById('settings-avatar-preview-img');
 const settingsAvatarPreviewInitials = document.getElementById('settings-avatar-preview-initials');
 const settingsAvatarFileInput = document.getElementById('settings-avatar-file-input');
@@ -3519,6 +3547,7 @@ function renderSettingsAvatarPreview() {
 
 function openSettingsModal() {
   settingsNicknameInput.value = currentUserNickname || '';
+  settingsTimeFormatSelect.value = currentUserTimeFormat;
   settingsPendingAvatar = undefined;
   renderSettingsAvatarPreview();
   settingsOverlay.classList.remove('hidden');
@@ -3548,11 +3577,18 @@ document.getElementById('settings-close').onclick = closeSettingsModal;
 document.getElementById('settings-save').onclick = () => {
   const nickname = settingsNicknameInput.value.trim();
   const avatar = settingsPendingAvatar === undefined ? currentUserAvatar : settingsPendingAvatar;
+  const timeFormat = settingsTimeFormatSelect.value;
   currentUserNickname = nickname;
   currentUserAvatar = avatar;
-  saveUserProfile({ nickname, avatar });
+  currentUserTimeFormat = timeFormat;
+  saveUserProfile({ nickname, avatar, timeFormat });
   renderAppTitle();
   renderUserAvatar();
+  // Every currently-rendered due time/comment-and-log timestamp was drawn
+  // with the old timeFormat baked into its text -- both need a full re-render
+  // to pick up the new one (renderSidePanel no-ops if nothing's selected).
+  renderTodo();
+  renderSidePanel();
   closeSettingsModal();
 };
 
@@ -3596,6 +3632,7 @@ function boot() {
     currentUserId = user.id;
     currentUserNickname = user.nickname;
     currentUserAvatar = user.avatar;
+    currentUserTimeFormat = user.timeFormat;
     startApp();
   });
 }
@@ -3610,6 +3647,7 @@ document.getElementById('login-form').onsubmit = async (e) => {
   currentUserId = user.id;
   currentUserNickname = user.nickname;
   currentUserAvatar = user.avatar;
+  currentUserTimeFormat = user.timeFormat;
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
   startApp();
