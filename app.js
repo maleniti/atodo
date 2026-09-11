@@ -187,7 +187,11 @@ function showFormModal(title, fields, opts = {}) {
           getValue = () => select.value;
         } else if (field.type === 'checkboxes') {
           const box = document.createElement('div');
-          box.className = 'modal-checkboxes';
+          // gridColumns lays the options out horizontally in a wrapping grid
+          // (e.g. Mon-Sun across 4 columns -> two rows) instead of the
+          // default scrollable vertical list -- see .modal-checkboxes-grid.
+          box.className = 'modal-checkboxes' + (field.gridColumns ? ' modal-checkboxes-grid' : '');
+          if (field.gridColumns) box.style.setProperty('--modal-checkboxes-columns', field.gridColumns);
           const checkboxes = field.options.map((option) => {
             const row = document.createElement('label');
             row.className = 'modal-checkbox-row';
@@ -1070,13 +1074,13 @@ const FREQUENCY_OPTIONS = [
 ];
 
 const WEEKDAY_CHECKBOX_OPTIONS = [
-  { value: '0', label: 'Sun' },
   { value: '1', label: 'Mon' },
   { value: '2', label: 'Tue' },
   { value: '3', label: 'Wed' },
   { value: '4', label: 'Thu' },
   { value: '5', label: 'Fri' },
   { value: '6', label: 'Sat' },
+  { value: '0', label: 'Sun' },
 ];
 
 const WEEKDAY_SELECT_OPTIONS = [
@@ -1225,6 +1229,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         type: 'checkboxes',
         value: existingTask && existingTask.frequency.weekdays ? existingTask.frequency.weekdays.map(String) : [],
         options: WEEKDAY_CHECKBOX_OPTIONS,
+        gridColumns: 4,
         required: false,
         showIf: (v) => isWeeklyFrequencyType(v),
       },
@@ -1268,6 +1273,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
             ? existingTask.frequency.weekdays.map(String)
             : [],
         options: WEEKDAY_CHECKBOX_OPTIONS,
+        gridColumns: 4,
         showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
       },
       // Merged into one row -- "[N] days [Before/After] [N]<suffix>

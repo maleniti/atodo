@@ -1171,6 +1171,21 @@ option {
   overflow-y: auto;
 }
 
+/* An alternative to the default scrollable vertical list -- lays options out
+   left-to-right, wrapping into as many rows as the option count and column
+   count require (e.g. 7 weekdays across 4 columns -> two rows of 4 and 3).
+   See showFormModal's field.gridColumns. */
+.modal-checkboxes-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--modal-checkboxes-columns), 1fr);
+  gap: 0 8px;
+  max-height: none;
+  overflow: visible;
+}
+.modal-checkboxes-grid .modal-checkbox-row {
+  padding: 3px 0;
+}
+
 .modal-checkbox-row {
   display: flex;
   align-items: center;
