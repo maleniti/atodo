@@ -2716,14 +2716,21 @@ const sidePanelContentEl = document.getElementById('side-panel-content');
 const sidePanelTitleEl = document.getElementById('side-panel-title');
 const sidePanelDetailsEl = document.getElementById('side-panel-details');
 const sidePanelToggleBtn = document.getElementById('side-panel-toggle-btn');
+const sidePanelEditToggleBtn = document.getElementById('side-panel-edit-toggle-btn');
 const sidePanelCommentInput = document.getElementById('side-panel-comment-input');
 const sidePanelCommentsEl = document.getElementById('side-panel-comments');
 const sidePanelLogEl = document.getElementById('side-panel-log');
 
 let sidePanelTask = null; // the specific task record last interacted with
 let sidePanelScope = 'task'; // 'task' | 'series'
+// Whether notes show their edit/delete controls -- off by default, and reset
+// back off whenever a different task is selected (see the sidePanelTask
+// comparison below), so it's never silently left armed against whatever task
+// happens to be clicked next.
+let sidePanelEditMode = false;
 
 function selectTaskForSidePanel(task) {
+  if (task !== sidePanelTask) sidePanelEditMode = false;
   sidePanelTask = task;
   renderSidePanel();
   refreshPreviewedHighlight();
@@ -2756,6 +2763,57 @@ function buildSidePanelEmptyRow(text) {
   return empty;
 }
 
+async function editCommentPrompt(comment) {
+  const result = await showFormModal('Edit note', [{ name: 'text', label: 'Note', type: 'textarea', value: comment.text }]);
+  if (!result) return;
+  comment.text = result.text;
+  saveTasks();
+  renderSidePanel();
+}
+
+// `task` is the specific record `comment` actually lives on -- not
+// necessarily sidePanelTask, since the comments list here can be merged
+// across a whole series (see sidePanelRecords) -- needed so a delete can
+// splice it out of the right record's own `comments` array.
+function buildSidePanelCommentRow(task, comment) {
+  const item = document.createElement('div');
+  item.className = 'side-panel-comment-item';
+
+  const topRow = document.createElement('div');
+  topRow.className = 'side-panel-comment-top-row';
+  const time = document.createElement('div');
+  time.className = 'side-panel-comment-time';
+  time.textContent = new Date(comment.timestamp).toLocaleString();
+  topRow.appendChild(time);
+
+  if (sidePanelEditMode) {
+    const actions = document.createElement('div');
+    actions.className = 'side-panel-comment-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.title = 'Edit note';
+    editBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+    editBtn.onclick = () => editCommentPrompt(comment);
+    actions.appendChild(editBtn);
+
+    appendDeleteButton(actions, () => {
+      task.comments.splice(task.comments.indexOf(comment), 1);
+      saveTasks();
+      renderSidePanel();
+    });
+
+    topRow.appendChild(actions);
+  }
+
+  item.appendChild(topRow);
+  const text = document.createElement('div');
+  text.className = 'side-panel-comment-text';
+  text.textContent = comment.text;
+  item.appendChild(text);
+  return item;
+}
+
 function renderSidePanel() {
   // The selected record can vanish out from under the panel (deleted, or
   // merged away -- tasksInSeries/taskId lookups above would just silently
@@ -2780,26 +2838,25 @@ function renderSidePanel() {
     sidePanelScope === 'series'
       ? 'Showing the whole series -- click to show just this task'
       : 'Showing just this task -- click to show its whole series';
+  sidePanelEditToggleBtn.textContent = sidePanelEditMode ? 'Done' : 'Edit';
+  sidePanelEditToggleBtn.title = sidePanelEditMode ? 'Stop editing/deleting notes' : 'Edit or delete notes';
+  sidePanelEditToggleBtn.classList.toggle('active', sidePanelEditMode);
 
   const records = sidePanelRecords();
 
-  const comments = records.flatMap((t) => t.comments || []).sort((a, b) => b.timestamp - a.timestamp);
+  // Paired with the owning record (not just the comment itself) so edits/
+  // deletes -- only offered once sidePanelEditMode is on -- can mutate the
+  // right record's own `comments` array, even though this list is merged
+  // across every record in scope (see sidePanelRecords/sidePanelScope).
+  const commentEntries = records
+    .flatMap((t) => (t.comments || []).map((comment) => ({ task: t, comment })))
+    .sort((a, b) => b.comment.timestamp - a.comment.timestamp);
   sidePanelCommentsEl.innerHTML = '';
-  if (comments.length === 0) {
+  if (commentEntries.length === 0) {
     sidePanelCommentsEl.appendChild(buildSidePanelEmptyRow('No notes yet.'));
   } else {
-    for (const c of comments) {
-      const item = document.createElement('div');
-      item.className = 'side-panel-comment-item';
-      const time = document.createElement('div');
-      time.className = 'side-panel-comment-time';
-      time.textContent = new Date(c.timestamp).toLocaleString();
-      const text = document.createElement('div');
-      text.className = 'side-panel-comment-text';
-      text.textContent = c.text;
-      item.appendChild(time);
-      item.appendChild(text);
-      sidePanelCommentsEl.appendChild(item);
+    for (const { task, comment } of commentEntries) {
+      sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(task, comment));
     }
   }
 
@@ -2825,6 +2882,11 @@ function renderSidePanel() {
 
 sidePanelToggleBtn.onclick = () => {
   sidePanelScope = sidePanelScope === 'series' ? 'task' : 'series';
+  renderSidePanel();
+};
+
+sidePanelEditToggleBtn.onclick = () => {
+  sidePanelEditMode = !sidePanelEditMode;
   renderSidePanel();
 };
 

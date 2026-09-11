@@ -88,6 +88,17 @@ main {
   margin-bottom: 10px;
 }
 
+.side-panel-header-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+#side-panel-edit-toggle-btn.active {
+  background: #8ab4f8;
+  color: #202124;
+}
+
 .side-panel-title {
   font-size: 15px;
   font-weight: 600;
@@ -149,10 +160,41 @@ main {
   padding: 6px 2px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
+.side-panel-comment-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .side-panel-comment-time {
   font-size: 10px;
   color: #80868b;
   margin-bottom: 2px;
+}
+
+.side-panel-comment-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.side-panel-comment-actions button {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #80868b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.side-panel-comment-actions button:hover { background: rgba(255, 255, 255, 0.1); color: #e8eaed; }
+.side-panel-comment-actions button.confirm,
+.side-panel-comment-actions button.confirm:hover {
+  background: #d93025;
+  color: #fff;
 }
 .side-panel-comment-text {
   font-size: 12px;
