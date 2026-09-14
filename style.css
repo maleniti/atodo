@@ -1166,6 +1166,27 @@ option {
   font-family: inherit;
 }
 
+/* Custom hour/minute(/AM-PM) trio replacing <input type="time"> -- see
+   showFormModal's field.type === 'time'. Native time inputs pick 12- vs
+   24-hour display from the browser's own UI language, which page JS can't
+   override, so this always renders per currentUserTimeFormat instead. */
+.modal-time-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.modal-time-part {
+  width: 52px;
+  text-align: center;
+  padding: 0 4px;
+}
+.modal-time-sep {
+  color: #80868b;
+}
+.modal-time-ampm {
+  width: 62px;
+}
+
 .modal-checkboxes {
   max-height: 120px;
   overflow-y: auto;

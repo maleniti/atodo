@@ -42,6 +42,63 @@ const MODAL_DELETE_RESULT = Symbol('modal-delete');
 // "Start" a timer) without needing a whole second modal.
 const MODAL_SECONDARY_RESULT = Symbol('modal-secondary');
 
+// Drives one hour/minute segment of the time field below (field.type ===
+// 'time'): a plain text box restricted to digits, with the same two-stage
+// "type a digit, maybe wait for a second one, then auto-advance" behavior
+// native date/time pickers use. `firstDigitRule(d)` classifies the first
+// digit typed into a segment -- { complete: true } if `d` alone is already
+// the whole segment (advance immediately), or { complete: false,
+// allowedSecond } to wait for a second digit (allowedSecond: null means any
+// digit 0-9 is valid next, otherwise the explicit set of digits that keep
+// the combined two-digit value in range -- anything else is ignored,
+// leaving focus on this segment). `onAdvance()` runs once a full value has
+// been committed to `input.value` (zero-padded), so the caller decides
+// where focus goes next (the next segment, or nowhere for the last one).
+function attachTimeSegmentInput(input, firstDigitRule, onAdvance) {
+  let buffer = '';
+  const commit = (value) => {
+    input.value = String(value).padStart(2, '0');
+    buffer = '';
+    onAdvance();
+  };
+  // A fresh focus (click or Tab) always starts a new entry -- the field's
+  // existing value gets fully selected by sharedInputBehavior.js, so the
+  // next digit typed should replace it rather than resume some stale buffer.
+  input.addEventListener('focus', () => {
+    buffer = '';
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+      buffer = '';
+      input.value = '';
+      return;
+    }
+    if (/^[0-9]$/.test(e.key)) {
+      e.preventDefault();
+      const digit = parseInt(e.key, 10);
+      if (buffer === '') {
+        const rule = firstDigitRule(digit);
+        if (rule.complete) commit(digit);
+        else {
+          buffer = String(digit);
+          input.value = buffer;
+        }
+        return;
+      }
+      const rule = firstDigitRule(parseInt(buffer, 10));
+      if (rule.allowedSecond && !rule.allowedSecond.includes(digit)) return;
+      commit(parseInt(buffer, 10) * 10 + digit);
+      return;
+    }
+    const navigationKeys = ['Tab', 'Shift', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (!navigationKeys.includes(e.key)) e.preventDefault();
+  });
+  // Pasting arbitrary text would bypass the digit-by-digit rules above.
+  input.addEventListener('paste', (e) => e.preventDefault());
+}
+
 // fields: [{ name, label, value, placeholder, required, min, max }] for
 // text/date/time/number fields (type defaults to 'text', also accepts
 // 'date'/'time'/'number'/'textarea'; min/max only apply to 'number' and are
@@ -219,6 +276,113 @@ function showFormModal(title, fields, opts = {}) {
           interactiveEls.push(textarea);
           fieldEls = [textarea];
           getValue = () => textarea.value.trim();
+        } else if (field.type === 'time') {
+          // Not a native <input type="time">: Chromium picks that control's
+          // AM/PM-vs-24-hour display from the browser's own UI language,
+          // ignoring both the page's `lang` attribute and navigator.language
+          // -- there is no way from page JS to make it follow
+          // currentUserTimeFormat. So the hour/minute (and, in 12-hour mode,
+          // AM/PM) are built as plain inputs here instead, always stored
+          // externally as a 24-hour "HH:MM" string (see field.value below).
+          const [vh, vm] = (field.value || '00:00').split(':').map((n) => parseInt(n, 10));
+          const is12Hour = currentUserTimeFormat === '12';
+
+          const container = document.createElement('div');
+          container.className = 'modal-time-input';
+
+          const hourInput = document.createElement('input');
+          hourInput.type = 'text';
+          hourInput.inputMode = 'numeric';
+          hourInput.className = 'modal-input modal-time-part';
+          hourInput.value = String(is12Hour ? vh % 12 || 12 : vh).padStart(2, '0');
+
+          const sep = document.createElement('span');
+          sep.className = 'modal-time-sep';
+          sep.textContent = ':';
+
+          const minuteInput = document.createElement('input');
+          minuteInput.type = 'text';
+          minuteInput.inputMode = 'numeric';
+          minuteInput.className = 'modal-input modal-time-part';
+          minuteInput.value = String(vm).padStart(2, '0');
+
+          container.appendChild(hourInput);
+          container.appendChild(sep);
+          container.appendChild(minuteInput);
+
+          let ampmSelect = null;
+          if (is12Hour) {
+            ampmSelect = document.createElement('select');
+            ampmSelect.className = 'modal-input modal-time-ampm';
+            for (const period of ['AM', 'PM']) {
+              const option = document.createElement('option');
+              option.value = period;
+              option.textContent = period;
+              ampmSelect.appendChild(option);
+            }
+            ampmSelect.value = vh < 12 ? 'AM' : 'PM';
+            // A native <select>'s arrow keys clamp at the first/last option
+            // instead of wrapping -- with only two options (AM/PM) that
+            // makes one direction dead at each end, so wrap manually.
+            // Leaves every other key (e.g. typing "a"/"p" to jump straight
+            // to AM/PM) on the browser's own default handling.
+            ampmSelect.addEventListener('keydown', (e) => {
+              if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+              e.preventDefault();
+              const count = ampmSelect.options.length;
+              const delta = e.key === 'ArrowDown' ? 1 : -1;
+              ampmSelect.selectedIndex = (ampmSelect.selectedIndex + delta + count) % count;
+            });
+            container.appendChild(ampmSelect);
+          }
+
+          // Hour: a first digit above the valid tens digit (>1 in 12-hour,
+          // >2 in 24-hour) is already a complete single-digit hour, so
+          // advance right away; 12-hour's leading "1" only admits a second
+          // digit of 0-2 (10/11/12), 24-hour's leading "2" only admits 0-3
+          // (20-23), and a leading 0 (either format) or 1 (24-hour) admits
+          // any second digit.
+          attachTimeSegmentInput(
+            hourInput,
+            (d) => {
+              if (is12Hour) {
+                if (d > 1) return { complete: true };
+                return { complete: false, allowedSecond: d === 1 ? [0, 1, 2] : null };
+              }
+              if (d > 2) return { complete: true };
+              return { complete: false, allowedSecond: d === 2 ? [0, 1, 2, 3] : null };
+            },
+            () => minuteInput.focus()
+          );
+          // Minute: same two-stage idea (0-5 as a leading digit admits any
+          // second digit for 00-59; above 5 is already a complete
+          // single-digit minute) -- but landing spot after a complete value
+          // differs: 24-hour has nowhere else to go, 12-hour advances to
+          // AM/PM.
+          attachTimeSegmentInput(
+            minuteInput,
+            (d) => (d > 5 ? { complete: true } : { complete: false, allowedSecond: null }),
+            () => {
+              if (ampmSelect) ampmSelect.focus();
+            }
+          );
+
+          host.appendChild(container);
+          interactiveEls.push(hourInput, minuteInput);
+          if (ampmSelect) interactiveEls.push(ampmSelect);
+          fieldEls = ampmSelect ? [hourInput, minuteInput, ampmSelect] : [hourInput, minuteInput];
+          getValue = () => {
+            let h = parseInt(hourInput.value, 10);
+            const m = parseInt(minuteInput.value, 10);
+            if (Number.isNaN(h) || Number.isNaN(m)) return '';
+            if (is12Hour) {
+              h = h % 12;
+              if (ampmSelect.value === 'PM') h += 12;
+            }
+            h = Math.min(23, Math.max(0, h));
+            const mm = Math.min(59, Math.max(0, m));
+            return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+          };
         } else {
           const input = document.createElement('input');
           input.className = 'modal-input';
