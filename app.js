@@ -1606,7 +1606,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     existingTask.endDate = endDate;
     logTaskEvent(existingTask, 'Edited');
   } else {
-    tasks.push({
+    const newTask = {
       id: uid(),
       taskId: uid(),
       seriesId: seriesOptions.forcedSeriesId || uid(),
@@ -1623,7 +1623,15 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       completions: {},
       dismissed: {},
       markedFailed: {},
-    });
+    };
+    // Joining an existing (already-named) series -- carry its saved name
+    // over so getSeriesName can find it on this record too, not just
+    // whichever member happened to have it before.
+    if (seriesOptions.forcedSeriesId) {
+      const seriesName = getSeriesName(seriesOptions.forcedSeriesId);
+      if (seriesName) newTask.seriesName = seriesName;
+    }
+    tasks.push(newTask);
   }
   saveTasks();
   renderTodo();
@@ -1676,6 +1684,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       id: uid(),
       taskId: originalTaskId,
       seriesId: originalTask.seriesId,
+      seriesName: originalTask.seriesName,
       name: edited.name,
       description: edited.description,
       details: edited.details,
@@ -1698,6 +1707,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         id: uid(),
         taskId: originalTaskId,
         seriesId: originalTask.seriesId,
+        seriesName: originalTask.seriesName,
         name: originalTask.name,
         description: originalTask.description,
         details: originalTask.details,
@@ -1718,6 +1728,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       id: uid(),
       taskId: originalTaskId,
       seriesId: originalTask.seriesId,
+      seriesName: originalTask.seriesName,
       name: edited.name,
       description: edited.description,
       details: edited.details,
@@ -1779,6 +1790,7 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
       id: uid(),
       taskId: originalTaskId,
       seriesId: originalTask.seriesId,
+      seriesName: originalTask.seriesName,
       name: originalTask.name,
       description: originalTask.description,
       details: originalTask.details,
@@ -2554,7 +2566,13 @@ function buildTodoItemRow(item, isToday) {
 
   const name = document.createElement('div');
   name.className = 'todo-item-name';
-  name.textContent = item.task.name;
+  // A task that's part of a mixed series (see isMixedSeries) is shown as
+  // "[series name]: [task name]" so it reads as belonging to that group;
+  // a single task or same-taskId recurring fragments just show their own
+  // name, as before.
+  name.textContent = isMixedSeries(item.task.seriesId)
+    ? `${getSeriesName(item.task.seriesId)}: ${item.task.name}`
+    : item.task.name;
   text.appendChild(name);
 
   if (item.task.description) {
@@ -2940,7 +2958,7 @@ function ensureTimerTicking() {
 const sidePanelEmptyEl = document.getElementById('side-panel-empty');
 const sidePanelContentEl = document.getElementById('side-panel-content');
 const sidePanelTitleEl = document.getElementById('side-panel-title');
-const sidePanelDetailsEl = document.getElementById('side-panel-details');
+const sidePanelSummariesEl = document.getElementById('side-panel-task-summaries');
 const sidePanelToggleBtn = document.getElementById('side-panel-toggle-btn');
 const sidePanelEditToggleBtn = document.getElementById('side-panel-edit-toggle-btn');
 const sidePanelCommentInput = document.getElementById('side-panel-comment-input');
@@ -3009,7 +3027,7 @@ function buildSidePanelCommentRow(task, comment) {
   topRow.className = 'side-panel-comment-top-row';
   const time = document.createElement('div');
   time.className = 'side-panel-comment-time';
-  time.textContent = formatDateTime(comment.timestamp);
+  time.textContent = `${task.name} · ${formatDateTime(comment.timestamp)}`;
   topRow.appendChild(time);
 
   if (sidePanelEditMode) {
@@ -3044,10 +3062,9 @@ function buildSidePanelCommentRow(task, comment) {
 // (name + its own due/recurrence date) only when the panel is merging
 // multiple records together (series scope): in single-task scope every
 // entry already obviously belongs to the one task on screen, so naming it
-// again on every row would just be noise. Description is its own row(s)
-// below rather than crammed onto the first line since it can run long/wrap,
-// and (like the task name) is only shown in series scope, and only when
-// there actually is one.
+// again on every row would just be noise. Description isn't repeated here
+// even in series scope -- it's already shown once per task in the
+// task-summaries block at the top of the panel (see buildSidePanelTaskSummary).
 function buildSidePanelLogRow(task, entry, showTaskInfo) {
   const item = document.createElement('div');
   item.className = 'side-panel-log-item';
@@ -3064,11 +3081,35 @@ function buildSidePanelLogRow(task, entry, showTaskInfo) {
   topRow.appendChild(time);
   item.appendChild(topRow);
 
-  if (showTaskInfo && task.description) {
+  return item;
+}
+
+// One block per task record -- its own name/description(/details), since
+// fragments of a split recurring task or members of a merged series can
+// differ on any of those. `includeDetails` is left off in task scope (see
+// renderSidePanel) -- there, this only ever renders the one selected
+// occurrence, not a set of records worth telling apart by their details too.
+function buildSidePanelTaskSummary(task, includeDetails = true) {
+  const item = document.createElement('div');
+  item.className = 'side-panel-task-summary';
+
+  const name = document.createElement('div');
+  name.className = 'side-panel-task-summary-name';
+  name.textContent = task.name;
+  item.appendChild(name);
+
+  if (task.description) {
     const description = document.createElement('div');
-    description.className = 'side-panel-log-description';
+    description.className = 'side-panel-task-summary-desc';
     description.textContent = task.description;
     item.appendChild(description);
+  }
+
+  if (includeDetails && task.details) {
+    const details = document.createElement('div');
+    details.className = 'side-panel-task-summary-details';
+    details.textContent = task.details;
+    item.appendChild(details);
   }
 
   return item;
@@ -3087,12 +3128,12 @@ function renderSidePanel() {
 
   sidePanelEmptyEl.classList.add('hidden');
   sidePanelContentEl.classList.remove('hidden');
-  sidePanelTitleEl.textContent = sidePanelTask.name;
-  // Tied to the exact record last interacted with, same as the title above,
-  // not aggregated across the task/series toggle -- there's one "Details"
-  // per task record, not a merged history of every fragment's own text.
-  sidePanelDetailsEl.textContent = sidePanelTask.details || '';
-  sidePanelDetailsEl.classList.toggle('hidden', !sidePanelTask.details);
+  // Only a mixed series (see isMixedSeries) has a series name worth
+  // showing above the individual task summaries below; a single task or
+  // same-taskId recurring fragments have nothing to add there.
+  const mixedSeries = isMixedSeries(sidePanelTask.seriesId);
+  sidePanelTitleEl.textContent = mixedSeries ? getSeriesName(sidePanelTask.seriesId) : '';
+  sidePanelTitleEl.classList.toggle('hidden', !mixedSeries);
   sidePanelToggleBtn.textContent = sidePanelScope === 'series' ? 'Series' : 'Task';
   sidePanelToggleBtn.title =
     sidePanelScope === 'series'
@@ -3103,6 +3144,19 @@ function renderSidePanel() {
   sidePanelEditToggleBtn.classList.toggle('active', sidePanelEditMode);
 
   const records = sidePanelRecords();
+
+  // Series scope: name/description/details for every record in the series,
+  // so differing fragments/members are all visible at once. Task scope:
+  // just the one selected occurrence's name/description -- no need to list
+  // its other fragments (they're all effectively "the same task" from
+  // here), and no details, to keep it to that bare minimum.
+  sidePanelSummariesEl.innerHTML = '';
+  if (sidePanelScope === 'series') {
+    const sortedRecords = records.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    for (const t of sortedRecords) sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(t));
+  } else {
+    sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(sidePanelTask, false));
+  }
 
   // Paired with the owning record (not just the comment itself) so edits/
   // deletes -- only offered once sidePanelEditMode is on -- can mutate the
@@ -3344,6 +3398,22 @@ function buildSeriesMemberRow(task) {
   info.appendChild(meta);
   row.appendChild(info);
 
+  // Overwrites just this one record's own name with the series' saved
+  // name (see the "Save" button below) -- useful after "Save" has changed
+  // the series name and this particular member's name has drifted from it
+  // (e.g. it was renamed individually, or predates the series name).
+  const resetNameBtn = document.createElement('button');
+  resetNameBtn.title = 'Reset name to match series name';
+  resetNameBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
+  resetNameBtn.onclick = () => {
+    task.name = getSeriesName(task.seriesId);
+    saveTasks();
+    renderTodo();
+    refreshTodoManageModal();
+  };
+  row.appendChild(resetNameBtn);
+
   const editBtn = document.createElement('button');
   editBtn.title = 'Edit';
   editBtn.innerHTML =
@@ -3352,13 +3422,17 @@ function buildSeriesMemberRow(task) {
   row.appendChild(editBtn);
 
   // Leaving the series is nothing but getting a fresh seriesId -- the task
-  // itself, and everything else about it, is untouched.
+  // itself, and everything else about it, is untouched. Also drops the old
+  // series' name -- it's now a series of one, so isMixedSeries never
+  // consults it again, but leaving a stale value around would be
+  // misleading if this task is later merged into another series.
   const removeBtn = document.createElement('button');
   removeBtn.title = 'Remove from series';
   removeBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M5 11v2h9v-2H5zm11-4-1.41 1.41L17.17 11H10v2h7.17l-2.58 2.59L16 17l5-5-5-5z"/></svg>';
   removeBtn.onclick = () => {
     task.seriesId = uid();
+    delete task.seriesName;
     saveTasks();
     renderTodo();
     refreshTodoManageModal();
@@ -3383,9 +3457,7 @@ function renderSeriesEditorPane() {
   seriesEditPanelEl.classList.remove('hidden');
 
   const sorted = members.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  // Prefills with whatever the first member is currently called -- just a
-  // starting point for the rename field, not a stored "series name".
-  seriesEditNameInput.value = sorted[0].name;
+  seriesEditNameInput.value = getSeriesName(manageSelectedSeriesId);
   seriesEditListEl.innerHTML = '';
   for (const task of sorted) seriesEditListEl.appendChild(buildSeriesMemberRow(task));
 }
@@ -3399,11 +3471,15 @@ function refreshTodoManageModal() {
   renderSeriesEditorPane();
 }
 
-document.getElementById('series-edit-rename-btn').onclick = () => {
+// Saves the series' own name (see getSeriesName), kept in sync across
+// every member record -- unlike the old "Rename all", this never touches
+// any individual task's own name (see buildSeriesMemberRow's "reset name"
+// button for pulling a member back in line with it after this changes).
+document.getElementById('series-edit-save-btn').onclick = () => {
   if (!manageSelectedSeriesId) return;
   const newName = seriesEditNameInput.value.trim();
   if (!newName) return;
-  for (const task of tasksInSeries(manageSelectedSeriesId)) task.name = newName;
+  for (const task of tasksInSeries(manageSelectedSeriesId)) task.seriesName = newName;
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
@@ -3464,6 +3540,31 @@ document.getElementById('todo-add-btn').onclick = () => openTaskForm(null);
 // on-screen representing "the task".
 function tasksInSeries(seriesId) {
   return tasks.filter((t) => t.seriesId === seriesId);
+}
+
+// A "mixed" series -- multiple records spanning more than one distinct
+// taskId, i.e. genuinely separate tasks merged together via the
+// manage-tasks modal's drag & drop (see renderTodoManageMonths' green
+// series-row-mixed) -- as opposed to a single task or a recurring task
+// split into same-taskId fragments (see tasksInSeries). Only a mixed
+// series has a "series name" worth showing next to a task's own name.
+function isMixedSeries(seriesId) {
+  const members = tasksInSeries(seriesId);
+  return new Set(members.map((t) => t.taskId)).size > 1;
+}
+
+// The series' saved name (see the "Save" button in the manage-tasks
+// modal's series editor), kept in sync across every member record
+// whenever it's set -- read back from whichever member happens to carry
+// it. Falls back to the earliest (by due date) member's own name if the
+// series has never been explicitly named, so a freshly-merged series
+// still shows something sensible.
+function getSeriesName(seriesId) {
+  const members = tasksInSeries(seriesId);
+  const named = members.find((t) => t.seriesName);
+  if (named) return named.seriesName;
+  const sorted = members.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  return sorted.length ? sorted[0].name : '';
 }
 
 // A series counts as recurring if any fragment still has a repeating
