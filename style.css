@@ -1027,6 +1027,18 @@ main,
 .series-edit-name-row .modal-input {
   flex: 1;
 }
+.series-edit-save-confirm {
+  color: #81c995;
+  font-size: 12px;
+  align-self: center;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.series-edit-save-confirm.visible {
+  opacity: 1;
+  transition: opacity 0.1s ease;
+}
 
 #series-edit-list {
   max-height: 300px;

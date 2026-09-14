@@ -54,10 +54,13 @@ const MODAL_SECONDARY_RESULT = Symbol('modal-secondary');
 // leaving focus on this segment). `onAdvance()` runs once a full value has
 // been committed to `input.value` (zero-padded), so the caller decides
 // where focus goes next (the next segment, or nowhere for the last one).
-function attachTimeSegmentInput(input, firstDigitRule, onAdvance) {
+// normalizeValue: applied to a just-committed two-digit value before display
+// -- used by the 12-hour hour segment (see below) since "00" isn't a real
+// 12-hour hour (0 means the 12 o'clock hour, displayed as "12").
+function attachTimeSegmentInput(input, firstDigitRule, onAdvance, normalizeValue = (v) => v) {
   let buffer = '';
   const commit = (value) => {
-    input.value = String(value).padStart(2, '0');
+    input.value = String(normalizeValue(value)).padStart(2, '0');
     buffer = '';
     onAdvance();
   };
@@ -352,7 +355,8 @@ function showFormModal(title, fields, opts = {}) {
               if (d > 2) return { complete: true };
               return { complete: false, allowedSecond: d === 2 ? [0, 1, 2, 3] : null };
             },
-            () => minuteInput.focus()
+            () => minuteInput.focus(),
+            is12Hour ? (v) => v || 12 : undefined
           );
           // Minute: same two-stage idea (0-5 as a leading digit admits any
           // second digit for 00-59; above 5 is already a complete
@@ -1624,12 +1628,15 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       dismissed: {},
       markedFailed: {},
     };
-    // Joining an existing (already-named) series -- carry its saved name
-    // over so getSeriesName can find it on this record too, not just
-    // whichever member happened to have it before.
+    // Joining an existing series -- carry its saved name over so
+    // getSeriesName can find it on this record too, not just whichever
+    // member happened to have it before. Only if the series has actually
+    // been explicitly named (some member carries seriesName): getSeriesName's
+    // fallback to the earliest member's own name is a display-time default,
+    // not something that should get permanently frozen onto a new record.
     if (seriesOptions.forcedSeriesId) {
-      const seriesName = getSeriesName(seriesOptions.forcedSeriesId);
-      if (seriesName) newTask.seriesName = seriesName;
+      const namedMember = tasksInSeries(seriesOptions.forcedSeriesId).find((t) => t.seriesName);
+      if (namedMember) newTask.seriesName = namedMember.seriesName;
     }
     tasks.push(newTask);
   }
@@ -2327,6 +2334,23 @@ const todoViewToggleOpts = Array.from(todoViewToggleEl.querySelectorAll('.todo-v
 // renderTodo(). See updatePinnedTodoHeader.
 let todoDayHeaderRefs = [];
 
+// Reset at the top of each renderTodo() call (see there) and consulted by
+// buildTodoItemRow's seriesRowLabelInfo -- isMixedSeries/getSeriesName each
+// scan the full task list, and without this a render with N rows sharing a
+// handful of series would redo that scan 2N times instead of twice per
+// distinct series.
+let todoSeriesLabelCache = new Map();
+
+// Mixed-ness and display name only matter together (see buildTodoItemRow) --
+// bundled into one lookup so a cache hit skips both scans, not just one.
+function seriesRowLabelInfo(seriesId) {
+  if (todoSeriesLabelCache.has(seriesId)) return todoSeriesLabelCache.get(seriesId);
+  const mixed = isMixedSeries(seriesId);
+  const info = { mixed, name: mixed ? getSeriesName(seriesId) : '' };
+  todoSeriesLabelCache.set(seriesId, info);
+  return info;
+}
+
 // Keeps exactly one day header "pinned" (position: sticky, see .todo-day-
 // header.pinned) at a time: the last one (in display order) whose day has
 // already started scrolling past the top of #todo-viewport. Every other
@@ -2570,9 +2594,8 @@ function buildTodoItemRow(item, isToday) {
   // "[series name]: [task name]" so it reads as belonging to that group;
   // a single task or same-taskId recurring fragments just show their own
   // name, as before.
-  name.textContent = isMixedSeries(item.task.seriesId)
-    ? `${getSeriesName(item.task.seriesId)}: ${item.task.name}`
-    : item.task.name;
+  const seriesLabelInfo = seriesRowLabelInfo(item.task.seriesId);
+  name.textContent = seriesLabelInfo.mixed ? `${seriesLabelInfo.name}: ${item.task.name}` : item.task.name;
   text.appendChild(name);
 
   if (item.task.description) {
@@ -2796,6 +2819,7 @@ function autoDismissStaleCarriedOverOccurrences() {
 }
 
 function renderTodo() {
+  todoSeriesLabelCache = new Map();
   expireFinishedTimers();
   autoDismissStaleCarriedOverOccurrences();
   updateTodoViewToggleButton();
@@ -3018,8 +3042,12 @@ async function editCommentPrompt(comment) {
 // `task` is the specific record `comment` actually lives on -- not
 // necessarily sidePanelTask, since the comments list here can be merged
 // across a whole series (see sidePanelRecords) -- needed so a delete can
-// splice it out of the right record's own `comments` array.
-function buildSidePanelCommentRow(task, comment) {
+// splice it out of the right record's own `comments` array. `showTaskInfo`
+// mirrors buildSidePanelLogRow's own parameter: only worth naming the task
+// when the panel is merging multiple records together (series scope) --
+// in single-task scope every note already obviously belongs to the one
+// task on screen.
+function buildSidePanelCommentRow(task, comment, showTaskInfo) {
   const item = document.createElement('div');
   item.className = 'side-panel-comment-item';
 
@@ -3027,7 +3055,7 @@ function buildSidePanelCommentRow(task, comment) {
   topRow.className = 'side-panel-comment-top-row';
   const time = document.createElement('div');
   time.className = 'side-panel-comment-time';
-  time.textContent = `${task.name} · ${formatDateTime(comment.timestamp)}`;
+  time.textContent = showTaskInfo ? `${task.name} · ${formatDateTime(comment.timestamp)}` : formatDateTime(comment.timestamp);
   topRow.appendChild(time);
 
   if (sidePanelEditMode) {
@@ -3084,12 +3112,10 @@ function buildSidePanelLogRow(task, entry, showTaskInfo) {
   return item;
 }
 
-// One block per task record -- its own name/description(/details), since
+// One block per task record -- its own name/description/details, since
 // fragments of a split recurring task or members of a merged series can
-// differ on any of those. `includeDetails` is left off in task scope (see
-// renderSidePanel) -- there, this only ever renders the one selected
-// occurrence, not a set of records worth telling apart by their details too.
-function buildSidePanelTaskSummary(task, includeDetails = true) {
+// differ on any of those.
+function buildSidePanelTaskSummary(task) {
   const item = document.createElement('div');
   item.className = 'side-panel-task-summary';
 
@@ -3105,7 +3131,7 @@ function buildSidePanelTaskSummary(task, includeDetails = true) {
     item.appendChild(description);
   }
 
-  if (includeDetails && task.details) {
+  if (task.details) {
     const details = document.createElement('div');
     details.className = 'side-panel-task-summary-details';
     details.textContent = task.details;
@@ -3147,15 +3173,15 @@ function renderSidePanel() {
 
   // Series scope: name/description/details for every record in the series,
   // so differing fragments/members are all visible at once. Task scope:
-  // just the one selected occurrence's name/description -- no need to list
-  // its other fragments (they're all effectively "the same task" from
-  // here), and no details, to keep it to that bare minimum.
+  // just the one selected occurrence's own name/description/details -- no
+  // need to list its other fragments too (they're all effectively "the
+  // same task" from here).
   sidePanelSummariesEl.innerHTML = '';
   if (sidePanelScope === 'series') {
     const sortedRecords = records.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     for (const t of sortedRecords) sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(t));
   } else {
-    sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(sidePanelTask, false));
+    sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(sidePanelTask));
   }
 
   // Paired with the owning record (not just the comment itself) so edits/
@@ -3170,7 +3196,7 @@ function renderSidePanel() {
     sidePanelCommentsEl.appendChild(buildSidePanelEmptyRow('No notes yet.'));
   } else {
     for (const { task, comment } of commentEntries) {
-      sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(task, comment));
+      sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(task, comment, sidePanelScope === 'series'));
     }
   }
 
@@ -3213,6 +3239,7 @@ const seriesEditEmptyEl = document.getElementById('series-edit-empty');
 const seriesEditPanelEl = document.getElementById('series-edit-panel');
 const seriesEditNameInput = document.getElementById('series-edit-name-input');
 const seriesEditListEl = document.getElementById('series-edit-list');
+const seriesEditSaveConfirmEl = document.getElementById('series-edit-save-confirm');
 const todoManageRightEl = document.querySelector('.todo-manage-right');
 
 // Two clicks to delete (arm -> confirm), instead of a native confirm()
@@ -3341,10 +3368,10 @@ function renderTodoManageMonths() {
     group.appendChild(header);
 
     const seriesInMonth = [...monthsMap.get(monthKey)]
-      .map((seriesId) => ({ seriesId, members: tasksInSeries(seriesId) }))
-      .sort((a, b) => a.members[0].name.localeCompare(b.members[0].name));
+      .map((seriesId) => ({ seriesId, members: tasksInSeries(seriesId), name: getSeriesName(seriesId) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    for (const { seriesId, members } of seriesInMonth) {
+    for (const { seriesId, members, name } of seriesInMonth) {
       // White: a single task record (whether a plain one-off or an unbroken
       // recurring task). Blue: more than one record, but all of them are
       // fragments of the SAME logical task (one taskId) -- a recurring task
@@ -3359,7 +3386,7 @@ function renderTodoManageMonths() {
       const row = document.createElement('div');
       row.className = 'series-row ' + colorClass;
       if (seriesId === manageSelectedSeriesId) row.classList.add('selected');
-      row.textContent = members[0].name;
+      row.textContent = name;
       row.onclick = () => selectSeriesInManage(seriesId);
 
       // Only a series representing a single logical task -- white or blue,
@@ -3382,6 +3409,63 @@ function renderTodoManageMonths() {
   }
 }
 
+// Gives `sourceTask` one extra occurrence on a date the user picks --
+// e.g. resuming a task whose recurrence has already ended (its own
+// frequency/endDate is left untouched; this doesn't "un-end" it, it just
+// adds one more record after the fact), or giving a one-off task a second
+// occurrence. Shares sourceTask's taskId (still "the same logical task",
+// same idea as a split-off fragment -- see applySplitEdit) and seriesId,
+// but is otherwise its own independent 'once' record with blank history,
+// copying sourceTask's name/description/details/appointment/passive as a
+// starting point since the form here only asks for the date/time.
+async function promptManualOccurrence(sourceTask) {
+  const result = await showFormModal('Add manual occurrence', [
+    { name: 'dueDate', label: 'Due date', type: 'date', value: Recurrence.dateToISO(new Date()) },
+    {
+      name: 'allDay',
+      label: '',
+      type: 'checkboxes',
+      value: sourceTask.allDay ? ['allDay'] : [],
+      options: [{ value: 'allDay', label: 'All day (no specific time)' }],
+      required: false,
+    },
+    {
+      name: 'dueTime',
+      label: 'Due time',
+      type: 'time',
+      value: sourceTask.dueTime || '18:00',
+      showIf: (v) => v.allDay.length === 0,
+    },
+  ]);
+  if (!result) return;
+
+  const allDay = result.allDay.length > 0;
+  const occurrence = {
+    id: uid(),
+    taskId: sourceTask.taskId,
+    seriesId: sourceTask.seriesId,
+    seriesName: sourceTask.seriesName,
+    name: sourceTask.name,
+    description: sourceTask.description,
+    details: sourceTask.details,
+    dueDate: result.dueDate,
+    dueTime: allDay ? null : result.dueTime,
+    allDay,
+    appointment: sourceTask.appointment,
+    passive: sourceTask.passive,
+    endDate: null,
+    frequency: { type: 'once', interval: 1 },
+    completions: {},
+    dismissed: {},
+    markedFailed: {},
+  };
+  tasks.push(occurrence);
+  logTaskEvent(occurrence, 'Manual occurrence added');
+  saveTasks();
+  renderTodo();
+  refreshTodoManageModal();
+}
+
 function buildSeriesMemberRow(task) {
   const row = document.createElement('div');
   row.className = 'todo-manage-item';
@@ -3397,6 +3481,17 @@ function buildSeriesMemberRow(task) {
   meta.textContent = describeTaskSchedule(task);
   info.appendChild(meta);
   row.appendChild(info);
+
+  // Adds one more occurrence of this task on a date the user picks --
+  // works the same whether this task is still actively recurring, is a
+  // plain one-off, or its recurrence/end date has already passed (see
+  // promptManualOccurrence).
+  const addOccurrenceBtn = document.createElement('button');
+  addOccurrenceBtn.title = 'Add manual occurrence';
+  addOccurrenceBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm-8-8h2v2h2v2h-2v2h-2v-2H9v-2h2z"/></svg>';
+  addOccurrenceBtn.onclick = () => promptManualOccurrence(task);
+  row.appendChild(addOccurrenceBtn);
 
   // Overwrites just this one record's own name with the series' saved
   // name (see the "Save" button below) -- useful after "Save" has changed
@@ -3445,6 +3540,8 @@ function buildSeriesMemberRow(task) {
 }
 
 function renderSeriesEditorPane() {
+  clearTimeout(seriesEditSaveConfirmTimer);
+  seriesEditSaveConfirmEl.classList.remove('visible');
   const members = manageSelectedSeriesId ? tasksInSeries(manageSelectedSeriesId) : [];
   if (members.length === 0) {
     manageSelectedSeriesId = null; // the selected series was emptied out (last member deleted/moved away)
@@ -3475,6 +3572,11 @@ function refreshTodoManageModal() {
 // every member record -- unlike the old "Rename all", this never touches
 // any individual task's own name (see buildSeriesMemberRow's "reset name"
 // button for pulling a member back in line with it after this changes).
+// A saved name only ever appears elsewhere in the UI for a mixed series
+// (see isMixedSeries) -- for a single-task or same-taskId series there's
+// nowhere else it shows up, so the "Saved" cue below is the only feedback
+// the user gets that the click actually did something.
+let seriesEditSaveConfirmTimer = null;
 document.getElementById('series-edit-save-btn').onclick = () => {
   if (!manageSelectedSeriesId) return;
   const newName = seriesEditNameInput.value.trim();
@@ -3483,6 +3585,10 @@ document.getElementById('series-edit-save-btn').onclick = () => {
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
+
+  clearTimeout(seriesEditSaveConfirmTimer);
+  seriesEditSaveConfirmEl.classList.add('visible');
+  seriesEditSaveConfirmTimer = setTimeout(() => seriesEditSaveConfirmEl.classList.remove('visible'), 1500);
 };
 
 document.getElementById('series-edit-add-new-btn').onclick = async () => {
@@ -3517,7 +3623,14 @@ todoManageRightEl.addEventListener('drop', (e) => {
   // the dragged series could have changed in between (e.g. another drop
   // already claimed part of it).
   if (sourceMembers.length === 0 || new Set(sourceMembers.map((t) => t.taskId)).size !== 1) return;
-  for (const task of sourceMembers) task.seriesId = manageSelectedSeriesId;
+  // Drop the dragged series' own name (if any) along with its old seriesId --
+  // it's joining manageSelectedSeriesId's series now, so its name (or lack
+  // of one) should come from there, not leak the source series' stale name
+  // into a getSeriesName lookup on the merged series.
+  for (const task of sourceMembers) {
+    task.seriesId = manageSelectedSeriesId;
+    delete task.seriesName;
+  }
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
