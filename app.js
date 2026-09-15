@@ -2993,6 +2993,18 @@ const sidePanelLogEl = document.getElementById('side-panel-log');
 
 const SIDE_PANEL_SCOPES = ['occurrence', 'task', 'series'];
 
+// Sizes/positions the thumb off the active option's own rendered box rather
+// than assuming equal thirds (see the CSS comment on .side-panel-scope-
+// toggle-thumb) -- "Occurrence" is much wider than "Task"/"Series", so the
+// buttons are naturally different widths themselves. Only meaningful while
+// the panel is actually visible (renderSidePanel's own early return covers
+// that); harmless no-op sizing off a 0-width button otherwise.
+function updateSidePanelScopeThumb(activeIndex) {
+  const activeBtn = sidePanelScopeOpts[activeIndex];
+  sidePanelScopeToggleThumb.style.left = `${activeBtn.offsetLeft}px`;
+  sidePanelScopeToggleThumb.style.width = `${activeBtn.offsetWidth}px`;
+}
+
 let sidePanelTask = null; // the specific task record last interacted with
 let sidePanelScope = 'task'; // 'occurrence' | 'task' | 'series'
 // Whether notes show their edit/delete controls -- off by default, and reset
@@ -3166,9 +3178,7 @@ function renderSidePanel() {
   sidePanelTitleEl.classList.toggle('hidden', !mixedSeries);
   const scopeIndex = SIDE_PANEL_SCOPES.indexOf(sidePanelScope);
   sidePanelScopeOpts.forEach((btn, i) => btn.classList.toggle('active', i === scopeIndex));
-  // Percentage-based, not measured off the buttons' own rendered boxes --
-  // same reasoning as todoViewToggleThumb, see updateTodoViewToggleButton.
-  sidePanelScopeToggleThumb.style.transform = `translateX(${scopeIndex * 100}%)`;
+  updateSidePanelScopeThumb(scopeIndex);
   sidePanelEditToggleBtn.textContent = sidePanelEditMode ? 'Done' : 'Edit';
   sidePanelEditToggleBtn.title = sidePanelEditMode ? 'Stop editing/deleting notes' : 'Edit or delete notes';
   sidePanelEditToggleBtn.classList.toggle('active', sidePanelEditMode);
