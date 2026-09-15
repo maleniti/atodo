@@ -104,6 +104,48 @@ main {
   color: #202124;
 }
 
+/* Same sliding-thumb pill as .todo-view-toggle, but sized to its text labels
+   (Occurrence/Task/Series) instead of fixed icon-width options. */
+.side-panel-scope-toggle {
+  position: relative;
+  display: flex;
+  flex: none;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.side-panel-scope-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 3);
+  border-radius: 999px;
+  background: rgba(138, 180, 248, 0.28);
+  border: 1px solid rgba(138, 180, 248, 0.55);
+  transition: transform 0.2s ease;
+  z-index: 0;
+  pointer-events: none;
+}
+.side-panel-scope-opt {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: 0 8px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #9aa0a6;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.side-panel-scope-opt:hover { color: #e8eaed; }
+.side-panel-scope-opt.active { color: #e8eaed; }
+
 .side-panel-title {
   font-size: 15px;
   font-weight: 600;

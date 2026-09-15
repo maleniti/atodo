@@ -83,8 +83,13 @@
         <div class="side-panel-header">
           <div id="side-panel-title" class="side-panel-title hidden"></div>
           <div class="side-panel-header-actions">
+            <div id="side-panel-scope-toggle" class="side-panel-scope-toggle">
+              <div class="side-panel-scope-toggle-thumb"></div>
+              <button type="button" class="side-panel-scope-opt" data-scope="occurrence" title="Just this occurrence">Occurrence</button>
+              <button type="button" class="side-panel-scope-opt" data-scope="task" title="Every fragment of this task">Task</button>
+              <button type="button" class="side-panel-scope-opt" data-scope="series" title="Every task in this series">Series</button>
+            </div>
             <button id="side-panel-edit-toggle-btn" class="menu-btn-small"></button>
-            <button id="side-panel-toggle-btn" class="menu-btn-small"></button>
           </div>
         </div>
         <div id="side-panel-task-summaries" class="side-panel-task-summaries"></div>

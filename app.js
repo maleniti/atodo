@@ -2971,26 +2971,30 @@ function ensureTimerTicking() {
 // ---------------------------------------------------------------------------
 // Side panel -- notes and activity history for whichever task was last
 // interacted with (see selectTaskForSidePanel, called from the to-do list's
-// click/right-click/checkbox/focus/dismiss handlers). Scoped to either just
-// that one logical task (every record sharing its taskId -- e.g. every
-// fragment of a recurring task that's been split via edit-scope) or its
-// whole series (every record sharing its seriesId, which can span multiple
-// distinct taskIds once tasks have been merged together in the manage-tasks
-// modal) -- see sidePanelScope/sidePanelRecords.
+// click/right-click/checkbox/focus/dismiss handlers). Scoped to just the one
+// selected record ('occurrence'), every record sharing its taskId ('task' --
+// e.g. every fragment of a recurring task that's been split via edit-scope),
+// or its whole series ('series' -- every record sharing its seriesId, which
+// can span multiple distinct taskIds once tasks have been merged together in
+// the manage-tasks modal) -- see sidePanelScope/sidePanelRecords.
 // ---------------------------------------------------------------------------
 
 const sidePanelEmptyEl = document.getElementById('side-panel-empty');
 const sidePanelContentEl = document.getElementById('side-panel-content');
 const sidePanelTitleEl = document.getElementById('side-panel-title');
 const sidePanelSummariesEl = document.getElementById('side-panel-task-summaries');
-const sidePanelToggleBtn = document.getElementById('side-panel-toggle-btn');
+const sidePanelScopeToggleEl = document.getElementById('side-panel-scope-toggle');
+const sidePanelScopeToggleThumb = sidePanelScopeToggleEl.querySelector('.side-panel-scope-toggle-thumb');
+const sidePanelScopeOpts = Array.from(sidePanelScopeToggleEl.querySelectorAll('.side-panel-scope-opt'));
 const sidePanelEditToggleBtn = document.getElementById('side-panel-edit-toggle-btn');
 const sidePanelCommentInput = document.getElementById('side-panel-comment-input');
 const sidePanelCommentsEl = document.getElementById('side-panel-comments');
 const sidePanelLogEl = document.getElementById('side-panel-log');
 
+const SIDE_PANEL_SCOPES = ['occurrence', 'task', 'series'];
+
 let sidePanelTask = null; // the specific task record last interacted with
-let sidePanelScope = 'task'; // 'task' | 'series'
+let sidePanelScope = 'task'; // 'occurrence' | 'task' | 'series'
 // Whether notes show their edit/delete controls -- off by default, and reset
 // back off whenever a different task is selected (see the sidePanelTask
 // comparison below), so it's never silently left armed against whatever task
@@ -3019,9 +3023,9 @@ function refreshPreviewedHighlight() {
 
 function sidePanelRecords() {
   if (!sidePanelTask) return [];
-  return sidePanelScope === 'series'
-    ? tasksInSeries(sidePanelTask.seriesId)
-    : tasks.filter((t) => t.taskId === sidePanelTask.taskId);
+  if (sidePanelScope === 'series') return tasksInSeries(sidePanelTask.seriesId);
+  if (sidePanelScope === 'task') return tasks.filter((t) => t.taskId === sidePanelTask.taskId);
+  return [sidePanelTask];
 }
 
 function buildSidePanelEmptyRow(text) {
@@ -3160,24 +3164,24 @@ function renderSidePanel() {
   const mixedSeries = isMixedSeries(sidePanelTask.seriesId);
   sidePanelTitleEl.textContent = mixedSeries ? getSeriesName(sidePanelTask.seriesId) : '';
   sidePanelTitleEl.classList.toggle('hidden', !mixedSeries);
-  sidePanelToggleBtn.textContent = sidePanelScope === 'series' ? 'Series' : 'Task';
-  sidePanelToggleBtn.title =
-    sidePanelScope === 'series'
-      ? 'Showing the whole series -- click to show just this task'
-      : 'Showing just this task -- click to show its whole series';
+  const scopeIndex = SIDE_PANEL_SCOPES.indexOf(sidePanelScope);
+  sidePanelScopeOpts.forEach((btn, i) => btn.classList.toggle('active', i === scopeIndex));
+  // Percentage-based, not measured off the buttons' own rendered boxes --
+  // same reasoning as todoViewToggleThumb, see updateTodoViewToggleButton.
+  sidePanelScopeToggleThumb.style.transform = `translateX(${scopeIndex * 100}%)`;
   sidePanelEditToggleBtn.textContent = sidePanelEditMode ? 'Done' : 'Edit';
   sidePanelEditToggleBtn.title = sidePanelEditMode ? 'Stop editing/deleting notes' : 'Edit or delete notes';
   sidePanelEditToggleBtn.classList.toggle('active', sidePanelEditMode);
 
   const records = sidePanelRecords();
+  // Only single-record ('occurrence') scope has just the one selected
+  // record's own name/description/details to show -- 'task' and 'series'
+  // both merge multiple records, whose fragments/members can differ on any
+  // of those, so every one of them gets its own summary block.
+  const showTaskInfo = sidePanelScope !== 'occurrence';
 
-  // Series scope: name/description/details for every record in the series,
-  // so differing fragments/members are all visible at once. Task scope:
-  // just the one selected occurrence's own name/description/details -- no
-  // need to list its other fragments too (they're all effectively "the
-  // same task" from here).
   sidePanelSummariesEl.innerHTML = '';
-  if (sidePanelScope === 'series') {
+  if (showTaskInfo) {
     const sortedRecords = records.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     for (const t of sortedRecords) sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(t));
   } else {
@@ -3196,7 +3200,7 @@ function renderSidePanel() {
     sidePanelCommentsEl.appendChild(buildSidePanelEmptyRow('No notes yet.'));
   } else {
     for (const { task, comment } of commentEntries) {
-      sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(task, comment, sidePanelScope === 'series'));
+      sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(task, comment, showTaskInfo));
     }
   }
 
@@ -3208,15 +3212,18 @@ function renderSidePanel() {
     sidePanelLogEl.appendChild(buildSidePanelEmptyRow('No activity yet.'));
   } else {
     for (const { task, entry } of logEntries) {
-      sidePanelLogEl.appendChild(buildSidePanelLogRow(task, entry, sidePanelScope === 'series'));
+      sidePanelLogEl.appendChild(buildSidePanelLogRow(task, entry, showTaskInfo));
     }
   }
 }
 
-sidePanelToggleBtn.onclick = () => {
-  sidePanelScope = sidePanelScope === 'series' ? 'task' : 'series';
-  renderSidePanel();
-};
+sidePanelScopeOpts.forEach((btn) => {
+  btn.onclick = () => {
+    if (sidePanelScope === btn.dataset.scope) return;
+    sidePanelScope = btn.dataset.scope;
+    renderSidePanel();
+  };
+});
 
 sidePanelEditToggleBtn.onclick = () => {
   sidePanelEditMode = !sidePanelEditMode;
