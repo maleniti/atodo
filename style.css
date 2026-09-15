@@ -1008,6 +1008,11 @@ main,
   justify-content: center;
 }
 .todo-manage-item button:hover { background: rgba(255, 255, 255, 0.1); color: #e8eaed; }
+.todo-manage-item button:disabled {
+  cursor: default;
+  opacity: 0.35;
+  pointer-events: none;
+}
 .todo-manage-item button.confirm,
 .todo-manage-item button.confirm:hover {
   background: #d93025;

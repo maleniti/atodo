@@ -3409,18 +3409,39 @@ function renderTodoManageMonths() {
   }
 }
 
-// Gives `sourceTask` one extra occurrence on a date the user picks --
-// e.g. resuming a task whose recurrence has already ended (its own
+// Gives `sourceTask` one extra occurrence on a date the user picks -- e.g.
+// resuming a task whose recurrence has already ended (its own
 // frequency/endDate is left untouched; this doesn't "un-end" it, it just
 // adds one more record after the fact), or giving a one-off task a second
 // occurrence. Shares sourceTask's taskId (still "the same logical task",
 // same idea as a split-off fragment -- see applySplitEdit) and seriesId,
-// but is otherwise its own independent 'once' record with blank history,
 // copying sourceTask's name/description/details/appointment/passive as a
 // starting point since the form here only asks for the date/time.
+//
+// If sourceTask is itself recurring (necessarily with an end date already
+// reached -- see buildSeriesMemberRow's disabling of the button otherwise),
+// the new record keeps that same frequency and picks up a fresh end date the
+// same length past the new due date as the original was past its own due
+// date, so the series effectively resumes for another run of the same span
+// instead of collapsing to a single occurrence. A one-off source just gets
+// another independent 'once' record, as before.
 async function promptManualOccurrence(sourceTask) {
+  const isRecurring = sourceTask.frequency.type !== 'once';
+  const hasEndDate = !!sourceTask.endDate;
+
+  // A recurring task with no end date is still generating its own
+  // occurrences forever -- there's nothing for a manual one to add on top of
+  // that. Defensive backstop; the button itself is disabled for this case.
+  if (isRecurring && !hasEndDate) return;
+
   const result = await showFormModal('Add manual occurrence', [
-    { name: 'dueDate', label: 'Due date', type: 'date', value: Recurrence.dateToISO(new Date()) },
+    {
+      name: 'dueDate',
+      label: 'Due date',
+      type: 'date',
+      value: Recurrence.dateToISO(new Date()),
+      min: hasEndDate ? sourceTask.endDate : undefined,
+    },
     {
       name: 'allDay',
       label: '',
@@ -3439,7 +3460,22 @@ async function promptManualOccurrence(sourceTask) {
   ]);
   if (!result) return;
 
+  // `min` above is only a hint to the native date picker -- a typed-in date
+  // isn't rejected by it, so this is the real guard against resuming the
+  // series before it actually stopped.
+  if (hasEndDate && result.dueDate < sourceTask.endDate) {
+    alert("Due date can't be earlier than the original recurrence's end date.");
+    return;
+  }
+
   const allDay = result.allDay.length > 0;
+  const endDate = isRecurring
+    ? Recurrence.dateToISO(
+        Recurrence.addDays(new Date(result.dueDate + 'T00:00:00'), Recurrence.daysBetween(sourceTask.dueDate, sourceTask.endDate))
+      )
+    : null;
+  const frequency = isRecurring ? sourceTask.frequency : { type: 'once', interval: 1 };
+
   const occurrence = {
     id: uid(),
     taskId: sourceTask.taskId,
@@ -3453,8 +3489,8 @@ async function promptManualOccurrence(sourceTask) {
     allDay,
     appointment: sourceTask.appointment,
     passive: sourceTask.passive,
-    endDate: null,
-    frequency: { type: 'once', interval: 1 },
+    endDate,
+    frequency,
     completions: {},
     dismissed: {},
     markedFailed: {},
@@ -3482,12 +3518,18 @@ function buildSeriesMemberRow(task) {
   info.appendChild(meta);
   row.appendChild(info);
 
-  // Adds one more occurrence of this task on a date the user picks --
-  // works the same whether this task is still actively recurring, is a
-  // plain one-off, or its recurrence/end date has already passed (see
-  // promptManualOccurrence).
+  // Adds one more occurrence of this task on a date the user picks -- works
+  // the same whether this task is a plain one-off or its recurrence/end date
+  // has already passed (see promptManualOccurrence). Disabled for a task
+  // that's still actively recurring with no end date: it's already
+  // generating its own occurrences forever, so there's nothing for a manual
+  // one to add.
+  const stillOpenEndedRecurring = task.frequency.type !== 'once' && !task.endDate;
   const addOccurrenceBtn = document.createElement('button');
-  addOccurrenceBtn.title = 'Add manual occurrence';
+  addOccurrenceBtn.title = stillOpenEndedRecurring
+    ? "Can't add a manual occurrence -- this task already recurs indefinitely"
+    : 'Add manual occurrence';
+  addOccurrenceBtn.disabled = stillOpenEndedRecurring;
   addOccurrenceBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm-8-8h2v2h2v2h-2v2h-2v-2H9v-2h2z"/></svg>';
   addOccurrenceBtn.onclick = () => promptManualOccurrence(task);
