@@ -589,21 +589,23 @@ const ACTIVE_OCCURRENCE_STORAGE_KEY = 'advanced-todo-active-occurrence';
 // shared blob regardless of which userId is passed. Upgrading to a real
 // per-user backend means replacing the body here (and in saveTasks) with a
 // fetch() keyed by userId; every caller already passes one.
+// Backward compatibility: tasks saved before seriesId/taskId existed each get
+// their own fresh one -- they were never part of a split, so there's no
+// correct value to backfill beyond "distinct from everything else". Shared
+// by loadTasks and importUserData, since an imported backup can be just as
+// old as whatever's already in localStorage.
+function normalizeLoadedTasks(loaded) {
+  for (const task of loaded) {
+    if (!task.seriesId) task.seriesId = uid();
+    if (!task.taskId) task.taskId = uid();
+  }
+  return loaded;
+}
+
 function loadTasks(userId = currentUserId) {
   try {
     const raw = localStorage.getItem(TASKS_STORAGE_KEY);
-    if (raw) {
-      const loaded = JSON.parse(raw);
-      // Backward compatibility: tasks saved before seriesId/taskId existed
-      // each get their own fresh one -- they were never part of a split, so
-      // there's no correct value to backfill beyond "distinct from
-      // everything else".
-      for (const task of loaded) {
-        if (!task.seriesId) task.seriesId = uid();
-        if (!task.taskId) task.taskId = uid();
-      }
-      return loaded;
-    }
+    if (raw) return normalizeLoadedTasks(JSON.parse(raw));
   } catch {
     // fall through to empty
   }
@@ -4075,6 +4077,90 @@ document.getElementById('settings-save').onclick = () => {
   renderTodo();
   renderSidePanel();
   closeSettingsModal();
+};
+
+// ---------------------------------------------------------------------------
+// Settings modal -- data export/import. Bundles everything this app stores
+// per-user (tasks, profile, active-task/timer state, view mode) into one
+// JSON file, and can load that same file back in wholesale -- the closest
+// thing to a backup/account-migration story this fake-single-user app has,
+// since there's no real backend to sync across devices with.
+// ---------------------------------------------------------------------------
+
+const settingsDownloadDataBtn = document.getElementById('settings-download-data-btn');
+const settingsImportDataBtn = document.getElementById('settings-import-data-btn');
+const settingsImportDataFileInput = document.getElementById('settings-import-data-file-input');
+
+const USER_DATA_EXPORT_VERSION = 1;
+
+function collectUserDataExport() {
+  return {
+    version: USER_DATA_EXPORT_VERSION,
+    exportedAt: new Date().toISOString(),
+    tasks,
+    userProfile: loadUserProfile(),
+    activeTaskId,
+    activeOccurrenceDate,
+    todoViewMode,
+  };
+}
+
+settingsDownloadDataBtn.onclick = () => {
+  const blob = new Blob([JSON.stringify(collectUserDataExport(), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `advanced-todo-backup-${Recurrence.dateToISO(new Date())}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+settingsImportDataBtn.onclick = () => settingsImportDataFileInput.click();
+
+// Wholesale-replaces every piece of this app's stored state with whatever's
+// in the imported file -- there's no merge story, since two independent task
+// lists (this device's vs. the imported one's) have no principled way to be
+// reconciled automatically.
+settingsImportDataFileInput.onchange = async () => {
+  const file = settingsImportDataFileInput.files[0];
+  settingsImportDataFileInput.value = ''; // so re-selecting the same file still fires onchange next time
+  if (!file) return;
+
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    alert('That file isn\'t valid JSON.');
+    return;
+  }
+  if (!data || typeof data !== 'object' || !Array.isArray(data.tasks)) {
+    alert('That file doesn\'t look like an advanced-todo data export.');
+    return;
+  }
+  if (!confirm('Importing will replace all of your current tasks and settings with what\'s in this file. Continue?')) return;
+
+  tasks = normalizeLoadedTasks(data.tasks);
+  saveTasks();
+
+  const profile = { ...DEFAULT_USER_PROFILE, ...(data.userProfile || {}) };
+  saveUserProfile(profile);
+  currentUserNickname = profile.nickname;
+  currentUserAvatar = profile.avatar;
+  currentUserTimeFormat = profile.timeFormat;
+
+  activeTaskId = data.activeTaskId || null;
+  activeOccurrenceDate = activeTaskId ? data.activeOccurrenceDate || null : null;
+  saveActiveTaskId();
+
+  todoViewMode = TODO_VIEW_MODES.includes(data.todoViewMode) ? data.todoViewMode : 'pending';
+  saveTodoViewMode();
+
+  openSettingsModal(); // re-seed the form fields (nickname/time format/avatar preview) from the just-imported profile
+  renderAppTitle();
+  renderUserAvatar();
+  renderTodo();
+  renderSidePanel();
+  refreshTodoManageModal();
 };
 
 // ---------------------------------------------------------------------------
