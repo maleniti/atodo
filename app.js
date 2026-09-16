@@ -3367,13 +3367,18 @@ function buildTodoItemRow(item, isToday) {
   // Plain click (anything not otherwise handled above -- those all
   // stopPropagation their own clicks) just selects this task for the side
   // panel; it never focuses/edits/etc. on its own (see the comment above
-  // canWorkOnNow). Deliberately doesn't renderTodo() itself (selectTaskFor
-  // SidePanel already handles the .previewed accent without a full rebuild,
-  // see refreshPreviewedHighlight) -- replacing this row's own DOM node
-  // mid-gesture broke the browser's double-click detection for
+  // canWorkOnNow). Clicking the already-selected row again deselects it
+  // instead (see deselectSidePanelTask), same as pressing Escape.
+  // Deliberately doesn't renderTodo() itself (selectTaskForSidePanel/
+  // deselectSidePanelTask already handle the .previewed accent without a
+  // full rebuild, see refreshPreviewedHighlight) -- replacing this row's own
+  // DOM node mid-gesture broke the browser's double-click detection for
   // row.ondblclick below, since the second click then lands on a different
   // element than the first.
-  row.onclick = () => selectTaskForSidePanel(item.task);
+  row.onclick = () => {
+    if (item.task === sidePanelTask) deselectSidePanelTask();
+    else selectTaskForSidePanel(item.task);
+  };
 
   row.ondblclick = () => editTaskOccurrence(item.task, item.occurrenceDate);
 
@@ -3670,6 +3675,20 @@ function selectTaskForSidePanel(task) {
   renderSidePanel();
   refreshPreviewedHighlight();
 }
+
+// Clicking the already-selected row again, or pressing Escape, clears the
+// side panel back to its empty state -- see row.onclick (buildTodoItemRow)
+// and the document-level Escape listener below.
+function deselectSidePanelTask() {
+  sidePanelTask = null;
+  sidePanelEditMode = false;
+  renderSidePanel();
+  refreshPreviewedHighlight();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && sidePanelTask) deselectSidePanelTask();
+});
 
 // Retags which rendered .todo-item row(s) carry the .previewed accent
 // without rebuilding the list (renderTodo() does that too, as a side effect
