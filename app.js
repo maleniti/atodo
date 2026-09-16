@@ -2,6 +2,522 @@ function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
+// ---------------------------------------------------------------------------
+// i18n -- English + Croatian. Deliberately NOT covering everything in the
+// app: activity-log entries (task.log messages -- see logTaskEvent) are
+// permanent historical text once written, so translating the dictionary
+// later wouldn't retranslate old entries and would just produce a mixed-
+// language log; and describeTaskSchedule's natural-language recurrence
+// summary ("Every 2 weeks on Mon/Wed") joins ordinals/weekday abbreviations
+// in a way that would need real Croatian grammatical-case handling to read
+// naturally, not just swapped-in word-for-word strings. Both are left in
+// English on purpose.
+//
+// currentUserLanguage is read by t() below and by every option-list
+// function (getFrequencyOptions() etc.) at the point they're actually
+// called (building a form, rendering the list, ...) -- never cached in a
+// plain array at script-load time -- so a language change picked up by
+// applyLanguage() takes effect immediately, without a page reload.
+// ---------------------------------------------------------------------------
+
+const I18N = {
+  en: {
+    'login.title': 'Log in',
+    'login.username': 'Username',
+    'login.password': 'Password',
+    'login.submit': 'Log in',
+
+    'common.close': 'Close',
+    'common.cancel': 'Cancel',
+    'common.save': 'Save',
+    'common.ok': 'OK',
+    'common.add': 'Add',
+    'common.delete': 'Delete',
+    'common.edit': 'Edit',
+    'common.remove': 'Remove',
+    'common.clickAgainToDelete': 'Click again to delete',
+
+    'avatar.accountMenu': 'Account menu',
+    'menu.manageTasks': 'Manage tasks…',
+    'menu.settings': 'Settings…',
+    'menu.logout': 'Log out',
+    'menu.logoutTitle': 'Log out (for testing the login screen)',
+
+    'app.titleGeneric': 'To-Do List',
+    'app.titleWithName': "{name}'s To-Do List",
+
+    'month.prev': 'Previous month',
+    'month.next': 'Next month',
+    'month.jumpToCurrent': 'Jump to current month',
+    'view.pending': 'Pending & overdue tasks this month',
+    'view.next': 'Next recurrence of every task',
+    'view.all': 'All tasks this month',
+
+    'todo.addTask': '+ Add task',
+    'todo.addTaskDue': 'Add a task due {date}',
+    'todo.empty': 'You have no to-dos yet.',
+    'todo.today': 'Today',
+    'todo.yesterday': 'Yesterday',
+    'todo.tomorrow': 'Tomorrow',
+    'todo.tomorrowAllDay': 'Tomorrow, all day',
+    'todo.tomorrowAt': 'Tomorrow, {time}',
+    'todo.allDay': 'All day',
+    'todo.due': 'Due {time}',
+    'todo.overdueSince': 'Overdue since {date}',
+    'todo.overdueSinceAt': 'Overdue since {date} {time}',
+    'todo.failedWasDue': 'Failed – was due {date}',
+    'todo.failedWasDueAt': 'Failed – was due {date} {time}',
+    'todo.timerElapsed': 'Total elapsed time is {elapsed}',
+    'todo.timerElapsedPlanned': 'Total elapsed time is {elapsed} with {planned} planned',
+    'todo.timerRemainingOfTotal': '{remaining} of {total}',
+    'todo.stopWorking': 'Stop working on this task',
+    'todo.workOnNow': 'Work on this task now',
+    'todo.showUndo': 'Show (undo hiding it)',
+    'todo.hideRemove': 'Hide (remove from the list)',
+
+    'menu.timer': 'Timer',
+    'menu.pauseTimer': 'Pause timer',
+    'menu.cancelTimer': 'Cancel timer',
+    'menu.resumeTimer': 'Resume timer',
+    'menu.markDone': 'Mark as done',
+    'menu.markFailed': 'Mark as failed',
+    'menu.focus': 'Focus',
+    'menu.unfocus': 'Unfocus',
+    'menu.show': 'Show',
+    'menu.hide': 'Hide',
+    'menu.taskStats': 'Task stats',
+
+    'sidePanel.empty': 'Click a task to see its notes and history.',
+    'sidePanel.occurrence': 'Occurrence',
+    'sidePanel.occurrenceTitle': 'Just this occurrence',
+    'sidePanel.task': 'Task',
+    'sidePanel.taskTitle': 'Every fragment of this task',
+    'sidePanel.series': 'Series',
+    'sidePanel.seriesTitle': 'Every task in this series',
+    'sidePanel.commentPlaceholder': 'Add a note about this task…',
+    'sidePanel.addNote': 'Add note',
+    'sidePanel.notes': 'Notes',
+    'sidePanel.activity': 'Activity',
+    'sidePanel.noNotes': 'No notes yet.',
+    'sidePanel.noActivity': 'No activity yet.',
+    'sidePanel.editNote': 'Edit note',
+    'sidePanel.noteLabel': 'Note',
+    'sidePanel.done': 'Done',
+    'sidePanel.stopEditing': 'Stop editing/deleting notes',
+    'sidePanel.editOrDelete': 'Edit or delete notes',
+
+    'timer.setTitle': 'Set a timer',
+    'timer.countUp': 'Count up (no fixed duration – stops automatically after 6 hours)',
+    'timer.minutesLabel': 'Minutes to work on this task',
+    'timer.continuePastZero': 'Continue counting down past zero instead of stopping',
+    'timer.start': 'Start',
+    'timer.set': 'Set',
+
+    'taskForm.editOccurrence': 'Edit this occurrence',
+    'taskForm.editFollowing': 'Edit this and following occurrences',
+    'taskForm.editTask': 'Edit task',
+    'taskForm.addTask': 'Add task',
+    'taskForm.name': 'Name',
+    'taskForm.description': 'Description',
+    'taskForm.details': 'Details',
+    'taskForm.dueDate': 'Due date',
+    'taskForm.allDay': 'All day (no specific time)',
+    'taskForm.dueTime': 'Due time',
+    'taskForm.repeatsEvery': 'Repeats every',
+    'taskForm.days': 'day(s)',
+    'taskForm.weeks': 'week(s)',
+    'taskForm.months': 'month(s)',
+    'taskForm.weekdayMon': 'Mon',
+    'taskForm.weekdayTue': 'Tue',
+    'taskForm.weekdayWed': 'Wed',
+    'taskForm.weekdayThu': 'Thu',
+    'taskForm.weekdayFri': 'Fri',
+    'taskForm.weekdaySat': 'Sat',
+    'taskForm.weekdaySun': 'Sun',
+    'taskForm.sunday': 'Sunday',
+    'taskForm.monday': 'Monday',
+    'taskForm.tuesday': 'Tuesday',
+    'taskForm.wednesday': 'Wednesday',
+    'taskForm.thursday': 'Thursday',
+    'taskForm.friday': 'Friday',
+    'taskForm.saturday': 'Saturday',
+    'taskForm.alsoRecurOn': "Also recur on these days (weekly only; leave blank to just use the due date's weekday)",
+    'taskForm.monthlyPattern': 'Monthly pattern',
+    'taskForm.monthlySameDay': 'Same day of month as due date',
+    'taskForm.monthlyLastDay': 'Last day of month',
+    'taskForm.monthlyBeforeLast': 'N days before last day of month',
+    'taskForm.monthlyWeekday': 'Nth weekday of month',
+    'taskForm.monthlyMultiWeekday': 'Earliest Nth occurrence of any of the selected days',
+    'taskForm.monthlyMultiWeekdayOffset': 'N days before/after earliest Nth occurrence of any of the selected days',
+    'taskForm.monthlyMultiDay': 'Multiple days of month (1-28)',
+    'taskForm.monthlyOffsetLabel': 'Days before last day of month (0-3)',
+    'taskForm.dayOfWeek': 'Day of week',
+    'taskForm.whichOccurrence': 'Which occurrence',
+    'taskForm.ordinal1': '1st',
+    'taskForm.ordinal2': '2nd',
+    'taskForm.ordinal3': '3rd',
+    'taskForm.ordinal4': '4th',
+    'taskForm.ordinal5': '5th',
+    'taskForm.ordinalLast': 'Last',
+    'taskForm.selectedDays': 'Selected days (earliest Nth occurrence of any of these)',
+    'taskForm.daysInline': 'days',
+    'taskForm.before': 'Before',
+    'taskForm.after': 'After',
+    'taskForm.occurrenceWord': 'occurrence',
+    'taskForm.occurrenceHr': '. occurrence',
+    'taskForm.multiDayDays': 'Days of the month (1-28)',
+    'taskForm.endDate': 'End date (optional – last recurrence on or before this date)',
+    'taskForm.appointmentDesc':
+      "Appointment – its due date is an expiration, not a standing reminder: if not done by then, it's marked failed (crossed out, red) instead of staying overdue. Can still be checked off as done afterward.",
+    'taskForm.passiveDesc':
+      "Passive – a plain reminder, not an actionable task: can't be focused on or timed, and its checkbox marks it failed instead of done. Never auto-resolves once overdue – stays visible until you mark it failed or, once it's no longer due today, dismiss it.",
+    'taskForm.endDateBeforeDue': "End date can't be before the due date.",
+
+    'manualOccurrence.title': 'Add manual occurrence',
+    'manualOccurrence.cantAdd': "Can't add a manual occurrence – this task already recurs indefinitely",
+    'manualOccurrence.add': 'Add manual occurrence',
+    'manualOccurrence.endDateTooEarly': "Due date can't be earlier than the original recurrence's end date.",
+
+    'manage.title': 'To-do list',
+    'manage.selectSeries': 'Select a series on the left to edit it.',
+    'manage.addNewTask': '+ Add new task',
+    'manage.seriesNamePlaceholder': 'Series name',
+    'manage.saved': 'Saved',
+    'manage.noTasksYet': 'No tasks yet.',
+    'manage.resetName': 'Reset name to match series name',
+    'manage.removeFromSeries': 'Remove from series',
+
+    'editScope.title': 'Edit recurring task',
+    'editScope.desc': 'This task repeats. What would you like to edit?',
+    'editScope.instance': 'Only this occurrence',
+    'editScope.following': 'This and following occurrences',
+    'editScope.all': 'All occurrences',
+
+    'taskStats.title': 'Stats: {name}',
+    'taskStats.totalFocusedAllRecurrences': 'Total time focused (all recurrences)',
+    'taskStats.totalFocused': 'Total time focused',
+    'taskStats.total': 'Total',
+    'taskStats.justFocused': 'Just focused',
+    'taskStats.focusedWithTimer': 'Focused with timer',
+    'taskStats.completion': 'Completion',
+    'taskStats.completed': 'Completed',
+    'taskStats.recurrencesToDate': 'Recurrences to date',
+    'taskStats.completionRate': 'Completion rate',
+    'taskStats.timePerRecurrence': 'Time per recurrence',
+    'taskStats.noFocusedTime': 'No focused time logged yet.',
+    'taskStats.focusedAndTimer': '{focused} focused · {timer} timer',
+
+    'settings.title': 'Settings',
+    'settings.nickname': 'Nickname',
+    'settings.nicknamePlaceholder': 'e.g. Nikola',
+    'settings.timeFormat': 'Time format',
+    'settings.timeFormat24': '24-hour (e.g. 18:00)',
+    'settings.timeFormat12': '12-hour (e.g. 6:00 PM)',
+    'settings.language': 'Language',
+    'settings.languageEnglish': 'English',
+    'settings.languageCroatian': 'Hrvatski (Croatian)',
+    'settings.avatar': 'Avatar',
+    'settings.uploadImage': 'Upload image…',
+    'settings.background': 'Background',
+    'settings.changeBackground': 'Change background…',
+    'settings.data': 'Data',
+    'settings.downloadData': 'Download my data…',
+    'settings.importData': 'Import data…',
+
+    'background.title': 'Change background',
+    'background.accessKeyLabel': 'Unsplash Access Key',
+    'background.accessKeyPlaceholder': 'Paste your Unsplash API Access Key',
+    'background.hint':
+      'Backgrounds are pulled from <a href="https://unsplash.com/developers" target="_blank" rel="noopener">Unsplash’s free developer API</a>. Create a free app there and paste its Access Key here — it’s saved only on this device, separately from your task data.',
+    'background.saveKey': 'Save key',
+    'background.searchPlaceholder': 'Search Unsplash, e.g. mountains, minimal, ocean',
+    'background.search': 'Search',
+    'background.loading': 'Loading…',
+    'background.noResults': 'No results.',
+    'background.usePhoto': 'Use this photo – by {name} on Unsplash',
+    'background.keyRejected': 'That Unsplash Access Key was rejected – double-check it and try again.',
+    'background.rateLimited': "Unsplash's free-tier rate limit was hit for this key – try again in a bit.",
+    'background.requestFailed': 'Unsplash request failed ({status}).',
+    'background.creditBy': 'Photo by',
+    'background.creditOn': 'on',
+    'background.creditUnsplashName': 'Unsplash',
+
+    'data.notJson': "That file isn't valid JSON.",
+    'data.notExport': "That file doesn't look like an advanced-todo data export.",
+    'data.importConfirm': "Importing will replace all of your current tasks and settings with what's in this file. Continue?",
+  },
+  hr: {
+    'login.title': 'Prijava',
+    'login.username': 'Korisničko ime',
+    'login.password': 'Lozinka',
+    'login.submit': 'Prijava',
+
+    'common.close': 'Zatvori',
+    'common.cancel': 'Odustani',
+    'common.save': 'Spremi',
+    'common.ok': 'U redu',
+    'common.add': 'Dodaj',
+    'common.delete': 'Izbriši',
+    'common.edit': 'Uredi',
+    'common.remove': 'Ukloni',
+    'common.clickAgainToDelete': 'Kliknite ponovno za brisanje',
+
+    'avatar.accountMenu': 'Izbornik računa',
+    'menu.manageTasks': 'Upravljanje zadacima…',
+    'menu.settings': 'Postavke…',
+    'menu.logout': 'Odjava',
+    'menu.logoutTitle': 'Odjava (za testiranje zaslona za prijavu)',
+
+    'app.titleGeneric': 'Popis obveza',
+    'app.titleWithName': 'Popis obveza – {name}',
+
+    'month.prev': 'Prethodni mjesec',
+    'month.next': 'Sljedeći mjesec',
+    'month.jumpToCurrent': 'Skoči na trenutni mjesec',
+    'view.pending': 'Zadaci na čekanju i zakašnjeli ovaj mjesec',
+    'view.next': 'Sljedeće ponavljanje svakog zadatka',
+    'view.all': 'Svi zadaci ovaj mjesec',
+
+    'todo.addTask': '+ Dodaj zadatak',
+    'todo.addTaskDue': 'Dodaj zadatak s rokom {date}',
+    'todo.empty': 'Još nemate zadataka.',
+    'todo.today': 'Danas',
+    'todo.yesterday': 'Jučer',
+    'todo.tomorrow': 'Sutra',
+    'todo.tomorrowAllDay': 'Sutra, cijeli dan',
+    'todo.tomorrowAt': 'Sutra, {time}',
+    'todo.allDay': 'Cijeli dan',
+    'todo.due': 'Rok: {time}',
+    'todo.overdueSince': 'Zakašnjelo od {date}',
+    'todo.overdueSinceAt': 'Zakašnjelo od {date} {time}',
+    'todo.failedWasDue': 'Neuspješno – rok je bio {date}',
+    'todo.failedWasDueAt': 'Neuspješno – rok je bio {date} {time}',
+    'todo.timerElapsed': 'Ukupno proteklo vrijeme: {elapsed}',
+    'todo.timerElapsedPlanned': 'Ukupno proteklo vrijeme: {elapsed} od planiranih {planned}',
+    'todo.timerRemainingOfTotal': '{remaining} od {total}',
+    'todo.stopWorking': 'Prestani raditi na ovom zadatku',
+    'todo.workOnNow': 'Radi na ovom zadatku sada',
+    'todo.showUndo': 'Prikaži (poništi skrivanje)',
+    'todo.hideRemove': 'Sakrij (ukloni s popisa)',
+
+    'menu.timer': 'Mjerač vremena',
+    'menu.pauseTimer': 'Pauziraj mjerač vremena',
+    'menu.cancelTimer': 'Odustani od mjerača vremena',
+    'menu.resumeTimer': 'Nastavi mjerač vremena',
+    'menu.markDone': 'Označi kao obavljeno',
+    'menu.markFailed': 'Označi kao neuspješno',
+    'menu.focus': 'Fokusiraj',
+    'menu.unfocus': 'Ukloni fokus',
+    'menu.show': 'Prikaži',
+    'menu.hide': 'Sakrij',
+    'menu.taskStats': 'Statistika zadatka',
+
+    'sidePanel.empty': 'Kliknite zadatak za prikaz bilješki i povijesti.',
+    'sidePanel.occurrence': 'Pojava',
+    'sidePanel.occurrenceTitle': 'Samo ova pojava',
+    'sidePanel.task': 'Zadatak',
+    'sidePanel.taskTitle': 'Svaki dio ovog zadatka',
+    'sidePanel.series': 'Niz',
+    'sidePanel.seriesTitle': 'Svaki zadatak u ovom nizu',
+    'sidePanel.commentPlaceholder': 'Dodajte bilješku o ovom zadatku…',
+    'sidePanel.addNote': 'Dodaj bilješku',
+    'sidePanel.notes': 'Bilješke',
+    'sidePanel.activity': 'Aktivnost',
+    'sidePanel.noNotes': 'Još nema bilješki.',
+    'sidePanel.noActivity': 'Još nema aktivnosti.',
+    'sidePanel.editNote': 'Uredi bilješku',
+    'sidePanel.noteLabel': 'Bilješka',
+    'sidePanel.done': 'Gotovo',
+    'sidePanel.stopEditing': 'Prestani uređivati/brisati bilješke',
+    'sidePanel.editOrDelete': 'Uredi ili izbriši bilješke',
+
+    'timer.setTitle': 'Postavi mjerač vremena',
+    'timer.countUp': 'Broji unaprijed (bez fiksnog trajanja – automatski se zaustavlja nakon 6 sati)',
+    'timer.minutesLabel': 'Minute rada na ovom zadatku',
+    'timer.continuePastZero': 'Nastavi odbrojavati ispod nule umjesto zaustavljanja',
+    'timer.start': 'Pokreni',
+    'timer.set': 'Postavi',
+
+    'taskForm.editOccurrence': 'Uredi ovu pojavu',
+    'taskForm.editFollowing': 'Uredi ovu i sljedeće pojave',
+    'taskForm.editTask': 'Uredi zadatak',
+    'taskForm.addTask': 'Dodaj zadatak',
+    'taskForm.name': 'Naziv',
+    'taskForm.description': 'Opis',
+    'taskForm.details': 'Detalji',
+    'taskForm.dueDate': 'Datum dospijeća',
+    'taskForm.allDay': 'Cijeli dan (bez određenog vremena)',
+    'taskForm.dueTime': 'Vrijeme dospijeća',
+    'taskForm.repeatsEvery': 'Ponavlja se svakih',
+    'taskForm.days': 'dan(a)',
+    'taskForm.weeks': 'tjedan(a)',
+    'taskForm.months': 'mjesec(a)',
+    'taskForm.weekdayMon': 'Pon',
+    'taskForm.weekdayTue': 'Uto',
+    'taskForm.weekdayWed': 'Sri',
+    'taskForm.weekdayThu': 'Čet',
+    'taskForm.weekdayFri': 'Pet',
+    'taskForm.weekdaySat': 'Sub',
+    'taskForm.weekdaySun': 'Ned',
+    'taskForm.sunday': 'Nedjelja',
+    'taskForm.monday': 'Ponedjeljak',
+    'taskForm.tuesday': 'Utorak',
+    'taskForm.wednesday': 'Srijeda',
+    'taskForm.thursday': 'Četvrtak',
+    'taskForm.friday': 'Petak',
+    'taskForm.saturday': 'Subota',
+    'taskForm.alsoRecurOn': 'Također se ponavlja ovim danima (samo tjedno; ostavite prazno za dan u tjednu datuma dospijeća)',
+    'taskForm.monthlyPattern': 'Mjesečni obrazac',
+    'taskForm.monthlySameDay': 'Isti dan u mjesecu kao datum dospijeća',
+    'taskForm.monthlyLastDay': 'Zadnji dan u mjesecu',
+    'taskForm.monthlyBeforeLast': 'N dana prije zadnjeg dana u mjesecu',
+    'taskForm.monthlyWeekday': 'N-ti dan u tjednu u mjesecu',
+    'taskForm.monthlyMultiWeekday': 'Najranija N-ta pojava bilo kojeg od odabranih dana',
+    'taskForm.monthlyMultiWeekdayOffset': 'N dana prije/poslije najranije N-te pojave bilo kojeg od odabranih dana',
+    'taskForm.monthlyMultiDay': 'Više dana u mjesecu (1-28)',
+    'taskForm.monthlyOffsetLabel': 'Dana prije zadnjeg dana u mjesecu (0-3)',
+    'taskForm.dayOfWeek': 'Dan u tjednu',
+    'taskForm.whichOccurrence': 'Koja pojava',
+    'taskForm.ordinal1': '1.',
+    'taskForm.ordinal2': '2.',
+    'taskForm.ordinal3': '3.',
+    'taskForm.ordinal4': '4.',
+    'taskForm.ordinal5': '5.',
+    'taskForm.ordinalLast': 'Zadnja',
+    'taskForm.selectedDays': 'Odabrani dani (najranija N-ta pojava bilo kojeg od njih)',
+    'taskForm.daysInline': 'dana',
+    'taskForm.before': 'Prije',
+    'taskForm.after': 'Poslije',
+    'taskForm.occurrenceWord': 'pojava',
+    'taskForm.occurrenceHr': '. pojava',
+    'taskForm.multiDayDays': 'Dani u mjesecu (1-28)',
+    'taskForm.endDate': 'Datum završetka (neobavezno – zadnje ponavljanje na ili prije ovog datuma)',
+    'taskForm.appointmentDesc':
+      "Termin – datum dospijeća je rok, a ne stalni podsjetnik: ako nije obavljen do tada, označava se kao neuspješan (precrtano, crveno) umjesto da ostane zakašnjelo. Ipak se može naknadno označiti kao obavljeno.",
+    'taskForm.passiveDesc':
+      "Pasivno – običan podsjetnik, a ne izvediv zadatak: ne može se fokusirati niti mjeriti vrijeme, a njegova kvačica označava neuspjeh umjesto dovršenosti. Nikad se automatski ne rješava nakon isteka roka – ostaje vidljivo dok ga ne označite neuspješnim ili, kad više nije na redu za danas, ga uklonite.",
+    'taskForm.endDateBeforeDue': 'Datum završetka ne može biti prije datuma dospijeća.',
+
+    'manualOccurrence.title': 'Dodaj ručnu pojavu',
+    'manualOccurrence.cantAdd': 'Nije moguće dodati ručnu pojavu – ovaj se zadatak već ponavlja bez ograničenja',
+    'manualOccurrence.add': 'Dodaj ručnu pojavu',
+    'manualOccurrence.endDateTooEarly': 'Datum dospijeća ne može biti raniji od datuma završetka izvornog ponavljanja.',
+
+    'manage.title': 'Popis zadataka',
+    'manage.selectSeries': 'Odaberite niz slijeva za njegovo uređivanje.',
+    'manage.addNewTask': '+ Dodaj novi zadatak',
+    'manage.seriesNamePlaceholder': 'Naziv niza',
+    'manage.saved': 'Spremljeno',
+    'manage.noTasksYet': 'Još nema zadataka.',
+    'manage.resetName': 'Vrati naziv na naziv niza',
+    'manage.removeFromSeries': 'Ukloni iz niza',
+
+    'editScope.title': 'Uredi ponavljajući zadatak',
+    'editScope.desc': 'Ovaj se zadatak ponavlja. Što želite urediti?',
+    'editScope.instance': 'Samo ovu pojavu',
+    'editScope.following': 'Ovu i sljedeće pojave',
+    'editScope.all': 'Sve pojave',
+
+    'taskStats.title': 'Statistika: {name}',
+    'taskStats.totalFocusedAllRecurrences': 'Ukupno vrijeme fokusa (sva ponavljanja)',
+    'taskStats.totalFocused': 'Ukupno vrijeme fokusa',
+    'taskStats.total': 'Ukupno',
+    'taskStats.justFocused': 'Samo fokusirano',
+    'taskStats.focusedWithTimer': 'Fokusirano uz mjerač vremena',
+    'taskStats.completion': 'Dovršenost',
+    'taskStats.completed': 'Dovršeno',
+    'taskStats.recurrencesToDate': 'Ponavljanja do danas',
+    'taskStats.completionRate': 'Stopa dovršenosti',
+    'taskStats.timePerRecurrence': 'Vrijeme po ponavljanju',
+    'taskStats.noFocusedTime': 'Još nije zabilježeno vrijeme fokusa.',
+    'taskStats.focusedAndTimer': '{focused} fokusirano · {timer} mjerač',
+
+    'settings.title': 'Postavke',
+    'settings.nickname': 'Nadimak',
+    'settings.nicknamePlaceholder': 'npr. Nikola',
+    'settings.timeFormat': 'Format vremena',
+    'settings.timeFormat24': '24-satni (npr. 18:00)',
+    'settings.timeFormat12': '12-satni (npr. 6:00 PM)',
+    'settings.language': 'Jezik',
+    'settings.languageEnglish': 'English (engleski)',
+    'settings.languageCroatian': 'Hrvatski',
+    'settings.avatar': 'Avatar',
+    'settings.uploadImage': 'Učitaj sliku…',
+    'settings.background': 'Pozadina',
+    'settings.changeBackground': 'Promijeni pozadinu…',
+    'settings.data': 'Podaci',
+    'settings.downloadData': 'Preuzmi moje podatke…',
+    'settings.importData': 'Uvezi podatke…',
+
+    'background.title': 'Promjena pozadine',
+    'background.accessKeyLabel': 'Unsplash API ključ',
+    'background.accessKeyPlaceholder': 'Zalijepite svoj Unsplash API ključ',
+    'background.hint':
+      'Pozadine se preuzimaju putem <a href="https://unsplash.com/developers" target="_blank" rel="noopener">Unsplashovog besplatnog razvojnog API-ja</a>. Ondje izradite besplatnu aplikaciju i zalijepite ovdje njezin pristupni ključ — sprema se samo na ovom uređaju, odvojeno od podataka o vašim zadacima.',
+    'background.saveKey': 'Spremi ključ',
+    'background.searchPlaceholder': 'Pretraži Unsplash, npr. planine, minimalizam, more',
+    'background.search': 'Pretraži',
+    'background.loading': 'Učitavanje…',
+    'background.noResults': 'Nema rezultata.',
+    'background.usePhoto': 'Koristi ovu fotografiju – autor {name} na Unsplashu',
+    'background.keyRejected': 'Taj Unsplash API ključ je odbijen – provjerite ga i pokušajte ponovno.',
+    'background.rateLimited': 'Dosegnuto je ograničenje besplatnog Unsplash plana za ovaj ključ – pokušajte ponovno za koji trenutak.',
+    'background.requestFailed': 'Unsplash zahtjev nije uspio ({status}).',
+    'background.creditBy': 'Fotografija autora',
+    'background.creditOn': 'na',
+    'background.creditUnsplashName': 'Unsplashu',
+
+    'data.notJson': 'Ta datoteka nije valjani JSON.',
+    'data.notExport': 'Čini se da ta datoteka nije izvoz podataka iz ove aplikacije.',
+    'data.importConfirm': 'Uvoz će zamijeniti sve vaše trenutne zadatke i postavke sadržajem ove datoteke. Želite li nastaviti?',
+  },
+};
+
+// Falls back to English for any key missing from the current language (lets
+// hr stay incomplete without ever showing a raw key or blank string), then
+// to the key itself if even English is somehow missing it (should never
+// happen in practice -- a visible "raw key" is easier to notice/fix than a
+// silent blank). {placeholder} tokens in the string are replaced from
+// `vars` -- a plain templating scheme, not full ICU pluralization/gendering,
+// which none of these strings need.
+function t(key, vars) {
+  const str = (I18N[currentUserLanguage] && I18N[currentUserLanguage][key]) || I18N.en[key] || key;
+  if (!vars) return str;
+  return str.replace(/\{(\w+)\}/g, (_, name) => (vars[name] != null ? vars[name] : `{${name}}`));
+}
+
+// Maps the app's own language codes to a BCP-47 tag for toLocaleDateString/
+// toLocaleString calls elsewhere (formatDateTime, describeDayLabel,
+// formatMonthLabel) -- lets weekday/month names follow the app's own
+// language setting instead of whatever locale the browser happens to be
+// configured with.
+function currentLocaleTag() {
+  return currentUserLanguage === 'hr' ? 'hr-HR' : 'en-US';
+}
+
+// Walks every element carrying one of these data-i18n* attributes and sets
+// the corresponding property from the current language -- covers all the
+// static chrome across every modal (only ever set once from the HTML
+// otherwise), including ones currently hidden, which is harmless. Dynamic
+// content built in JS (modal titles, list rows, ...) isn't marked up this
+// way -- those call t() directly at the point they're rendered instead, so
+// they're always current without needing a translation pass of their own.
+function applyStaticTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach((el) => {
+    el.innerHTML = t(el.dataset.i18nHtml);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  document.documentElement.lang = currentUserLanguage;
+}
+
 // task.log ({ message, timestamp }[]) is the side panel's short activity
 // history -- lazily created like task.focusLog, not present on every task
 // from the start. Recorded per task record (not per taskId/seriesId); the
@@ -120,8 +636,8 @@ function showFormModal(title, fields, opts = {}) {
   return new Promise((resolve) => {
     modalTitle.textContent = title;
     modalFields.innerHTML = '';
-    modalOk.textContent = opts.okLabel || 'OK';
-    modalCancel.textContent = opts.cancelLabel || 'Cancel';
+    modalOk.textContent = opts.okLabel || t('common.ok');
+    modalCancel.textContent = opts.cancelLabel || t('common.cancel');
 
     // The overlay's DOM (including .modal-actions) is reused across every
     // showFormModal() call in the app, so any delete/secondary button from a
@@ -137,7 +653,7 @@ function showFormModal(title, fields, opts = {}) {
       deleteBtn.onclick = () => {
         if (!deleteArmed) {
           deleteArmed = true;
-          deleteBtn.textContent = 'Click again to delete';
+          deleteBtn.textContent = t('common.clickAgainToDelete');
           deleteBtn.classList.add('confirm');
           return;
         }
@@ -542,7 +1058,12 @@ const USER_PROFILE_STORAGE_KEY = 'advanced-todo-user-profile';
 // loadUnsplashAccessKey) -- that's a per-device API credential, not user
 // data, so it's kept in its own separate storage key and left out of the
 // data export/import too.
-const DEFAULT_USER_PROFILE = { nickname: FAKE_USER_NICKNAME, avatar: null, timeFormat: '24', background: null };
+// language: null means "never chosen or auto-detected yet" -- see
+// detectLanguageAndTimeFormatFromLocation below, which only ever runs once
+// (while this is still null) and then saves a real 'en'/'hr' over it, so a
+// user's own choice in Settings (or a failed detection falling back to
+// 'en') always sticks instead of being silently re-detected on every load.
+const DEFAULT_USER_PROFILE = { nickname: FAKE_USER_NICKNAME, avatar: null, timeFormat: '24', background: null, language: null };
 
 function loadUserProfile(userId = currentUserId) {
   try {
@@ -565,7 +1086,14 @@ async function login(username, password) {
 async function getMe(token) {
   const payload = JSON.parse(atob(token));
   const profile = loadUserProfile(payload.sub);
-  return { id: payload.sub, nickname: profile.nickname, avatar: profile.avatar, timeFormat: profile.timeFormat, background: profile.background };
+  return {
+    id: payload.sub,
+    nickname: profile.nickname,
+    avatar: profile.avatar,
+    timeFormat: profile.timeFormat,
+    background: profile.background,
+    language: profile.language,
+  };
 }
 
 // Set once boot()/the login form resolves a user -- every call site below
@@ -582,6 +1110,57 @@ let currentUserNickname = null;
 let currentUserAvatar = null; // data URL, or null for the initials fallback
 let currentUserTimeFormat = '24'; // '12' | '24' -- see formatTimeOfDay/formatDateTime
 let currentUserBackground = null; // same shape as the profile's background field, or null -- see applyBackground
+let currentUserLanguage = 'en'; // 'en' | 'hr' -- see the i18n section up top (t()/currentLocaleTag())
+
+// Applies a (possibly new) language everywhere it matters -- called on
+// startup and whenever Settings' Save button changes it. No page reload
+// needed: every dynamic string call t() fresh at render time (see the i18n
+// section up top), so re-running the renders below is enough to pick up the
+// change immediately, the same as any other Settings field.
+function applyLanguage(language) {
+  currentUserLanguage = language;
+  applyStaticTranslations();
+  renderAppTitle();
+  renderTodo();
+  renderSidePanel();
+  refreshTodoManageModal();
+}
+
+// Free, keyless IP geolocation (no account/API key to configure, unlike
+// Unsplash) -- runs at most once per profile, the first time it's ever
+// loaded (see DEFAULT_USER_PROFILE.language), to guess a sensible starting
+// language + time format instead of always defaulting to English/24-hour
+// regardless of where the user actually is. Never overrides an explicit
+// choice: both are saved as real (non-null) values right after this runs,
+// successfully or not, so it's a one-time first-run guess, never a
+// recurring override of the user's own Settings.
+const IP_GEOLOCATION_API = 'https://ipwho.is/';
+
+// Countries where a 12-hour clock (with AM/PM) is the everyday convention,
+// as opposed to the 24-hour clock most of the world (including Croatia)
+// uses -- necessarily a rough, incomplete list (this isn't strictly a
+// national standard anywhere), just enough to get a sensible default rather
+// than none at all. The user can always override it in Settings regardless.
+const TWELVE_HOUR_CLOCK_COUNTRIES = new Set(['US', 'CA', 'AU', 'NZ', 'PH', 'IN', 'EG', 'SA', 'CO', 'PK']);
+
+async function detectLanguageAndTimeFormatFromLocation() {
+  let countryCode = null;
+  try {
+    const res = await fetch(IP_GEOLOCATION_API);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success !== false && data.country_code) countryCode = data.country_code;
+    }
+  } catch {
+    // Offline, blocked, or the service is down -- fall through to the
+    // English/24-hour default below rather than leaving language null
+    // forever (which would just retry, silently, on every future load).
+  }
+  return {
+    language: countryCode === 'HR' ? 'hr' : 'en',
+    timeFormat: countryCode && TWELVE_HOUR_CLOCK_COUNTRIES.has(countryCode) ? '12' : '24',
+  };
+}
 
 // Builds the full profile object saveUserProfile expects (it always
 // overwrites the stored blob wholesale, no partial-patch merge) from
@@ -594,6 +1173,7 @@ function currentUserProfileSnapshot() {
     avatar: currentUserAvatar,
     timeFormat: currentUserTimeFormat,
     background: currentUserBackground,
+    language: currentUserLanguage,
   };
 }
 
@@ -880,7 +1460,7 @@ function formatElapsedDuration(totalSeconds) {
 // tomorrow's preview).
 async function startTaskTimerPrompt(task, occurrenceDate) {
   const result = await showFormModal(
-    'Set a timer',
+    t('timer.setTitle'),
     [
       {
         name: 'countUp',
@@ -888,11 +1468,11 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
         type: 'checkboxes',
         value: [],
         required: false,
-        options: [{ value: 'countUp', label: 'Count up (no fixed duration -- stops automatically after 6 hours)' }],
+        options: [{ value: 'countUp', label: t('timer.countUp') }],
       },
       {
         name: 'minutes',
-        label: 'Minutes to work on this task',
+        label: t('timer.minutesLabel'),
         type: 'number',
         value: '25',
         min: 1,
@@ -905,11 +1485,11 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
         type: 'checkboxes',
         value: ['continuePastZero'],
         required: false,
-        options: [{ value: 'continuePastZero', label: 'Continue counting down past zero instead of stopping' }],
+        options: [{ value: 'continuePastZero', label: t('timer.continuePastZero') }],
         disableIf: (v) => v.countUp.length > 0,
       },
     ],
-    { okLabel: 'Start', secondaryLabel: 'Set' }
+    { okLabel: t('timer.start'), secondaryLabel: t('timer.set') }
   );
   if (!result) return;
   const countUp = result.countUp.length > 0;
@@ -1047,39 +1627,39 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
   if (isFutureItem) {
     // Nothing below applies to a not-yet-due preview -- see above.
   } else if (!timerIsHere) {
-    if (canWorkOnNow) addItem(0, 'Timer', () => startTaskTimerPrompt(task, occurrenceDate));
+    if (canWorkOnNow) addItem(0, t('menu.timer'), () => startTaskTimerPrompt(task, occurrenceDate));
   } else if (isActiveHere) {
-    addItem(0, 'Pause timer', () => {
+    addItem(0, t('menu.pauseTimer'), () => {
       setActiveTaskId(null);
       renderTodo();
     });
-    addItem(0, 'Cancel timer', () => cancelTaskTimer(task));
+    addItem(0, t('menu.cancelTimer'), () => cancelTaskTimer(task));
   } else {
     if (canWorkOnNow) {
-      addItem(0, 'Resume timer', () => {
+      addItem(0, t('menu.resumeTimer'), () => {
         setActiveTaskId(task.id, occurrenceDate);
         renderTodo();
       });
     }
-    addItem(0, 'Cancel timer', () => cancelTaskTimer(task));
+    addItem(0, t('menu.cancelTimer'), () => cancelTaskTimer(task));
   }
 
   if (!isFutureItem) {
     if (!task.passive && !completed) {
-      addItem(1, 'Mark as done', () => toggleTaskCompletion(task, occurrenceDate));
+      addItem(1, t('menu.markDone'), () => toggleTaskCompletion(task, occurrenceDate));
     }
     if (task.passive && !failed) {
-      addItem(1, 'Mark as failed', () => toggleTaskFailedMark(task, occurrenceDate));
+      addItem(1, t('menu.markFailed'), () => toggleTaskFailedMark(task, occurrenceDate));
     }
 
     if (canWorkOnNow && !isActiveHere) {
-      addItem(1, 'Focus', () => {
+      addItem(1, t('menu.focus'), () => {
         setActiveTaskId(task.id, occurrenceDate);
         renderTodo();
       });
     }
     if (isActiveHere) {
-      addItem(1, 'Unfocus', () => {
+      addItem(1, t('menu.unfocus'), () => {
         setActiveTaskId(null);
         renderTodo();
       });
@@ -1087,15 +1667,15 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
 
     if (kind === 'carried-over') {
       if (task.dismissed[occurrenceDate]) {
-        addItem(1, 'Show', () => restoreOccurrence(task, occurrenceDate));
+        addItem(1, t('menu.show'), () => restoreOccurrence(task, occurrenceDate));
       } else {
-        addItem(1, 'Hide', () => dismissOccurrence(task, occurrenceDate));
+        addItem(1, t('menu.hide'), () => dismissOccurrence(task, occurrenceDate));
       }
     }
   }
 
-  addItem(2, 'Edit', () => editTaskOccurrence(task, occurrenceDate));
-  addItem(3, 'Task stats', () => showTaskStatsModal(task));
+  addItem(2, t('common.edit'), () => editTaskOccurrence(task, occurrenceDate));
+  addItem(3, t('menu.taskStats'), () => showTaskStatsModal(task));
 
   for (const group of groups) {
     if (!group.length) continue;
@@ -1192,7 +1772,7 @@ function formatTimeOfDay(hhmm) {
 // only the hour cycle is forced one way or the other instead of following
 // whatever the browser's locale would otherwise pick.
 function formatDateTime(timestamp) {
-  return new Date(timestamp).toLocaleString(undefined, { hour12: currentUserTimeFormat === '12' });
+  return new Date(timestamp).toLocaleString(currentLocaleTag(), { hour12: currentUserTimeFormat === '12' });
 }
 
 // The bare "st"/"nd"/"rd"/"th" suffix for a number, ignoring ORDINAL_LABELS'
@@ -1256,67 +1836,86 @@ function describeTaskSchedule(task) {
   return withEnd;
 }
 
+// Every one of these option lists is a function, not a plain array -- called
+// fresh each time openTaskForm actually builds the field list, so a
+// language change (see applyLanguage) is reflected the next time the form
+// opens, rather than being frozen into whatever language was active the
+// first time this module-level code happened to run.
+
 // The "Repeats every N ..." unit dropdown -- see the 'repeats' field group
 // in openTaskForm. No "once" option: that's the group's own checkbox.
-const FREQUENCY_OPTIONS = [
-  { value: 'days', label: 'day(s)' },
-  { value: 'weeks', label: 'week(s)' },
-  { value: 'months', label: 'month(s)' },
-];
+function getFrequencyOptions() {
+  return [
+    { value: 'days', label: t('taskForm.days') },
+    { value: 'weeks', label: t('taskForm.weeks') },
+    { value: 'months', label: t('taskForm.months') },
+  ];
+}
 
-const WEEKDAY_CHECKBOX_OPTIONS = [
-  { value: '1', label: 'Mon' },
-  { value: '2', label: 'Tue' },
-  { value: '3', label: 'Wed' },
-  { value: '4', label: 'Thu' },
-  { value: '5', label: 'Fri' },
-  { value: '6', label: 'Sat' },
-  { value: '0', label: 'Sun' },
-];
+function getWeekdayCheckboxOptions() {
+  return [
+    { value: '1', label: t('taskForm.weekdayMon') },
+    { value: '2', label: t('taskForm.weekdayTue') },
+    { value: '3', label: t('taskForm.weekdayWed') },
+    { value: '4', label: t('taskForm.weekdayThu') },
+    { value: '5', label: t('taskForm.weekdayFri') },
+    { value: '6', label: t('taskForm.weekdaySat') },
+    { value: '0', label: t('taskForm.weekdaySun') },
+  ];
+}
 
-const WEEKDAY_SELECT_OPTIONS = [
-  { value: '0', label: 'Sunday' },
-  { value: '1', label: 'Monday' },
-  { value: '2', label: 'Tuesday' },
-  { value: '3', label: 'Wednesday' },
-  { value: '4', label: 'Thursday' },
-  { value: '5', label: 'Friday' },
-  { value: '6', label: 'Saturday' },
-];
+function getWeekdaySelectOptions() {
+  return [
+    { value: '0', label: t('taskForm.sunday') },
+    { value: '1', label: t('taskForm.monday') },
+    { value: '2', label: t('taskForm.tuesday') },
+    { value: '3', label: t('taskForm.wednesday') },
+    { value: '4', label: t('taskForm.thursday') },
+    { value: '5', label: t('taskForm.friday') },
+    { value: '6', label: t('taskForm.saturday') },
+  ];
+}
 
-const MONTHLY_MODE_OPTIONS = [
-  { value: 'day', label: 'Same day of month as due date' },
-  { value: 'last', label: 'Last day of month' },
-  { value: 'before-last', label: 'N days before last day of month' },
-  { value: 'weekday', label: 'Nth weekday of month' },
-  { value: 'multi-weekday', label: 'Earliest Nth occurrence of any of the selected days' },
-  { value: 'multi-weekday-offset', label: 'N days before/after earliest Nth occurrence of any of the selected days' },
-  { value: 'multi-day', label: 'Multiple days of month (1-28)' },
-];
+function getMonthlyModeOptions() {
+  return [
+    { value: 'day', label: t('taskForm.monthlySameDay') },
+    { value: 'last', label: t('taskForm.monthlyLastDay') },
+    { value: 'before-last', label: t('taskForm.monthlyBeforeLast') },
+    { value: 'weekday', label: t('taskForm.monthlyWeekday') },
+    { value: 'multi-weekday', label: t('taskForm.monthlyMultiWeekday') },
+    { value: 'multi-weekday-offset', label: t('taskForm.monthlyMultiWeekdayOffset') },
+    { value: 'multi-day', label: t('taskForm.monthlyMultiDay') },
+  ];
+}
 
 // Capped at 28 (not 31) so every selected day exists in every month --
 // avoids the ambiguity of what a 30th or 31st should do in a 28/29/30-day
 // month (unlike dayMode 'day', which has an explicit clamp-to-last-day rule
 // for exactly that case; a multi-day list has no single anchor day to
-// clamp, so this just sidesteps the question instead).
+// clamp, so this just sidesteps the question instead). Plain numbers, not
+// translated text, so this stays a plain array rather than a function.
 const MONTH_DAY_CHECKBOX_OPTIONS = Array.from({ length: 28 }, (_, i) => ({
   value: String(i + 1),
   label: String(i + 1),
 }));
 
-const BEFORE_AFTER_OPTIONS = [
-  { value: 'before', label: 'Before' },
-  { value: 'after', label: 'After' },
-];
+function getBeforeAfterOptions() {
+  return [
+    { value: 'before', label: t('taskForm.before') },
+    { value: 'after', label: t('taskForm.after') },
+  ];
+}
 
-const ORDINAL_OPTIONS = [
-  { value: '1', label: '1st' },
-  { value: '2', label: '2nd' },
-  { value: '3', label: '3rd' },
-  { value: '4', label: '4th' },
-  { value: '5', label: '5th' },
-  { value: 'last', label: 'Last' },
-];
+function getOrdinalOptions() {
+  return [
+    { value: '1', label: t('taskForm.ordinal1') },
+    { value: '2', label: t('taskForm.ordinal2') },
+    { value: '3', label: t('taskForm.ordinal3') },
+    { value: '4', label: t('taskForm.ordinal4') },
+    { value: '5', label: t('taskForm.ordinal5') },
+    { value: 'last', label: t('taskForm.ordinalLast') },
+  ];
+}
 
 // Both take the form's whole current values object (not just frequencyType)
 // so they also gate on the 'repeats' checkbox -- otherwise the weekly/
@@ -1339,11 +1938,11 @@ const isMultiWeekdayMonthlyMode = (monthlyMode) => monthlyMode === 'multi-weekda
 async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOptions = {}) {
   const formTitle = splitContext
     ? splitContext.scope === 'instance'
-      ? 'Edit this occurrence'
-      : 'Edit this and following occurrences'
+      ? t('taskForm.editOccurrence')
+      : t('taskForm.editFollowing')
     : existingTask
-      ? 'Edit task'
-      : 'Add task';
+      ? t('taskForm.editTask')
+      : t('taskForm.addTask');
   const formDueDate = splitContext
     ? splitContext.occurrenceDate
     : existingTask
@@ -1352,26 +1951,26 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
   const result = await showFormModal(
     formTitle,
     [
-      { name: 'name', label: 'Name', value: existingTask ? existingTask.name : seriesOptions.nameDefault || '' },
+      { name: 'name', label: t('taskForm.name'), value: existingTask ? existingTask.name : seriesOptions.nameDefault || '' },
       {
         // Single-line like Name, not a textarea like Details -- the to-do
         // list shows this truncated to one line too (see .todo-item-desc),
         // so a multi-line value could never be seen in full there anyway.
         name: 'description',
-        label: 'Description',
+        label: t('taskForm.description'),
         value: existingTask ? existingTask.description : '',
         required: false,
       },
       {
         name: 'details',
-        label: 'Details',
+        label: t('taskForm.details'),
         type: 'textarea',
         value: existingTask ? existingTask.details : '',
         required: false,
       },
       {
         name: 'dueDate',
-        label: 'Due date',
+        label: t('taskForm.dueDate'),
         type: 'date',
         value: formDueDate,
       },
@@ -1380,12 +1979,12 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         label: '',
         type: 'checkboxes',
         value: existingTask && existingTask.allDay ? ['allDay'] : [],
-        options: [{ value: 'allDay', label: 'All day (no specific time)' }],
+        options: [{ value: 'allDay', label: t('taskForm.allDay') }],
         required: false,
       },
       {
         name: 'dueTime',
-        label: 'Due time',
+        label: t('taskForm.dueTime'),
         type: 'time',
         value: existingTask ? existingTask.dueTime || '18:00' : '18:00',
         showIf: (v) => v.allDay.length === 0,
@@ -1395,7 +1994,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
           name: 'repeats',
           type: 'checkboxes',
           value: existingTask && existingTask.frequency.type !== 'once' ? ['repeats'] : [],
-          options: [{ value: 'repeats', label: 'Repeats every' }],
+          options: [{ value: 'repeats', label: t('taskForm.repeatsEvery') }],
           required: false,
         },
         {
@@ -1411,61 +2010,61 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
           name: 'frequencyType',
           type: 'select',
           value: existingTask && existingTask.frequency.type !== 'once' ? existingTask.frequency.type : 'days',
-          options: FREQUENCY_OPTIONS,
+          options: getFrequencyOptions(),
           inlineWidth: '100px',
           disableIf: (v) => v.repeats.length === 0,
         },
       ],
       {
         name: 'weekdays',
-        label: "Also recur on these days (weekly only; leave blank to just use the due date's weekday)",
+        label: t('taskForm.alsoRecurOn'),
         type: 'checkboxes',
         value: existingTask && existingTask.frequency.weekdays ? existingTask.frequency.weekdays.map(String) : [],
-        options: WEEKDAY_CHECKBOX_OPTIONS,
+        options: getWeekdayCheckboxOptions(),
         gridColumns: 4,
         required: false,
         showIf: (v) => isWeeklyFrequencyType(v),
       },
       {
         name: 'monthlyMode',
-        label: 'Monthly pattern',
+        label: t('taskForm.monthlyPattern'),
         type: 'select',
         value: existingTask ? existingTask.frequency.dayMode || 'day' : 'day',
-        options: MONTHLY_MODE_OPTIONS,
+        options: getMonthlyModeOptions(),
         showIf: (v) => isMonthlyFrequencyType(v),
       },
       {
         name: 'monthlyOffset',
-        label: 'Days before last day of month (0-3)',
+        label: t('taskForm.monthlyOffsetLabel'),
         value: existingTask && existingTask.frequency.offset != null ? String(existingTask.frequency.offset) : '0',
         required: false,
         showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'before-last',
       },
       {
         name: 'monthlyWeekday',
-        label: 'Day of week',
+        label: t('taskForm.dayOfWeek'),
         type: 'select',
         value: existingTask && existingTask.frequency.weekday != null ? String(existingTask.frequency.weekday) : '1',
-        options: WEEKDAY_SELECT_OPTIONS,
+        options: getWeekdaySelectOptions(),
         showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
       },
       {
         name: 'monthlyOrdinal',
-        label: 'Which occurrence',
+        label: t('taskForm.whichOccurrence'),
         type: 'select',
         value: existingTask && existingTask.frequency.ordinal != null ? String(existingTask.frequency.ordinal) : '1',
-        options: ORDINAL_OPTIONS,
+        options: getOrdinalOptions(),
         showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
       },
       {
         name: 'multiWeekdayDays',
-        label: 'Selected days (earliest Nth occurrence of any of these)',
+        label: t('taskForm.selectedDays'),
         type: 'checkboxes',
         value:
           existingTask && existingTask.frequency.weekdays && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
             ? existingTask.frequency.weekdays.map(String)
             : [],
-        options: WEEKDAY_CHECKBOX_OPTIONS,
+        options: getWeekdayCheckboxOptions(),
         gridColumns: 4,
         showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
       },
@@ -1493,7 +2092,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         },
         {
           type: 'static',
-          text: () => 'days',
+          text: () => t('taskForm.daysInline'),
           showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
         },
         {
@@ -1503,7 +2102,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
             existingTask && existingTask.frequency.offsetDirection && existingTask.frequency.dayMode === 'multi-weekday-offset'
               ? existingTask.frequency.offsetDirection
               : 'before',
-          options: BEFORE_AFTER_OPTIONS,
+          options: getBeforeAfterOptions(),
           inlineWidth: '90px',
           showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
         },
@@ -1521,14 +2120,21 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         },
         {
           type: 'static',
-          text: (v) => `${ordinalSuffix(parseInt(v.multiWeekdayOrdinal, 10) || 1)} occurrence`,
+          // Croatian ordinals are just "N." (no letter suffix like English's
+          // "1st"/"2nd"/"3rd") -- the number itself already shown by the
+          // input right before this, so this only ever supplies the trailing
+          // punctuation/word, not the ordinal itself, in either language.
+          text: (v) =>
+            currentUserLanguage === 'hr'
+              ? t('taskForm.occurrenceHr')
+              : `${ordinalSuffix(parseInt(v.multiWeekdayOrdinal, 10) || 1)} ${t('taskForm.occurrenceWord')}`,
           tightGap: true,
           showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
         },
       ],
       {
         name: 'multiDayDays',
-        label: 'Days of the month (1-28)',
+        label: t('taskForm.multiDayDays'),
         type: 'checkboxes',
         value:
           existingTask && existingTask.frequency.days && existingTask.frequency.dayMode === 'multi-day'
@@ -1539,7 +2145,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       },
       {
         name: 'endDate',
-        label: 'End date (optional -- last recurrence on or before this date)',
+        label: t('taskForm.endDate'),
         type: 'date',
         value: existingTask && existingTask.endDate ? existingTask.endDate : '',
         required: false,
@@ -1550,13 +2156,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         label: '',
         type: 'checkboxes',
         value: existingTask && existingTask.appointment ? ['appointment'] : [],
-        options: [
-          {
-            value: 'appointment',
-            label:
-              "Appointment -- its due date is an expiration, not a standing reminder: if not done by then, it's marked failed (crossed out, red) instead of staying overdue. Can still be checked off as done afterward.",
-          },
-        ],
+        options: [{ value: 'appointment', label: t('taskForm.appointmentDesc') }],
         required: false,
       },
       {
@@ -1564,17 +2164,11 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         label: '',
         type: 'checkboxes',
         value: existingTask && existingTask.passive ? ['passive'] : [],
-        options: [
-          {
-            value: 'passive',
-            label:
-              "Passive -- a plain reminder, not an actionable task: can't be focused on or timed, and its checkbox marks it failed instead of done. Never auto-resolves once overdue -- stays visible until you mark it failed or, once it's no longer due today, dismiss it.",
-          },
-        ],
+        options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
         required: false,
       },
     ],
-    { okLabel: existingTask ? 'Save' : 'Add', deleteLabel: existingTask ? 'Delete' : undefined }
+    { okLabel: existingTask ? t('common.save') : t('common.add'), deleteLabel: existingTask ? t('common.delete') : undefined }
   );
 
   if (result === MODAL_DELETE_RESULT) {
@@ -1596,7 +2190,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
 
   const endDate = result.endDate || null;
   if (endDate && endDate < result.dueDate) {
-    alert('End date can\'t be before the due date.');
+    alert(t('taskForm.endDateBeforeDue'));
     return;
   }
 
@@ -2485,7 +3079,7 @@ function updateTodoMonthNav() {
   if (isNextRecurrence) return;
   todoMonthLabelEl.textContent = formatMonthLabel(viewedMonthKey);
   const isCurrentMonth = viewedMonthKey === monthKeyOf(Recurrence.dateToISO(new Date()));
-  todoMonthLabelEl.title = isCurrentMonth ? '' : 'Jump to current month';
+  todoMonthLabelEl.title = isCurrentMonth ? '' : t('month.jumpToCurrent');
 }
 
 todoMonthPrevBtn.onclick = () => {
@@ -2511,12 +3105,12 @@ function renderTodoEmptyState() {
 
   const message = document.createElement('div');
   message.className = 'empty-state';
-  message.textContent = 'You have no to-dos yet.';
+  message.textContent = t('todo.empty');
   todoListEl.appendChild(message);
 
   const btn = document.createElement('button');
   btn.className = 'accent-btn';
-  btn.textContent = '+ Add task';
+  btn.textContent = t('todo.addTask');
   btn.onclick = () => openTaskForm(null);
   todoListEl.appendChild(btn);
 }
@@ -2527,17 +3121,17 @@ function renderTodoEmptyState() {
 // gets its plain weekday + date, since "3 days ago" style phrasing wasn't
 // asked for.
 function describeDayLabel(dateISO, todayISO) {
-  const dateStr = new Date(dateISO + 'T00:00:00').toLocaleDateString(undefined, {
+  const dateStr = new Date(dateISO + 'T00:00:00').toLocaleDateString(currentLocaleTag(), {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
   });
-  if (dateISO === todayISO) return `Today, ${dateStr}`;
+  if (dateISO === todayISO) return `${t('todo.today')}, ${dateStr}`;
   if (dateISO === Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), -1))) {
-    return `Yesterday, ${dateStr}`;
+    return `${t('todo.yesterday')}, ${dateStr}`;
   }
   if (dateISO === Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), 1))) {
-    return `Tomorrow, ${dateStr}`;
+    return `${t('todo.tomorrow')}, ${dateStr}`;
   }
   return dateStr;
 }
@@ -2669,28 +3263,34 @@ function buildTodoItemRow(item, isToday) {
     const timer = item.task.timer;
     const remaining = currentTimerRemaining(timer);
     if (timer.mode === 'countup') {
-      meta.textContent = `Total elapsed time is ${formatElapsedDuration(timerElapsedSeconds(timer))}`;
+      meta.textContent = t('todo.timerElapsed', { elapsed: formatElapsedDuration(timerElapsedSeconds(timer)) });
     } else if (remaining < 0) {
-      meta.textContent = `Total elapsed time is ${formatElapsedDuration(timerElapsedSeconds(timer))} with ${formatElapsedDuration(timer.totalSeconds)} planned`;
+      meta.textContent = t('todo.timerElapsedPlanned', {
+        elapsed: formatElapsedDuration(timerElapsedSeconds(timer)),
+        planned: formatElapsedDuration(timer.totalSeconds),
+      });
     } else {
-      meta.textContent = `${formatTimerDuration(remaining)} of ${formatTimerDuration(timer.totalSeconds)}`;
+      meta.textContent = t('todo.timerRemainingOfTotal', {
+        remaining: formatTimerDuration(remaining),
+        total: formatTimerDuration(timer.totalSeconds),
+      });
     }
   } else {
     meta.textContent = item.task.allDay
       ? item.kind === 'tomorrow'
-        ? 'Tomorrow, all day'
+        ? t('todo.tomorrowAllDay')
         : item.failed
-          ? `Failed -- was due ${item.occurrenceDate}`
+          ? t('todo.failedWasDue', { date: item.occurrenceDate })
           : item.overdue && !item.completed
-            ? `Overdue since ${item.occurrenceDate}`
-            : 'All day'
+            ? t('todo.overdueSince', { date: item.occurrenceDate })
+            : t('todo.allDay')
       : item.kind === 'tomorrow'
-        ? `Tomorrow, ${formatTimeOfDay(item.task.dueTime)}`
+        ? t('todo.tomorrowAt', { time: formatTimeOfDay(item.task.dueTime) })
         : item.failed
-          ? `Failed -- was due ${item.occurrenceDate} ${formatTimeOfDay(item.task.dueTime)}`
+          ? t('todo.failedWasDueAt', { date: item.occurrenceDate, time: formatTimeOfDay(item.task.dueTime) })
           : item.overdue && !item.completed
-            ? `Overdue since ${item.occurrenceDate} ${formatTimeOfDay(item.task.dueTime)}`
-            : `Due ${formatTimeOfDay(item.task.dueTime)}`;
+            ? t('todo.overdueSinceAt', { date: item.occurrenceDate, time: formatTimeOfDay(item.task.dueTime) })
+            : t('todo.due', { time: formatTimeOfDay(item.task.dueTime) });
   }
   text.appendChild(meta);
 
@@ -2720,7 +3320,7 @@ function buildTodoItemRow(item, isToday) {
     const workOnBtn = document.createElement('button');
     workOnBtn.className = 'todo-focus-btn' + (isActiveHere ? ' active' : '');
     workOnBtn.innerHTML = isActiveHere ? WORKING_ON_ICON : WORK_ON_ICON;
-    workOnBtn.title = isActiveHere ? 'Stop working on this task' : 'Work on this task now';
+    workOnBtn.title = isActiveHere ? t('todo.stopWorking') : t('todo.workOnNow');
     workOnBtn.onclick = (e) => {
       e.stopPropagation();
       setActiveTaskId(isActiveHere ? null : item.task.id, item.occurrenceDate);
@@ -2745,7 +3345,7 @@ function buildTodoItemRow(item, isToday) {
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'todo-focus-btn';
     dismissBtn.innerHTML = isDismissed ? SHOW_ICON : DISMISS_ICON;
-    dismissBtn.title = isDismissed ? 'Show (undo hiding it)' : 'Hide (remove from the list)';
+    dismissBtn.title = isDismissed ? t('todo.showUndo') : t('todo.hideRemove');
     dismissBtn.onclick = (e) => {
       e.stopPropagation();
       if (isDismissed) restoreOccurrence(item.task, item.occurrenceDate);
@@ -2962,7 +3562,7 @@ function renderTodo() {
     const addBtn = document.createElement('button');
     addBtn.className = 'todo-day-add-btn';
     addBtn.textContent = '+';
-    addBtn.title = `Add a task due ${dateISO}`;
+    addBtn.title = t('todo.addTaskDue', { date: dateISO });
     addBtn.onclick = () => openTaskForm(null, undefined, dateISO);
     header.appendChild(addBtn);
 
@@ -3099,7 +3699,7 @@ function buildSidePanelEmptyRow(text) {
 }
 
 async function editCommentPrompt(comment) {
-  const result = await showFormModal('Edit note', [{ name: 'text', label: 'Note', type: 'textarea', value: comment.text }]);
+  const result = await showFormModal(t('sidePanel.editNote'), [{ name: 'text', label: t('sidePanel.noteLabel'), type: 'textarea', value: comment.text }]);
   if (!result) return;
   comment.text = result.text;
   saveTasks();
@@ -3130,7 +3730,7 @@ function buildSidePanelCommentRow(task, comment, showTaskInfo) {
     actions.className = 'side-panel-comment-actions';
 
     const editBtn = document.createElement('button');
-    editBtn.title = 'Edit note';
+    editBtn.title = t('sidePanel.editNote');
     editBtn.innerHTML =
       '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
     editBtn.onclick = () => editCommentPrompt(comment);
@@ -3230,8 +3830,8 @@ function renderSidePanel() {
   const scopeIndex = SIDE_PANEL_SCOPES.indexOf(sidePanelScope);
   sidePanelScopeOpts.forEach((btn, i) => btn.classList.toggle('active', i === scopeIndex));
   updateSidePanelScopeThumb(scopeIndex);
-  sidePanelEditToggleBtn.textContent = sidePanelEditMode ? 'Done' : 'Edit';
-  sidePanelEditToggleBtn.title = sidePanelEditMode ? 'Stop editing/deleting notes' : 'Edit or delete notes';
+  sidePanelEditToggleBtn.textContent = sidePanelEditMode ? t('sidePanel.done') : t('common.edit');
+  sidePanelEditToggleBtn.title = sidePanelEditMode ? t('sidePanel.stopEditing') : t('sidePanel.editOrDelete');
   sidePanelEditToggleBtn.classList.toggle('active', sidePanelEditMode);
 
   const records = sidePanelRecords();
@@ -3258,7 +3858,7 @@ function renderSidePanel() {
     .sort((a, b) => b.comment.timestamp - a.comment.timestamp);
   sidePanelCommentsEl.innerHTML = '';
   if (commentEntries.length === 0) {
-    sidePanelCommentsEl.appendChild(buildSidePanelEmptyRow('No notes yet.'));
+    sidePanelCommentsEl.appendChild(buildSidePanelEmptyRow(t('sidePanel.noNotes')));
   } else {
     for (const { task, comment } of commentEntries) {
       sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(task, comment, showTaskInfo));
@@ -3270,7 +3870,7 @@ function renderSidePanel() {
     .sort((a, b) => b.entry.timestamp - a.entry.timestamp);
   sidePanelLogEl.innerHTML = '';
   if (logEntries.length === 0) {
-    sidePanelLogEl.appendChild(buildSidePanelEmptyRow('No activity yet.'));
+    sidePanelLogEl.appendChild(buildSidePanelEmptyRow(t('sidePanel.noActivity')));
   } else {
     for (const { task, entry } of logEntries) {
       sidePanelLogEl.appendChild(buildSidePanelLogRow(task, entry, showTaskInfo));
@@ -3319,14 +3919,14 @@ function appendDeleteButton(row, onConfirm) {
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
   const confirmIcon =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M11 7h2v8h-2zM11 16h2v2h-2z"/></svg>';
-  deleteBtn.title = 'Delete';
+  deleteBtn.title = t('common.delete');
   deleteBtn.innerHTML = trashIcon;
   let deleteArmed = false;
   deleteBtn.onclick = () => {
     if (!deleteArmed) {
       deleteArmed = true;
       deleteBtn.innerHTML = confirmIcon;
-      deleteBtn.title = 'Click again to delete';
+      deleteBtn.title = t('common.clickAgainToDelete');
       deleteBtn.classList.add('confirm');
     } else {
       onConfirm();
@@ -3336,7 +3936,7 @@ function appendDeleteButton(row, onConfirm) {
     if (!deleteArmed) return;
     deleteArmed = false;
     deleteBtn.innerHTML = trashIcon;
-    deleteBtn.title = 'Delete';
+    deleteBtn.title = t('common.delete');
     deleteBtn.classList.remove('confirm');
   });
   row.appendChild(deleteBtn);
@@ -3354,7 +3954,7 @@ function addMonthsToKey(monthKey, n) {
 
 function formatMonthLabel(monthKey) {
   const [y, m] = monthKey.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return new Date(y, m - 1, 1).toLocaleDateString(currentLocaleTag(), { month: 'long', year: 'numeric' });
 }
 
 // Whether `task` lands on any date within monthKey, without enumerating
@@ -3421,7 +4021,7 @@ function renderTodoManageMonths() {
   if (monthKeys.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'todo-manage-empty';
-    empty.textContent = 'No tasks yet.';
+    empty.textContent = t('manage.noTasksYet');
     todoManageMonthsEl.appendChild(empty);
     return;
   }
@@ -3502,10 +4102,10 @@ async function promptManualOccurrence(sourceTask) {
   // that. Defensive backstop; the button itself is disabled for this case.
   if (isRecurring && !hasEndDate) return;
 
-  const result = await showFormModal('Add manual occurrence', [
+  const result = await showFormModal(t('manualOccurrence.title'), [
     {
       name: 'dueDate',
-      label: 'Due date',
+      label: t('taskForm.dueDate'),
       type: 'date',
       value: Recurrence.dateToISO(new Date()),
       min: hasEndDate ? sourceTask.endDate : undefined,
@@ -3515,12 +4115,12 @@ async function promptManualOccurrence(sourceTask) {
       label: '',
       type: 'checkboxes',
       value: sourceTask.allDay ? ['allDay'] : [],
-      options: [{ value: 'allDay', label: 'All day (no specific time)' }],
+      options: [{ value: 'allDay', label: t('taskForm.allDay') }],
       required: false,
     },
     {
       name: 'dueTime',
-      label: 'Due time',
+      label: t('taskForm.dueTime'),
       type: 'time',
       value: sourceTask.dueTime || '18:00',
       showIf: (v) => v.allDay.length === 0,
@@ -3532,7 +4132,7 @@ async function promptManualOccurrence(sourceTask) {
   // isn't rejected by it, so this is the real guard against resuming the
   // series before it actually stopped.
   if (hasEndDate && result.dueDate < sourceTask.endDate) {
-    alert("Due date can't be earlier than the original recurrence's end date.");
+    alert(t('manualOccurrence.endDateTooEarly'));
     return;
   }
 
@@ -3594,9 +4194,7 @@ function buildSeriesMemberRow(task) {
   // one to add.
   const stillOpenEndedRecurring = task.frequency.type !== 'once' && !task.endDate;
   const addOccurrenceBtn = document.createElement('button');
-  addOccurrenceBtn.title = stillOpenEndedRecurring
-    ? "Can't add a manual occurrence -- this task already recurs indefinitely"
-    : 'Add manual occurrence';
+  addOccurrenceBtn.title = stillOpenEndedRecurring ? t('manualOccurrence.cantAdd') : t('manualOccurrence.add');
   addOccurrenceBtn.disabled = stillOpenEndedRecurring;
   addOccurrenceBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm-8-8h2v2h2v2h-2v2h-2v-2H9v-2h2z"/></svg>';
@@ -3608,7 +4206,7 @@ function buildSeriesMemberRow(task) {
   // the series name and this particular member's name has drifted from it
   // (e.g. it was renamed individually, or predates the series name).
   const resetNameBtn = document.createElement('button');
-  resetNameBtn.title = 'Reset name to match series name';
+  resetNameBtn.title = t('manage.resetName');
   resetNameBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
   resetNameBtn.onclick = () => {
@@ -3620,7 +4218,7 @@ function buildSeriesMemberRow(task) {
   row.appendChild(resetNameBtn);
 
   const editBtn = document.createElement('button');
-  editBtn.title = 'Edit';
+  editBtn.title = t('common.edit');
   editBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
   editBtn.onclick = () => openTaskForm(task);
@@ -3632,7 +4230,7 @@ function buildSeriesMemberRow(task) {
   // consults it again, but leaving a stale value around would be
   // misleading if this task is later merged into another series.
   const removeBtn = document.createElement('button');
-  removeBtn.title = 'Remove from series';
+  removeBtn.title = t('manage.removeFromSeries');
   removeBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M5 11v2h9v-2H5zm11-4-1.41 1.41L17.17 11H10v2h7.17l-2.58 2.59L16 17l5-5-5-5z"/></svg>';
   removeBtn.onclick = () => {
@@ -3878,17 +4476,17 @@ const taskStatsTitleEl = document.getElementById('task-stats-title');
 const taskStatsBodyEl = document.getElementById('task-stats-body');
 
 function showTaskStatsModal(task) {
-  taskStatsTitleEl.textContent = `Stats: ${task.name}`;
+  taskStatsTitleEl.textContent = t('taskStats.title', { name: task.name });
   taskStatsBodyEl.innerHTML = '';
 
   const seriesTasks = tasksInSeries(task.seriesId);
   const recurring = isRecurringSeries(seriesTasks);
   const { byDate, totalFocusedSeconds, totalTimerSeconds } = aggregateFocusLog(seriesTasks);
 
-  const totalsSection = buildStatsSection(recurring ? 'Total time focused (all recurrences)' : 'Total time focused');
-  totalsSection.appendChild(buildStatRow('Total', formatStatsDuration(totalFocusedSeconds + totalTimerSeconds)));
-  totalsSection.appendChild(buildStatRow('Just focused', formatStatsDuration(totalFocusedSeconds)));
-  totalsSection.appendChild(buildStatRow('Focused with timer', formatStatsDuration(totalTimerSeconds)));
+  const totalsSection = buildStatsSection(recurring ? t('taskStats.totalFocusedAllRecurrences') : t('taskStats.totalFocused'));
+  totalsSection.appendChild(buildStatRow(t('taskStats.total'), formatStatsDuration(totalFocusedSeconds + totalTimerSeconds)));
+  totalsSection.appendChild(buildStatRow(t('taskStats.justFocused'), formatStatsDuration(totalFocusedSeconds)));
+  totalsSection.appendChild(buildStatRow(t('taskStats.focusedWithTimer'), formatStatsDuration(totalTimerSeconds)));
   taskStatsBodyEl.appendChild(totalsSection);
 
   if (!recurring) {
@@ -3901,18 +4499,18 @@ function showTaskStatsModal(task) {
   const occurrences = countSeriesOccurrencesToDate(seriesTasks, todayISO);
   const percent = occurrences > 0 ? Math.round((completed / occurrences) * 100) : 0;
 
-  const completionSection = buildStatsSection('Completion');
-  completionSection.appendChild(buildStatRow('Completed', String(completed)));
-  completionSection.appendChild(buildStatRow('Recurrences to date', String(occurrences)));
-  completionSection.appendChild(buildStatRow('Completion rate', `${percent}%`));
+  const completionSection = buildStatsSection(t('taskStats.completion'));
+  completionSection.appendChild(buildStatRow(t('taskStats.completed'), String(completed)));
+  completionSection.appendChild(buildStatRow(t('taskStats.recurrencesToDate'), String(occurrences)));
+  completionSection.appendChild(buildStatRow(t('taskStats.completionRate'), `${percent}%`));
   taskStatsBodyEl.appendChild(completionSection);
 
-  const perRecurrenceSection = buildStatsSection('Time per recurrence');
+  const perRecurrenceSection = buildStatsSection(t('taskStats.timePerRecurrence'));
   const dates = [...byDate.keys()].sort().reverse();
   if (dates.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'task-stats-empty';
-    empty.textContent = 'No focused time logged yet.';
+    empty.textContent = t('taskStats.noFocusedTime');
     perRecurrenceSection.appendChild(empty);
   } else {
     const list = document.createElement('div');
@@ -3926,7 +4524,10 @@ function showTaskStatsModal(task) {
       dateEl.textContent = date;
       const timeEl = document.createElement('span');
       timeEl.className = 'task-stats-occurrence-time';
-      timeEl.textContent = `${formatStatsDuration(entry.focusedSeconds)} focused · ${formatStatsDuration(entry.timerSeconds)} timer`;
+      timeEl.textContent = t('taskStats.focusedAndTimer', {
+        focused: formatStatsDuration(entry.focusedSeconds),
+        timer: formatStatsDuration(entry.timerSeconds),
+      });
       item.appendChild(dateEl);
       item.appendChild(timeEl);
       list.appendChild(item);
@@ -4019,6 +4620,7 @@ document.getElementById('user-menu-logout').onclick = (e) => {
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsNicknameInput = document.getElementById('settings-nickname-input');
 const settingsTimeFormatSelect = document.getElementById('settings-time-format-select');
+const settingsLanguageSelect = document.getElementById('settings-language-select');
 const settingsAvatarPreviewImg = document.getElementById('settings-avatar-preview-img');
 const settingsAvatarPreviewInitials = document.getElementById('settings-avatar-preview-initials');
 const settingsAvatarFileInput = document.getElementById('settings-avatar-file-input');
@@ -4069,6 +4671,7 @@ function renderSettingsAvatarPreview() {
 function openSettingsModal() {
   settingsNicknameInput.value = currentUserNickname || '';
   settingsTimeFormatSelect.value = currentUserTimeFormat;
+  settingsLanguageSelect.value = currentUserLanguage;
   settingsPendingAvatar = undefined;
   renderSettingsAvatarPreview();
   renderSettingsBackgroundPreview();
@@ -4100,17 +4703,18 @@ document.getElementById('settings-save').onclick = () => {
   const nickname = settingsNicknameInput.value.trim();
   const avatar = settingsPendingAvatar === undefined ? currentUserAvatar : settingsPendingAvatar;
   const timeFormat = settingsTimeFormatSelect.value;
+  const language = settingsLanguageSelect.value;
   currentUserNickname = nickname;
   currentUserAvatar = avatar;
   currentUserTimeFormat = timeFormat;
-  saveUserProfile(currentUserProfileSnapshot());
-  renderAppTitle();
+  saveUserProfile({ ...currentUserProfileSnapshot(), language });
   renderUserAvatar();
-  // Every currently-rendered due time/comment-and-log timestamp was drawn
-  // with the old timeFormat baked into its text -- both need a full re-render
-  // to pick up the new one (renderSidePanel no-ops if nothing's selected).
-  renderTodo();
-  renderSidePanel();
+  // applyLanguage saves currentUserLanguage and re-renders everything
+  // renderAppTitle/renderTodo/renderSidePanel below would have anyway (every
+  // currently-rendered due time/comment-and-log timestamp was drawn with the
+  // old timeFormat/language baked into its text), so it's called instead of
+  // them, not alongside them.
+  applyLanguage(language);
   closeSettingsModal();
 };
 
@@ -4165,14 +4769,14 @@ settingsImportDataFileInput.onchange = async () => {
   try {
     data = JSON.parse(await file.text());
   } catch {
-    alert('That file isn\'t valid JSON.');
+    alert(t('data.notJson'));
     return;
   }
   if (!data || typeof data !== 'object' || !Array.isArray(data.tasks)) {
-    alert('That file doesn\'t look like an advanced-todo data export.');
+    alert(t('data.notExport'));
     return;
   }
-  if (!confirm('Importing will replace all of your current tasks and settings with what\'s in this file. Continue?')) return;
+  if (!confirm(t('data.importConfirm'))) return;
 
   tasks = normalizeLoadedTasks(data.tasks);
   saveTasks();
@@ -4183,6 +4787,7 @@ settingsImportDataFileInput.onchange = async () => {
   currentUserAvatar = profile.avatar;
   currentUserTimeFormat = profile.timeFormat;
   currentUserBackground = profile.background;
+  currentUserLanguage = profile.language || 'en';
 
   activeTaskId = data.activeTaskId || null;
   activeOccurrenceDate = activeTaskId ? data.activeOccurrenceDate || null : null;
@@ -4191,7 +4796,8 @@ settingsImportDataFileInput.onchange = async () => {
   todoViewMode = TODO_VIEW_MODES.includes(data.todoViewMode) ? data.todoViewMode : 'pending';
   saveTodoViewMode();
 
-  openSettingsModal(); // re-seed the form fields (nickname/time format/avatar/background preview) from the just-imported profile
+  applyStaticTranslations();
+  openSettingsModal(); // re-seed the form fields (nickname/time format/avatar/background/language preview) from the just-imported profile
   renderAppTitle();
   renderUserAvatar();
   applyBackground(currentUserBackground);
@@ -4296,9 +4902,9 @@ async function fetchUnsplashPhotos(query) {
     : `${UNSPLASH_API_BASE}/photos/random?count=30`;
   const res = await fetch(endpoint, { headers: { Authorization: `Client-ID ${loadUnsplashAccessKey()}` } });
   if (!res.ok) {
-    if (res.status === 401) throw new Error('That Unsplash Access Key was rejected -- double-check it and try again.');
-    if (res.status === 403) throw new Error('Unsplash\'s free-tier rate limit was hit for this key -- try again in a bit.');
-    throw new Error(`Unsplash request failed (${res.status}).`);
+    if (res.status === 401) throw new Error(t('background.keyRejected'));
+    if (res.status === 403) throw new Error(t('background.rateLimited'));
+    throw new Error(t('background.requestFailed', { status: res.status }));
   }
   const data = await res.json();
   return query ? data.results : data;
@@ -4310,7 +4916,7 @@ function renderBackgroundPickerGrid(photos) {
     const thumb = document.createElement('button');
     thumb.type = 'button';
     thumb.className = 'background-picker-thumb';
-    thumb.title = `Use this photo -- by ${photo.user.name} on Unsplash`;
+    thumb.title = t('background.usePhoto', { name: photo.user.name });
 
     const img = document.createElement('img');
     img.src = photo.urls.small;
@@ -4328,11 +4934,11 @@ function renderBackgroundPickerGrid(photos) {
 }
 
 async function loadBackgroundPhotos(query) {
-  backgroundPickerStatusEl.textContent = 'Loading…';
+  backgroundPickerStatusEl.textContent = t('background.loading');
   backgroundPickerGridEl.innerHTML = '';
   try {
     const photos = await fetchUnsplashPhotos(query);
-    backgroundPickerStatusEl.textContent = photos.length ? '' : 'No results.';
+    backgroundPickerStatusEl.textContent = photos.length ? '' : t('background.noResults');
     renderBackgroundPickerGrid(photos);
   } catch (err) {
     backgroundPickerStatusEl.textContent = err.message;
@@ -4417,7 +5023,7 @@ const appTitleEl = document.getElementById('app-title');
 // Falls back to the generic title if a user's nickname isn't known yet (e.g.
 // briefly, before getMe() resolves) -- see startApp().
 function renderAppTitle() {
-  appTitleEl.textContent = currentUserNickname ? `${currentUserNickname}'s To-Do List` : 'To-Do List';
+  appTitleEl.textContent = currentUserNickname ? t('app.titleWithName', { name: currentUserNickname }) : t('app.titleGeneric');
 }
 
 // The one-time "we now know who's logged in" entry point, run either right
@@ -4425,15 +5031,34 @@ function renderAppTitle() {
 // resolves a fresh one -- loads that user's tasks and renders for the first
 // time. Everything from here on (every saveTasks()/loadTasks() call
 // elsewhere in the app) already defaults to currentUserId on its own.
-function startApp() {
+// `needsLanguageDetection` is true only the very first time this profile is
+// ever loaded (see DEFAULT_USER_PROFILE.language) -- kicks off the one-time
+// IP-based language/time-format guess (detectLanguageAndTimeFormatFromLocation)
+// in the background, applying and saving it whenever it resolves.
+function startApp(needsLanguageDetection) {
   tasks = loadTasks(currentUserId);
+  applyStaticTranslations();
   renderAppTitle();
   renderUserAvatar();
   applyBackground(currentUserBackground);
   renderTodo();
+  if (needsLanguageDetection) {
+    detectLanguageAndTimeFormatFromLocation().then(({ language, timeFormat }) => {
+      currentUserTimeFormat = timeFormat;
+      applyLanguage(language);
+      saveUserProfile(currentUserProfileSnapshot());
+    });
+  }
 }
 
 function boot() {
+  // Applied even before a token exists so the login screen itself already
+  // respects a previously-saved language (e.g. after logging out) -- there's
+  // no user to detect-and-guess a language for yet on a genuinely first-ever
+  // visit, so it stays English until the first successful login runs
+  // detectLanguageAndTimeFormatFromLocation.
+  currentUserLanguage = loadUserProfile().language || 'en';
+  applyStaticTranslations();
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) {
     loginScreenEl.classList.remove('hidden');
@@ -4446,7 +5071,8 @@ function boot() {
     currentUserAvatar = user.avatar;
     currentUserTimeFormat = user.timeFormat;
     currentUserBackground = user.background;
-    startApp();
+    currentUserLanguage = user.language || 'en';
+    startApp(user.language == null);
   });
 }
 
@@ -4462,9 +5088,10 @@ document.getElementById('login-form').onsubmit = async (e) => {
   currentUserAvatar = user.avatar;
   currentUserTimeFormat = user.timeFormat;
   currentUserBackground = user.background;
+  currentUserLanguage = user.language || 'en';
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
-  startApp();
+  startApp(user.language == null);
 };
 
 boot();

@@ -20,18 +20,18 @@
 
   <div id="login-screen" class="modal-overlay hidden">
     <div class="modal login-modal">
-      <div class="modal-title">Log in</div>
+      <div class="modal-title" data-i18n="login.title">Log in</div>
       <form id="login-form">
         <div class="modal-field">
-          <label for="login-username">Username</label>
+          <label for="login-username" data-i18n="login.username">Username</label>
           <input id="login-username" class="modal-input" type="text" autocomplete="username">
         </div>
         <div class="modal-field">
-          <label for="login-password">Password</label>
+          <label for="login-password" data-i18n="login.password">Password</label>
           <input id="login-password" class="modal-input" type="password" autocomplete="current-password">
         </div>
         <div class="modal-actions">
-          <button type="submit" class="modal-ok">Log in</button>
+          <button type="submit" class="modal-ok" data-i18n="login.submit">Log in</button>
         </div>
       </form>
     </div>
@@ -43,15 +43,15 @@
         <h1 id="app-title">To-Do List</h1>
         <div class="app-header-actions">
           <div class="user-menu">
-            <button id="user-avatar-btn" class="user-avatar-btn" title="Account menu">
+            <button id="user-avatar-btn" class="user-avatar-btn" title="Account menu" data-i18n-title="avatar.accountMenu">
               <img id="user-avatar-img" class="user-avatar-img hidden" alt="">
               <span id="user-avatar-initials" class="user-avatar-initials"></span>
             </button>
             <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
-              <div id="user-menu-manage-tasks" class="menu-item">Manage tasks&hellip;</div>
-              <div id="user-menu-settings" class="menu-item">Settings&hellip;</div>
+              <div id="user-menu-manage-tasks" class="menu-item" data-i18n="menu.manageTasks">Manage tasks&hellip;</div>
+              <div id="user-menu-settings" class="menu-item" data-i18n="menu.settings">Settings&hellip;</div>
               <div class="menu-separator"></div>
-              <div id="user-menu-logout" class="menu-item" title="Log out (for testing the login screen)">Log out</div>
+              <div id="user-menu-logout" class="menu-item" title="Log out (for testing the login screen)" data-i18n="menu.logout" data-i18n-title="menu.logoutTitle">Log out</div>
             </div>
           </div>
         </div>
@@ -60,15 +60,15 @@
       <div id="todo-section" class="todo-section hidden">
         <div class="todo-toolbar">
           <div id="todo-month-nav" class="todo-month-nav">
-            <button type="button" id="todo-month-prev" class="todo-month-nav-btn" title="Previous month"></button>
+            <button type="button" id="todo-month-prev" class="todo-month-nav-btn" title="Previous month" data-i18n-title="month.prev"></button>
             <span id="todo-month-label" class="todo-month-label"></span>
-            <button type="button" id="todo-month-next" class="todo-month-nav-btn" title="Next month"></button>
+            <button type="button" id="todo-month-next" class="todo-month-nav-btn" title="Next month" data-i18n-title="month.next"></button>
           </div>
           <div id="todo-view-toggle" class="todo-view-toggle">
             <div class="todo-view-toggle-thumb"></div>
-            <button type="button" class="todo-view-toggle-opt" data-mode="pending" title="Pending &amp; overdue tasks this month"></button>
-            <button type="button" class="todo-view-toggle-opt" data-mode="next-recurrence" title="Next recurrence of every task"></button>
-            <button type="button" class="todo-view-toggle-opt" data-mode="all" title="All tasks this month"></button>
+            <button type="button" class="todo-view-toggle-opt" data-mode="pending" title="Pending &amp; overdue tasks this month" data-i18n-title="view.pending"></button>
+            <button type="button" class="todo-view-toggle-opt" data-mode="next-recurrence" title="Next recurrence of every task" data-i18n-title="view.next"></button>
+            <button type="button" class="todo-view-toggle-opt" data-mode="all" title="All tasks this month" data-i18n-title="view.all"></button>
           </div>
         </div>
         <div id="todo-viewport">
@@ -78,26 +78,26 @@
     </div>
 
     <div class="side-panel">
-      <div id="side-panel-empty" class="side-panel-empty">Click a task to see its notes and history.</div>
+      <div id="side-panel-empty" class="side-panel-empty" data-i18n="sidePanel.empty">Click a task to see its notes and history.</div>
       <div id="side-panel-content" class="side-panel-content hidden">
         <div class="side-panel-header">
           <div id="side-panel-title" class="side-panel-title hidden"></div>
           <div class="side-panel-header-actions">
             <div id="side-panel-scope-toggle" class="side-panel-scope-toggle">
               <div class="side-panel-scope-toggle-thumb"></div>
-              <button type="button" class="side-panel-scope-opt" data-scope="occurrence" title="Just this occurrence">Occurrence</button>
-              <button type="button" class="side-panel-scope-opt" data-scope="task" title="Every fragment of this task">Task</button>
-              <button type="button" class="side-panel-scope-opt" data-scope="series" title="Every task in this series">Series</button>
+              <button type="button" class="side-panel-scope-opt" data-scope="occurrence" title="Just this occurrence" data-i18n="sidePanel.occurrence" data-i18n-title="sidePanel.occurrenceTitle">Occurrence</button>
+              <button type="button" class="side-panel-scope-opt" data-scope="task" title="Every fragment of this task" data-i18n="sidePanel.task" data-i18n-title="sidePanel.taskTitle">Task</button>
+              <button type="button" class="side-panel-scope-opt" data-scope="series" title="Every task in this series" data-i18n="sidePanel.series" data-i18n-title="sidePanel.seriesTitle">Series</button>
             </div>
             <button id="side-panel-edit-toggle-btn" class="menu-btn-small"></button>
           </div>
         </div>
         <div id="side-panel-task-summaries" class="side-panel-task-summaries"></div>
-        <textarea id="side-panel-comment-input" class="modal-input side-panel-comment-input" placeholder="Add a note about this task&hellip;"></textarea>
-        <button id="side-panel-comment-add" class="menu-btn-small">Add note</button>
-        <div class="side-panel-section-heading">Notes</div>
+        <textarea id="side-panel-comment-input" class="modal-input side-panel-comment-input" placeholder="Add a note about this task&hellip;" data-i18n-placeholder="sidePanel.commentPlaceholder"></textarea>
+        <button id="side-panel-comment-add" class="menu-btn-small" data-i18n="sidePanel.addNote">Add note</button>
+        <div class="side-panel-section-heading" data-i18n="sidePanel.notes">Notes</div>
         <div id="side-panel-comments" class="side-panel-comments"></div>
-        <div class="side-panel-section-heading">Activity</div>
+        <div class="side-panel-section-heading" data-i18n="sidePanel.activity">Activity</div>
         <div id="side-panel-log" class="side-panel-log"></div>
       </div>
     </div>
@@ -116,25 +116,25 @@
 
   <div id="todo-manage-overlay" class="modal-overlay hidden">
     <div class="modal todo-manage-modal">
-      <button id="todo-manage-close" class="modal-close-btn" title="Close">
+      <button id="todo-manage-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
         <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <div class="modal-title">To-do list</div>
+      <div class="modal-title" data-i18n="manage.title">To-do list</div>
       <div class="todo-manage-panes">
         <div class="todo-manage-left">
           <div id="todo-manage-months"></div>
-          <button id="todo-add-btn" class="menu-btn-small">+ Add task</button>
+          <button id="todo-add-btn" class="menu-btn-small" data-i18n="todo.addTask">+ Add task</button>
         </div>
         <div class="todo-manage-right">
-          <div id="series-edit-empty" class="todo-manage-empty">Select a series on the left to edit it.</div>
+          <div id="series-edit-empty" class="todo-manage-empty" data-i18n="manage.selectSeries">Select a series on the left to edit it.</div>
           <div id="series-edit-panel" class="hidden">
             <div class="series-edit-name-row">
-              <input id="series-edit-name-input" class="modal-input" type="text" placeholder="Series name">
-              <button id="series-edit-save-btn" class="menu-btn-small">Save</button>
-              <span id="series-edit-save-confirm" class="series-edit-save-confirm">Saved</span>
+              <input id="series-edit-name-input" class="modal-input" type="text" placeholder="Series name" data-i18n-placeholder="manage.seriesNamePlaceholder">
+              <button id="series-edit-save-btn" class="menu-btn-small" data-i18n="common.save">Save</button>
+              <span id="series-edit-save-confirm" class="series-edit-save-confirm" data-i18n="manage.saved">Saved</span>
             </div>
             <div id="series-edit-list"></div>
-            <button id="series-edit-add-new-btn" class="menu-btn-small">+ Add new task</button>
+            <button id="series-edit-add-new-btn" class="menu-btn-small" data-i18n="manage.addNewTask">+ Add new task</button>
           </div>
         </div>
       </div>
@@ -143,20 +143,20 @@
 
   <div id="edit-scope-overlay" class="modal-overlay hidden">
     <div class="modal edit-scope-modal">
-      <div class="modal-title">Edit recurring task</div>
-      <p class="edit-scope-desc">This task repeats. What would you like to edit?</p>
-      <button id="edit-scope-instance" class="menu-btn-small menu-btn-wide">Only this occurrence</button>
-      <button id="edit-scope-following" class="menu-btn-small menu-btn-wide">This and following occurrences</button>
-      <button id="edit-scope-all" class="menu-btn-small menu-btn-wide">All occurrences</button>
+      <div class="modal-title" data-i18n="editScope.title">Edit recurring task</div>
+      <p class="edit-scope-desc" data-i18n="editScope.desc">This task repeats. What would you like to edit?</p>
+      <button id="edit-scope-instance" class="menu-btn-small menu-btn-wide" data-i18n="editScope.instance">Only this occurrence</button>
+      <button id="edit-scope-following" class="menu-btn-small menu-btn-wide" data-i18n="editScope.following">This and following occurrences</button>
+      <button id="edit-scope-all" class="menu-btn-small menu-btn-wide" data-i18n="editScope.all">All occurrences</button>
       <div class="modal-actions">
-        <button id="edit-scope-cancel" class="modal-cancel">Cancel</button>
+        <button id="edit-scope-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
       </div>
     </div>
   </div>
 
   <div id="task-stats-overlay" class="modal-overlay hidden">
     <div class="modal task-stats-modal">
-      <button id="task-stats-close" class="modal-close-btn" title="Close">
+      <button id="task-stats-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
         <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <div class="modal-title" id="task-stats-title"></div>
@@ -166,79 +166,86 @@
 
   <div id="settings-overlay" class="modal-overlay hidden">
     <div class="modal settings-modal">
-      <button id="settings-close" class="modal-close-btn" title="Close">
+      <button id="settings-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
         <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <div class="modal-title">Settings</div>
+      <div class="modal-title" data-i18n="settings.title">Settings</div>
       <div class="modal-field">
-        <label for="settings-nickname-input">Nickname</label>
-        <input id="settings-nickname-input" class="modal-input" type="text" placeholder="e.g. Nikola">
+        <label for="settings-nickname-input" data-i18n="settings.nickname">Nickname</label>
+        <input id="settings-nickname-input" class="modal-input" type="text" placeholder="e.g. Nikola" data-i18n-placeholder="settings.nicknamePlaceholder">
       </div>
       <div class="modal-field">
-        <label for="settings-time-format-select">Time format</label>
+        <label for="settings-time-format-select" data-i18n="settings.timeFormat">Time format</label>
         <select id="settings-time-format-select" class="modal-input">
-          <option value="24">24-hour (e.g. 18:00)</option>
-          <option value="12">12-hour (e.g. 6:00 PM)</option>
+          <option value="24" data-i18n="settings.timeFormat24">24-hour (e.g. 18:00)</option>
+          <option value="12" data-i18n="settings.timeFormat12">12-hour (e.g. 6:00 PM)</option>
         </select>
       </div>
       <div class="modal-field">
-        <label>Avatar</label>
+        <label for="settings-language-select" data-i18n="settings.language">Language</label>
+        <select id="settings-language-select" class="modal-input">
+          <option value="en" data-i18n="settings.languageEnglish">English</option>
+          <option value="hr" data-i18n="settings.languageCroatian">Hrvatski (Croatian)</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label data-i18n="settings.avatar">Avatar</label>
         <div class="settings-avatar-row">
           <div class="user-avatar-btn settings-avatar-preview">
             <img id="settings-avatar-preview-img" class="user-avatar-img hidden" alt="">
             <span id="settings-avatar-preview-initials" class="user-avatar-initials"></span>
           </div>
-          <button id="settings-avatar-upload-btn" type="button" class="menu-btn-small">Upload image&hellip;</button>
-          <button id="settings-avatar-remove-btn" type="button" class="menu-btn-small">Remove</button>
+          <button id="settings-avatar-upload-btn" type="button" class="menu-btn-small" data-i18n="settings.uploadImage">Upload image&hellip;</button>
+          <button id="settings-avatar-remove-btn" type="button" class="menu-btn-small" data-i18n="common.remove">Remove</button>
           <input id="settings-avatar-file-input" type="file" accept="image/*" class="hidden">
         </div>
       </div>
       <div class="modal-field">
-        <label>Background</label>
+        <label data-i18n="settings.background">Background</label>
         <div class="settings-avatar-row">
           <div id="settings-background-preview" class="settings-background-preview"></div>
-          <button id="settings-change-background-btn" type="button" class="menu-btn-small">Change background&hellip;</button>
-          <button id="settings-remove-background-btn" type="button" class="menu-btn-small">Remove</button>
+          <button id="settings-change-background-btn" type="button" class="menu-btn-small" data-i18n="settings.changeBackground">Change background&hellip;</button>
+          <button id="settings-remove-background-btn" type="button" class="menu-btn-small" data-i18n="common.remove">Remove</button>
         </div>
       </div>
       <div class="modal-field">
-        <label>Data</label>
+        <label data-i18n="settings.data">Data</label>
         <div class="settings-avatar-row">
-          <button id="settings-download-data-btn" type="button" class="menu-btn-small">Download my data&hellip;</button>
-          <button id="settings-import-data-btn" type="button" class="menu-btn-small">Import data&hellip;</button>
+          <button id="settings-download-data-btn" type="button" class="menu-btn-small" data-i18n="settings.downloadData">Download my data&hellip;</button>
+          <button id="settings-import-data-btn" type="button" class="menu-btn-small" data-i18n="settings.importData">Import data&hellip;</button>
           <input id="settings-import-data-file-input" type="file" accept="application/json" class="hidden">
         </div>
       </div>
       <div class="modal-actions">
-        <button id="settings-cancel" class="modal-cancel">Cancel</button>
-        <button id="settings-save" class="modal-ok">Save</button>
+        <button id="settings-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
+        <button id="settings-save" class="modal-ok" data-i18n="common.save">Save</button>
       </div>
     </div>
   </div>
 
   <div id="background-overlay" class="modal-overlay hidden">
     <div class="modal background-modal">
-      <button id="background-close" class="modal-close-btn" title="Close">
+      <button id="background-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
         <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <div class="modal-title">Change background</div>
+      <div class="modal-title" data-i18n="background.title">Change background</div>
 
       <div id="background-key-setup" class="modal-field hidden">
-        <label for="background-key-input">Unsplash Access Key</label>
-        <input id="background-key-input" class="modal-input" type="text" placeholder="Paste your Unsplash API Access Key">
-        <div class="field-hint">
+        <label for="background-key-input" data-i18n="background.accessKeyLabel">Unsplash Access Key</label>
+        <input id="background-key-input" class="modal-input" type="text" placeholder="Paste your Unsplash API Access Key" data-i18n-placeholder="background.accessKeyPlaceholder">
+        <div class="field-hint" data-i18n-html="background.hint">
           Backgrounds are pulled from <a href="https://unsplash.com/developers" target="_blank" rel="noopener">Unsplash's free developer API</a>.
           Create a free app there and paste its Access Key here &mdash; it's saved only on this device, separately from your task data.
         </div>
         <div class="modal-actions">
-          <button id="background-key-save-btn" type="button" class="modal-ok">Save key</button>
+          <button id="background-key-save-btn" type="button" class="modal-ok" data-i18n="background.saveKey">Save key</button>
         </div>
       </div>
 
       <div id="background-browser" class="hidden">
         <div class="background-search-row">
-          <input id="background-search-input" class="modal-input" type="text" placeholder="Search Unsplash, e.g. mountains, minimal, ocean">
-          <button id="background-search-btn" type="button" class="menu-btn-small">Search</button>
+          <input id="background-search-input" class="modal-input" type="text" placeholder="Search Unsplash, e.g. mountains, minimal, ocean" data-i18n-placeholder="background.searchPlaceholder">
+          <button id="background-search-btn" type="button" class="menu-btn-small" data-i18n="background.search">Search</button>
         </div>
         <div id="background-picker-status" class="field-hint"></div>
         <div id="background-picker-grid" class="background-picker-grid"></div>
@@ -247,8 +254,9 @@
   </div>
 
   <div id="background-credit" class="background-credit hidden">
-    Photo by <a id="background-credit-photographer" target="_blank" rel="noopener"></a> on
-    <a id="background-credit-unsplash" href="https://unsplash.com/?utm_source=advanced-todo&amp;utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>
+    <span data-i18n="background.creditBy">Photo by</span> <a id="background-credit-photographer" target="_blank" rel="noopener"></a>
+    <span data-i18n="background.creditOn">on</span>
+    <a id="background-credit-unsplash" href="https://unsplash.com/?utm_source=advanced-todo&amp;utm_medium=referral" target="_blank" rel="noopener" data-i18n="background.creditUnsplashName">Unsplash</a>
   </div>
 
   <!-- Optional and gitignored -- see config.example.js. Sets window.APP_CONFIG
