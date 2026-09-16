@@ -1581,6 +1581,21 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
   const passive = result.passive.length > 0;
   const frequency = result.repeats.length > 0 ? decodeFrequency(result.frequencyType, result.interval, result) : { type: 'once', interval: 1 };
 
+  // getSeriesName falls back to the earliest member's own name when no
+  // member has an explicit seriesName yet (see getSeriesName) -- purely a
+  // display-time default. Without this, renaming that member here would make
+  // the mixed-series label/editor appear to rename itself. Freeze the
+  // current (pre-rename) display name as the real seriesName the first time
+  // a rename would otherwise change it, so it only changes again via the
+  // series editor's own "Save".
+  if (existingTask && result.name !== existingTask.name && isMixedSeries(existingTask.seriesId)) {
+    const members = tasksInSeries(existingTask.seriesId);
+    if (!members.some((t) => t.seriesName)) {
+      const frozenName = getSeriesName(existingTask.seriesId);
+      for (const t of members) t.seriesName = frozenName;
+    }
+  }
+
   if (splitContext) {
     applySplitEdit(existingTask, {
       originalOccurrenceDate: splitContext.occurrenceDate,
