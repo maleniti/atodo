@@ -194,6 +194,14 @@
         </div>
       </div>
       <div class="modal-field">
+        <label>Background</label>
+        <div class="settings-avatar-row">
+          <div id="settings-background-preview" class="settings-background-preview"></div>
+          <button id="settings-change-background-btn" type="button" class="menu-btn-small">Change background&hellip;</button>
+          <button id="settings-remove-background-btn" type="button" class="menu-btn-small">Remove</button>
+        </div>
+      </div>
+      <div class="modal-field">
         <label>Data</label>
         <div class="settings-avatar-row">
           <button id="settings-download-data-btn" type="button" class="menu-btn-small">Download my data&hellip;</button>
@@ -208,6 +216,46 @@
     </div>
   </div>
 
+  <div id="background-overlay" class="modal-overlay hidden">
+    <div class="modal background-modal">
+      <button id="background-close" class="modal-close-btn" title="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-title">Change background</div>
+
+      <div id="background-key-setup" class="modal-field hidden">
+        <label for="background-key-input">Unsplash Access Key</label>
+        <input id="background-key-input" class="modal-input" type="text" placeholder="Paste your Unsplash API Access Key">
+        <div class="field-hint">
+          Backgrounds are pulled from <a href="https://unsplash.com/developers" target="_blank" rel="noopener">Unsplash's free developer API</a>.
+          Create a free app there and paste its Access Key here &mdash; it's saved only on this device, separately from your task data.
+        </div>
+        <div class="modal-actions">
+          <button id="background-key-save-btn" type="button" class="modal-ok">Save key</button>
+        </div>
+      </div>
+
+      <div id="background-browser" class="hidden">
+        <div class="background-search-row">
+          <input id="background-search-input" class="modal-input" type="text" placeholder="Search Unsplash, e.g. mountains, minimal, ocean">
+          <button id="background-search-btn" type="button" class="menu-btn-small">Search</button>
+        </div>
+        <div id="background-picker-status" class="field-hint"></div>
+        <div id="background-picker-grid" class="background-picker-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="background-credit" class="background-credit hidden">
+    Photo by <a id="background-credit-photographer" target="_blank" rel="noopener"></a> on
+    <a id="background-credit-unsplash" href="https://unsplash.com/?utm_source=advanced-todo&amp;utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>
+  </div>
+
+  <!-- Optional and gitignored -- see config.example.js. Sets window.APP_CONFIG
+       (currently just an app-wide Unsplash Access Key); app.js falls back
+       gracefully if this 404s, so it's fine to open index.html directly
+       without ever creating one. -->
+  <script src="config.js"></script>
   <script src="sharedInputBehavior.js"></script>
   <script src="recurrence.js"></script>
   <script src="app.js"></script>

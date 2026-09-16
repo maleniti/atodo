@@ -10,7 +10,14 @@ A standalone to-do list web app (recurring tasks, overdue/failed states, work ti
 
 - **Run the app**: open `index.html` directly in a browser, or serve the directory (e.g. `npx serve .`). There's no dev server or build step.
 - **Run tests**: `node recurrence.test.js` — a plain Node script using `node:assert`, not a test framework (no jest/mocha). It exits non-zero and throws on the first failed assertion; there's no way to run a single test in isolation, just re-run the whole file. Prints `recurrence.test.js: all assertions passed` on success.
-- **Docker**: `docker build .` copies the five static files (`index.html`, `style.css`, `app.js`, `recurrence.js`, `sharedInputBehavior.js`) into an `nginx:alpine` image. If you add a new source file, add it to the `COPY` line in `Dockerfile` too, or it won't ship.
+- **Docker**: `docker build .` copies the five static files (`index.html`, `style.css`, `app.js`, `recurrence.js`, `sharedInputBehavior.js`) into an `nginx:alpine` image. If you add a new source file, add it to the `COPY` line in `Dockerfile` too, or it won't ship. `config.js` is the one deliberate exception — see Configuration below. `./atd <port>` builds and (re)runs the image via Docker; it requires a `.env` file in this directory (refuses to start without one) and sources it with `set -a` before `docker run`, so anything in `.env` (currently just `UNSPLASH_ACCESS_KEY`) is forwarded into the container as an env var.
+
+## Configuration
+
+The only configurable value so far is an app-wide Unsplash Access Key (used by the background picker in Settings — see `app.js`'s `configuredUnsplashAccessKey`/`loadUnsplashAccessKey`), loaded from `window.APP_CONFIG` set in `config.js`. There's no build step, so this is a plain untracked (gitignored) JS file, not an env-driven bundler define:
+
+- **Local dev**: copy `config.example.js` to `config.js` and fill in a real key (get one at https://unsplash.com/developers). `index.html` loads `config.js` before `app.js`; it's fine to skip this file entirely (`config.js` 404s harmlessly, `window.APP_CONFIG` stays undefined) — the background picker then falls back to asking each user to paste in their own key, stored per-device in `localStorage`.
+- **Docker (via `./atd`)**: don't create `config.js` yourself — put `UNSPLASH_ACCESS_KEY=...` in a gitignored `.env` file next to `Dockerfile` instead. `./atd` sources it and forwards it into the container; `docker-entrypoint.d/40-write-app-config.sh` (nginx:alpine's image runs every `*.sh` in `/docker-entrypoint.d/` on container start) then generates `config.js` fresh from that env var every time the container starts, so the key can be rotated by editing `.env` and re-running `./atd`, no rebuild needed.
 
 ## Architecture
 

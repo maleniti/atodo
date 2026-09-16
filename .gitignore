@@ -1,0 +1,10 @@
+# Local Unsplash API key for dev (npx serve/opening index.html directly).
+# See config.example.js -- copy it to config.js and fill in a real key.
+# The Docker image never bakes this in; it's generated at container start
+# from the UNSPLASH_ACCESS_KEY env var instead (see
+# docker-entrypoint.d/40-write-app-config.sh).
+config.js
+
+# Secrets for ./atd (currently just UNSPLASH_ACCESS_KEY) -- sourced and
+# forwarded into the Docker container as env vars. Never commit real keys.
+.env

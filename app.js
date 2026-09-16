@@ -536,7 +536,13 @@ const FAKE_USER_NICKNAME = 'Nikola';
 // older saved profile missing a field (e.g. timeFormat, added after nickname/
 // avatar already existed) doesn't end up with `undefined` for it.
 const USER_PROFILE_STORAGE_KEY = 'advanced-todo-user-profile';
-const DEFAULT_USER_PROFILE = { nickname: FAKE_USER_NICKNAME, avatar: null, timeFormat: '24' };
+// background: null, or { regularUrl, thumbUrl, photographerName, photographerUrl, photoLink }
+// -- see the "Background" section near the Settings modal below. Deliberately
+// doesn't include the Unsplash Access Key used to fetch it (see
+// loadUnsplashAccessKey) -- that's a per-device API credential, not user
+// data, so it's kept in its own separate storage key and left out of the
+// data export/import too.
+const DEFAULT_USER_PROFILE = { nickname: FAKE_USER_NICKNAME, avatar: null, timeFormat: '24', background: null };
 
 function loadUserProfile(userId = currentUserId) {
   try {
@@ -559,7 +565,7 @@ async function login(username, password) {
 async function getMe(token) {
   const payload = JSON.parse(atob(token));
   const profile = loadUserProfile(payload.sub);
-  return { id: payload.sub, nickname: profile.nickname, avatar: profile.avatar, timeFormat: profile.timeFormat };
+  return { id: payload.sub, nickname: profile.nickname, avatar: profile.avatar, timeFormat: profile.timeFormat, background: profile.background };
 }
 
 // Set once boot()/the login form resolves a user -- every call site below
@@ -575,6 +581,21 @@ let currentUserId = null;
 let currentUserNickname = null;
 let currentUserAvatar = null; // data URL, or null for the initials fallback
 let currentUserTimeFormat = '24'; // '12' | '24' -- see formatTimeOfDay/formatDateTime
+let currentUserBackground = null; // same shape as the profile's background field, or null -- see applyBackground
+
+// Builds the full profile object saveUserProfile expects (it always
+// overwrites the stored blob wholesale, no partial-patch merge) from
+// whatever's currently in memory -- every write site below (Settings' Save
+// button, picking/removing a background) goes through this so none of them
+// can accidentally drop a field a *different* write site owns.
+function currentUserProfileSnapshot() {
+  return {
+    nickname: currentUserNickname,
+    avatar: currentUserAvatar,
+    timeFormat: currentUserTimeFormat,
+    background: currentUserBackground,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // To-do list.
@@ -1333,9 +1354,11 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     [
       { name: 'name', label: 'Name', value: existingTask ? existingTask.name : seriesOptions.nameDefault || '' },
       {
+        // Single-line like Name, not a textarea like Details -- the to-do
+        // list shows this truncated to one line too (see .todo-item-desc),
+        // so a multi-line value could never be seen in full there anyway.
         name: 'description',
         label: 'Description',
-        type: 'textarea',
         value: existingTask ? existingTask.description : '',
         required: false,
       },
@@ -2378,9 +2401,18 @@ function seriesRowLabelInfo(seriesId) {
 function updatePinnedTodoHeader() {
   if (todoDayHeaderRefs.length === 0) return;
   const viewportTop = todoViewportEl.getBoundingClientRect().top;
-  let pinnedIndex = 0;
+  // -1 (nothing pinned), not 0, until the very first sentinel actually
+  // crosses the top -- at rest, scrolled all the way to the top, the first
+  // header already sits exactly where it'd be if it were sticky, so there's
+  // nothing for .pinned's opaque background (see .todo-day-header.pinned in
+  // style.css) to usefully mask yet; forcing it pinned from the start just
+  // showed a solid bar over the very first date for no reason.
+  let pinnedIndex = -1;
   for (let i = 0; i < todoDayHeaderRefs.length; i++) {
-    if (todoDayHeaderRefs[i].sentinel.getBoundingClientRect().top <= viewportTop) pinnedIndex = i;
+    // Strictly less than, not <= -- the very first sentinel sits exactly at
+    // the viewport's own top edge before any scrolling at all (0 == 0), so
+    // <= pinned it from the very first render with nothing to mask yet.
+    if (todoDayHeaderRefs[i].sentinel.getBoundingClientRect().top < viewportTop) pinnedIndex = i;
   }
   todoDayHeaderRefs.forEach(({ header }, i) => header.classList.toggle('pinned', i === pinnedIndex));
 }
@@ -2615,12 +2647,14 @@ function buildTodoItemRow(item, isToday) {
   name.textContent = seriesLabelInfo.mixed ? `${seriesLabelInfo.name}: ${item.task.name}` : item.task.name;
   text.appendChild(name);
 
-  if (item.task.description) {
-    const desc = document.createElement('div');
-    desc.className = 'todo-item-desc';
-    desc.textContent = item.task.description;
-    text.appendChild(desc);
-  }
+  // Always rendered, even when empty -- so every row reserves the same
+  // description line and they're all the same height (see .todo-item-desc),
+  // instead of a description-less task's row being shorter than one with a
+  // description.
+  const desc = document.createElement('div');
+  desc.className = 'todo-item-desc';
+  desc.textContent = item.task.description;
+  text.appendChild(desc);
 
   const meta = document.createElement('div');
   meta.className =
@@ -4037,6 +4071,7 @@ function openSettingsModal() {
   settingsTimeFormatSelect.value = currentUserTimeFormat;
   settingsPendingAvatar = undefined;
   renderSettingsAvatarPreview();
+  renderSettingsBackgroundPreview();
   settingsOverlay.classList.remove('hidden');
 }
 
@@ -4068,7 +4103,7 @@ document.getElementById('settings-save').onclick = () => {
   currentUserNickname = nickname;
   currentUserAvatar = avatar;
   currentUserTimeFormat = timeFormat;
-  saveUserProfile({ nickname, avatar, timeFormat });
+  saveUserProfile(currentUserProfileSnapshot());
   renderAppTitle();
   renderUserAvatar();
   // Every currently-rendered due time/comment-and-log timestamp was drawn
@@ -4147,6 +4182,7 @@ settingsImportDataFileInput.onchange = async () => {
   currentUserNickname = profile.nickname;
   currentUserAvatar = profile.avatar;
   currentUserTimeFormat = profile.timeFormat;
+  currentUserBackground = profile.background;
 
   activeTaskId = data.activeTaskId || null;
   activeOccurrenceDate = activeTaskId ? data.activeOccurrenceDate || null : null;
@@ -4155,12 +4191,216 @@ settingsImportDataFileInput.onchange = async () => {
   todoViewMode = TODO_VIEW_MODES.includes(data.todoViewMode) ? data.todoViewMode : 'pending';
   saveTodoViewMode();
 
-  openSettingsModal(); // re-seed the form fields (nickname/time format/avatar preview) from the just-imported profile
+  openSettingsModal(); // re-seed the form fields (nickname/time format/avatar/background preview) from the just-imported profile
   renderAppTitle();
   renderUserAvatar();
+  applyBackground(currentUserBackground);
   renderTodo();
   renderSidePanel();
   refreshTodoManageModal();
+};
+
+// ---------------------------------------------------------------------------
+// Background picker (Unsplash) -- opened via Settings' "Change background"
+// button. No uploads: every image comes from Unsplash's free-tier API, both
+// to sidestep the copyright issues user-uploaded images could bring and
+// because Unsplash requires attribution wherever a photo is shown (see
+// applyBackground's #background-credit) and a ping to its "download"
+// endpoint whenever a photo is actually put to use (see selectBackgroundPhoto)
+// -- obligations that only make sense for their own catalog, not arbitrary
+// uploads.
+//
+// Picking a photo takes effect (and saves) immediately -- there's no
+// separate "Save" step the way nickname/avatar/time-format have, since this
+// is its own modal opened from within Settings rather than a field staged
+// inside Settings' own form.
+// ---------------------------------------------------------------------------
+
+// The Unsplash Access Key is a per-device API credential, not user data: kept
+// in its own storage key, deliberately left out of the user profile (see
+// DEFAULT_USER_PROFILE) and the data export/import.
+const UNSPLASH_ACCESS_KEY_STORAGE_KEY = 'advanced-todo-unsplash-access-key';
+const UNSPLASH_API_BASE = 'https://api.unsplash.com';
+
+// An app-wide key an admin provides via config.js (see config.example.js and
+// CLAUDE.md's "Configuration" section) -- generated at container start from
+// the UNSPLASH_ACCESS_KEY env var in the Docker image, or a real config.js
+// file for local dev. Takes priority over any per-device key below, so once
+// one's configured, users never see the "paste a key" step at all.
+// window.APP_CONFIG is simply undefined if config.js 404s (nothing sets it),
+// which is the normal case for local dev without one -- not an error.
+function configuredUnsplashAccessKey() {
+  return (window.APP_CONFIG && window.APP_CONFIG.unsplashAccessKey) || '';
+}
+
+// Falls back to a key the user pastes in themselves (see backgroundKeySetupEl)
+// when there's no app-wide one -- keeps the picker usable for local dev/a
+// single user without requiring config.js at all.
+function loadUnsplashAccessKey() {
+  return configuredUnsplashAccessKey() || localStorage.getItem(UNSPLASH_ACCESS_KEY_STORAGE_KEY) || '';
+}
+function saveUnsplashAccessKey(key) {
+  localStorage.setItem(UNSPLASH_ACCESS_KEY_STORAGE_KEY, key);
+}
+
+const settingsBackgroundPreviewEl = document.getElementById('settings-background-preview');
+const settingsChangeBackgroundBtn = document.getElementById('settings-change-background-btn');
+const settingsRemoveBackgroundBtn = document.getElementById('settings-remove-background-btn');
+
+function renderSettingsBackgroundPreview() {
+  settingsBackgroundPreviewEl.style.backgroundImage = currentUserBackground ? `url("${currentUserBackground.thumbUrl}")` : '';
+  settingsRemoveBackgroundBtn.disabled = !currentUserBackground;
+}
+
+const backgroundCreditEl = document.getElementById('background-credit');
+const backgroundCreditPhotographerEl = document.getElementById('background-credit-photographer');
+
+// The one place that actually paints the chosen photo -- covers the full
+// viewport (body, behind every panel's own translucent glass background) with
+// no tiling, per style.css's background-size/position/repeat rules on body.
+// Also the one place that shows/hides the required Unsplash attribution, so
+// the two can never end up out of sync.
+function applyBackground(background) {
+  document.body.style.backgroundImage = background ? `url("${background.regularUrl}")` : '';
+  backgroundCreditEl.classList.toggle('hidden', !background);
+  if (background) {
+    backgroundCreditPhotographerEl.href = background.photographerUrl;
+    backgroundCreditPhotographerEl.textContent = background.photographerName;
+  }
+}
+
+settingsRemoveBackgroundBtn.onclick = () => {
+  currentUserBackground = null;
+  saveUserProfile(currentUserProfileSnapshot());
+  applyBackground(null);
+  renderSettingsBackgroundPreview();
+};
+
+const backgroundOverlay = document.getElementById('background-overlay');
+const backgroundKeySetupEl = document.getElementById('background-key-setup');
+const backgroundKeyInput = document.getElementById('background-key-input');
+const backgroundBrowserEl = document.getElementById('background-browser');
+const backgroundSearchInput = document.getElementById('background-search-input');
+const backgroundPickerStatusEl = document.getElementById('background-picker-status');
+const backgroundPickerGridEl = document.getElementById('background-picker-grid');
+
+// query === '' fetches a batch of random photos to browse (the picker's
+// default, no-search-yet view); a non-empty query hits the search endpoint
+// instead. Unsplash's two endpoints don't share a response shape -- /photos/
+// random resolves an array directly, /search/photos wraps it in `.results`
+// (alongside pagination totals this app has no UI for) -- normalized here so
+// every caller just gets an array of photos either way.
+async function fetchUnsplashPhotos(query) {
+  const endpoint = query
+    ? `${UNSPLASH_API_BASE}/search/photos?per_page=30&query=${encodeURIComponent(query)}`
+    : `${UNSPLASH_API_BASE}/photos/random?count=30`;
+  const res = await fetch(endpoint, { headers: { Authorization: `Client-ID ${loadUnsplashAccessKey()}` } });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('That Unsplash Access Key was rejected -- double-check it and try again.');
+    if (res.status === 403) throw new Error('Unsplash\'s free-tier rate limit was hit for this key -- try again in a bit.');
+    throw new Error(`Unsplash request failed (${res.status}).`);
+  }
+  const data = await res.json();
+  return query ? data.results : data;
+}
+
+function renderBackgroundPickerGrid(photos) {
+  backgroundPickerGridEl.innerHTML = '';
+  for (const photo of photos) {
+    const thumb = document.createElement('button');
+    thumb.type = 'button';
+    thumb.className = 'background-picker-thumb';
+    thumb.title = `Use this photo -- by ${photo.user.name} on Unsplash`;
+
+    const img = document.createElement('img');
+    img.src = photo.urls.small;
+    img.alt = photo.alt_description || '';
+    thumb.appendChild(img);
+
+    const credit = document.createElement('span');
+    credit.className = 'background-picker-thumb-credit';
+    credit.textContent = photo.user.name;
+    thumb.appendChild(credit);
+
+    thumb.onclick = () => selectBackgroundPhoto(photo);
+    backgroundPickerGridEl.appendChild(thumb);
+  }
+}
+
+async function loadBackgroundPhotos(query) {
+  backgroundPickerStatusEl.textContent = 'Loading…';
+  backgroundPickerGridEl.innerHTML = '';
+  try {
+    const photos = await fetchUnsplashPhotos(query);
+    backgroundPickerStatusEl.textContent = photos.length ? '' : 'No results.';
+    renderBackgroundPickerGrid(photos);
+  } catch (err) {
+    backgroundPickerStatusEl.textContent = err.message;
+  }
+}
+
+// utm params on both links per Unsplash's attribution guidelines
+// (https://help.unsplash.com/en/articles/2511315), which every photo shown
+// anywhere in the app (see applyBackground) has to carry, not just the ones
+// in this picker.
+function unsplashAttributionUrl(url) {
+  return `${url}?utm_source=advanced-todo&utm_medium=referral`;
+}
+
+function selectBackgroundPhoto(photo) {
+  // Unsplash's API guidelines require pinging a photo's download_location
+  // whenever it's actually put to use (as opposed to just shown as a search
+  // thumbnail) -- fire-and-forget, since a failed ping shouldn't block the
+  // user from getting their background.
+  fetch(photo.links.download_location, { headers: { Authorization: `Client-ID ${loadUnsplashAccessKey()}` } }).catch(() => {});
+
+  currentUserBackground = {
+    regularUrl: photo.urls.regular,
+    thumbUrl: photo.urls.thumb,
+    photographerName: photo.user.name,
+    photographerUrl: unsplashAttributionUrl(photo.user.links.html),
+    photoLink: unsplashAttributionUrl(photo.links.html),
+  };
+  saveUserProfile(currentUserProfileSnapshot());
+  applyBackground(currentUserBackground);
+  renderSettingsBackgroundPreview();
+  closeBackgroundModal();
+}
+
+function openBackgroundModal() {
+  const hasKey = !!loadUnsplashAccessKey();
+  backgroundKeySetupEl.classList.toggle('hidden', hasKey);
+  backgroundBrowserEl.classList.toggle('hidden', !hasKey);
+  backgroundKeyInput.value = '';
+  backgroundSearchInput.value = '';
+  backgroundPickerStatusEl.textContent = '';
+  backgroundPickerGridEl.innerHTML = '';
+  backgroundOverlay.classList.remove('hidden');
+  if (hasKey) loadBackgroundPhotos('');
+}
+
+function closeBackgroundModal() {
+  backgroundOverlay.classList.add('hidden');
+}
+
+settingsChangeBackgroundBtn.onclick = openBackgroundModal;
+document.getElementById('background-close').onclick = closeBackgroundModal;
+
+document.getElementById('background-key-save-btn').onclick = () => {
+  const key = backgroundKeyInput.value.trim();
+  if (!key) return;
+  saveUnsplashAccessKey(key);
+  backgroundKeySetupEl.classList.add('hidden');
+  backgroundBrowserEl.classList.remove('hidden');
+  loadBackgroundPhotos('');
+};
+
+document.getElementById('background-search-btn').onclick = () => loadBackgroundPhotos(backgroundSearchInput.value.trim());
+backgroundSearchInput.onkeydown = (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    loadBackgroundPhotos(backgroundSearchInput.value.trim());
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -4189,6 +4429,7 @@ function startApp() {
   tasks = loadTasks(currentUserId);
   renderAppTitle();
   renderUserAvatar();
+  applyBackground(currentUserBackground);
   renderTodo();
 }
 
@@ -4204,6 +4445,7 @@ function boot() {
     currentUserNickname = user.nickname;
     currentUserAvatar = user.avatar;
     currentUserTimeFormat = user.timeFormat;
+    currentUserBackground = user.background;
     startApp();
   });
 }
@@ -4219,6 +4461,7 @@ document.getElementById('login-form').onsubmit = async (e) => {
   currentUserNickname = user.nickname;
   currentUserAvatar = user.avatar;
   currentUserTimeFormat = user.timeFormat;
+  currentUserBackground = user.background;
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
   startApp();

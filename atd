@@ -17,12 +17,26 @@ container="advanced-todo"
 
 cd "$(dirname "$0")"
 
+# .env holds secrets (currently just UNSPLASH_ACCESS_KEY -- see
+# config.example.js/CLAUDE.md's Configuration section) that get forwarded
+# into the container below. Gitignored, never baked into the image itself --
+# required rather than defaulting to empty so a missing key fails loudly here
+# instead of silently shipping a container with backgrounds disabled.
+if [ ! -f .env ]; then
+  echo ".env not found -- copy config.example.js's key into a .env file (UNSPLASH_ACCESS_KEY=...) first." >&2
+  exit 1
+fi
+set -a
+# shellcheck source=/dev/null
+. ./.env
+set +a
+
 docker build -t "$image" .
 
 if docker ps -a --format '{{.Names}}' | grep -qx "$container"; then
   docker rm -f "$container" >/dev/null
 fi
 
-docker run -d --name "$container" -p "$port:80" "$image"
+docker run -d --name "$container" -p "$port:80" -e "UNSPLASH_ACCESS_KEY=${UNSPLASH_ACCESS_KEY:-}" "$image"
 
 echo "advanced-todo running at http://localhost:$port"
