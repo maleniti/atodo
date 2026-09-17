@@ -79,6 +79,12 @@
             <button type="button" class="todo-view-toggle-opt" data-mode="next-recurrence" title="Next recurrence of every task" data-i18n-title="view.next"></button>
             <button type="button" class="todo-view-toggle-opt" data-mode="all" title="All tasks this month" data-i18n-title="view.all"></button>
           </div>
+          <!-- Narrow screens only (see style.css) -- the side panel isn't
+               shown by default there, so this is the only way to reach
+               today's agenda without first selecting a task. -->
+          <button type="button" id="agenda-toggle-btn" class="agenda-toggle-btn" title="Today's agenda" data-i18n-title="sidePanel.agendaHeading">
+            <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
         </div>
         <div id="todo-viewport">
           <div id="todo-list"></div>
@@ -88,6 +94,13 @@
 
     <div class="side-panel">
       <div id="side-panel-empty" class="side-panel-empty">
+        <!-- Narrow screens only (see style.css) -- opening the agenda there
+             is an explicit action (agenda-toggle-btn above), so closing it
+             needs to be one too, rather than relying on deselecting a task
+             that was never selected to begin with. -->
+        <button type="button" id="agenda-close-btn" class="modal-close-btn agenda-close-btn" title="Close" data-i18n-title="common.close">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
         <div class="side-panel-section-heading" data-i18n="sidePanel.agendaHeading">Today's agenda</div>
         <div id="agenda-all-day" class="agenda-all-day"></div>
         <div id="agenda-empty" class="todo-manage-empty hidden" data-i18n="sidePanel.agendaEmpty">No tasks today.</div>
@@ -108,6 +121,14 @@
               <button type="button" class="side-panel-scope-opt" data-scope="series" title="Every task in this series" data-i18n="sidePanel.series" data-i18n-title="sidePanel.seriesTitle">Series</button>
             </div>
             <button id="side-panel-edit-toggle-btn" class="menu-btn-small"></button>
+            <!-- Narrow screens only (see style.css) -- the panel is a
+                 full-screen drawer there, so it needs an explicit close
+                 control rather than relying on deselecting the task (which
+                 the drawer itself can visually cover, making Escape/re-
+                 clicking the row the only other way to reach it). -->
+            <button type="button" id="side-panel-close-btn" class="side-panel-close-btn" title="Close" data-i18n-title="common.close">
+              <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
           </div>
         </div>
         <div id="side-panel-task-summaries" class="side-panel-task-summaries"></div>

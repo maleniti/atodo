@@ -2645,7 +2645,9 @@ function toggleTaskCompletion(task, occurrenceDate) {
       task.timer = null;
     }
   }
-  selectTaskForSidePanel(task);
+  // Not on narrow screens (see isNarrowLayout) -- checking a task off is a
+  // plain list action there, not a request to see its full-screen details.
+  if (!isNarrowLayout()) selectTaskForSidePanel(task);
   saveTasks();
   renderTodo();
 }
@@ -2696,7 +2698,8 @@ function toggleTaskFailedMark(task, occurrenceDate) {
     task.markedFailed[occurrenceDate] = true;
     logTaskEvent(task, 'Marked failed', occurrenceDate);
   }
-  selectTaskForSidePanel(task);
+  // See the same guard in toggleTaskCompletion above.
+  if (!isNarrowLayout()) selectTaskForSidePanel(task);
   saveTasks();
   renderTodo();
 }
@@ -3335,7 +3338,9 @@ function buildTodoItemRow(item, isToday) {
     workOnBtn.onclick = (e) => {
       e.stopPropagation();
       setActiveTaskId(isActiveHere ? null : item.task.id, item.occurrenceDate);
-      selectTaskForSidePanel(item.task);
+      // See the same guard in toggleTaskCompletion -- focusing/unfocusing is
+      // a plain list action on narrow screens, not a request to see details.
+      if (!isNarrowLayout()) selectTaskForSidePanel(item.task);
       renderTodo();
     };
     row.appendChild(workOnBtn);
@@ -3648,7 +3653,11 @@ function ensureTimerTicking() {
 // the manage-tasks modal) -- see sidePanelScope/sidePanelRecords.
 // ---------------------------------------------------------------------------
 
+const sidePanelEl = document.querySelector('.side-panel');
 const sidePanelEmptyEl = document.getElementById('side-panel-empty');
+const sidePanelCloseBtn = document.getElementById('side-panel-close-btn');
+const agendaToggleBtn = document.getElementById('agenda-toggle-btn');
+const agendaCloseBtn = document.getElementById('agenda-close-btn');
 const agendaAllDayEl = document.getElementById('agenda-all-day');
 const agendaEmptyEl = document.getElementById('agenda-empty');
 const agendaTimelineEl = document.getElementById('agenda-timeline');
@@ -3686,9 +3695,30 @@ let sidePanelScope = 'task'; // 'occurrence' | 'task' | 'series'
 // happens to be clicked next.
 let sidePanelEditMode = false;
 
+// Same breakpoint as the max-width: 1000px query (style.css) that turns the
+// side panel into a full-screen drawer -- used by call sites below that
+// select a task for the panel only as a side effect of some other action
+// (checking it off, focusing it, ...), to skip actually opening that
+// full-screen drawer on narrow screens where doing so would just get in the
+// way of whatever the user actually clicked to do.
+function isNarrowLayout() {
+  return window.matchMedia('(max-width: 1000px)').matches;
+}
+
+// Narrow-screen-only (see the max-width: 1000px query, style.css): the side
+// panel is a toggleable drawer there instead of a permanent column, and this
+// is the drawer's own open/closed state for when nothing's selected --
+// selecting a task always shows the panel regardless (see renderSidePanel),
+// so this only matters for reaching today's agenda with nothing selected.
+let agendaDrawerOpenNarrow = false;
+
 function selectTaskForSidePanel(task) {
   if (task !== sidePanelTask) sidePanelEditMode = false;
   sidePanelTask = task;
+  // A task being selected already shows the panel on its own -- reset so
+  // deselecting it later closes the panel back up instead of falling back
+  // to a drawer left open from before this selection.
+  agendaDrawerOpenNarrow = false;
   renderSidePanel();
   refreshPreviewedHighlight();
 }
@@ -3702,6 +3732,20 @@ function deselectSidePanelTask() {
   renderSidePanel();
   refreshPreviewedHighlight();
 }
+
+function openAgendaDrawer() {
+  agendaDrawerOpenNarrow = true;
+  renderSidePanel();
+}
+
+function closeAgendaDrawer() {
+  agendaDrawerOpenNarrow = false;
+  renderSidePanel();
+}
+
+agendaToggleBtn.onclick = openAgendaDrawer;
+agendaCloseBtn.onclick = closeAgendaDrawer;
+sidePanelCloseBtn.onclick = deselectSidePanelTask;
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sidePanelTask) deselectSidePanelTask();
@@ -4069,8 +4113,21 @@ function renderSidePanel() {
   // The selected record can vanish out from under the panel (deleted, or
   // merged away -- tasksInSeries/taskId lookups above would just silently
   // return nothing for it), so this doubles as the panel's own cleanup.
-  if (!sidePanelTask || !tasks.includes(sidePanelTask)) {
-    sidePanelTask = null;
+  if (!sidePanelTask || !tasks.includes(sidePanelTask)) sidePanelTask = null;
+
+  // Narrow screens only (see style.css) -- irrelevant at normal widths,
+  // where .side-panel is always visible via its own permanent column and
+  // neither class has a rule to match against there. The panel is a
+  // full-screen drawer at that width (see the max-width: 1000px query), so
+  // whatever's underneath it (app-main's own narrow-overlay-open rule hides
+  // .todo-column entirely) would otherwise still be sitting there for
+  // keyboard/screen-reader focus to land on, or just visually cluttering
+  // things up through the panel's own translucent background.
+  const narrowPanelVisible = !!sidePanelTask || agendaDrawerOpenNarrow;
+  sidePanelEl.classList.toggle('side-panel-narrow-visible', narrowPanelVisible);
+  appMainEl.classList.toggle('narrow-overlay-open', narrowPanelVisible);
+
+  if (!sidePanelTask) {
     sidePanelEmptyEl.classList.remove('hidden');
     sidePanelContentEl.classList.add('hidden');
     renderTodayAgenda();

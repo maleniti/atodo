@@ -91,10 +91,23 @@ main {
    app.js). Same flex-column shape as .side-panel-content, just with its own
    children instead. */
 .side-panel-empty {
+  position: relative; /* positioning context for #agenda-close-btn (narrow screens only) */
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+/* Hidden except on narrow screens (see the max-width: 1000px query below),
+   where the side panel itself is a toggleable drawer rather than a
+   permanent column -- these are its only open/close controls there.
+   .modal-close-btn.agenda-close-btn (not just .agenda-close-btn) so this
+   wins on specificity over .modal-close-btn's own display: flex, regardless
+   of which happens to come first in the file. */
+.agenda-toggle-btn,
+.side-panel-close-btn,
+.modal-close-btn.agenda-close-btn {
+  display: none;
 }
 
 .agenda-all-day {
@@ -684,13 +697,16 @@ main {
   gap: 2px;
 }
 
+/* Same opaque pill tone as .todo-view-toggle's own track (not a near-
+   invisible 0.06 tint) -- was too faint to read as a button in its own
+   right sitting next to that toggle. */
 .todo-month-nav-btn {
   width: 22px;
   height: 22px;
   flex: none;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(24, 26, 28, 0.9);
   color: #9aa0a6;
   display: flex;
   align-items: center;
@@ -699,6 +715,45 @@ main {
   transition: background 0.15s, color 0.15s;
 }
 .todo-month-nav-btn:hover { background: rgba(255, 255, 255, 0.14); color: #e8eaed; }
+
+/* Same round icon-button look/tone as .todo-month-nav-btn -- display itself
+   is set elsewhere (none by default, flex on narrow screens only, see the
+   max-width: 1000px query below). */
+.agenda-toggle-btn {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  background: rgba(24, 26, 28, 0.9);
+  color: #9aa0a6;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.agenda-toggle-btn:hover { background: rgba(255, 255, 255, 0.14); color: #e8eaed; }
+
+/* Same round icon-button look as .agenda-toggle-btn, sitting inline among
+   .side-panel-header-actions' other controls (not position: absolute like
+   .modal-close-btn/#agenda-close-btn -- there's already a natural flex row
+   here to join instead of overlaying). Display itself is set elsewhere
+   (none by default, flex on narrow screens only, see the max-width: 1000px
+   query below). */
+.side-panel-close-btn {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  background: rgba(24, 26, 28, 0.9);
+  color: #9aa0a6;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.side-panel-close-btn:hover { background: rgba(255, 255, 255, 0.14); color: #e8eaed; }
 
 .todo-month-label {
   min-width: 108px;
@@ -1204,6 +1259,11 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* .modal's own max-height/overflow-y below keep it within the viewport, so
+     this never actually needs to scroll itself -- just gives it room to
+     breathe against the viewport edges on a short window, rather than the
+     modal touching them directly. */
+  padding: 16px 0;
 }
 /* The generic single-form modal (#modal-overlay) is used for transient
    forms like the add/edit-task form, which can open on top of the to-do
@@ -1218,6 +1278,12 @@ main {
   border-radius: 12px;
   padding: 18px;
   width: 420px;
+  /* A form with enough fields (e.g. a recurring task's edit form) can get
+     taller than a short/narrow window -- scrolls within the modal itself
+     rather than overflowing off the top/bottom of the viewport with no way
+     to reach the rest. */
+  max-height: 100%;
+  overflow-y: auto;
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8);
 }
 
@@ -1702,12 +1768,40 @@ option {
   .todo-item-desc { display: none; }
 }
 
-@media (max-width: 640px) {
-  /* The reserved 25% side panel has nothing in it yet and just eats space
-     that the to-do list needs once the window's this narrow -- drop the
-     split and let the list use the full width. */
-  .side-panel { display: none; }
+/* The permanent 25% side panel doesn't fit next to the to-do list once the
+   window's this narrow -- rather than always reserving the space (dropping
+   the to-do list to a cramped remainder), it becomes a full-screen drawer:
+   hidden by default, covering the whole viewport (not just floating over
+   part of it -- simpler than reworking this app's fixed-to-the-viewport
+   layout, see html/body's own overflow: hidden, into one where the whole
+   page scrolls) once a task is selected or agenda-toggle-btn is clicked (see
+   renderSidePanel/openAgendaDrawer, app.js), closed again via
+   agenda-close-btn/side-panel-close-btn or deselecting the task. Whatever's
+   underneath (app-main's own narrow-overlay-open rule below) is hidden
+   outright rather than left sitting there under the drawer's own
+   translucent background. */
+@media (max-width: 1000px) {
   .todo-column { flex: 1; }
+  .side-panel {
+    display: none;
+    position: fixed;
+    inset: 0;
+    width: auto;
+    flex: none;
+    max-height: none;
+    border-radius: 0;
+    z-index: 20;
+  }
+  .side-panel.side-panel-narrow-visible { display: flex; }
+  main.narrow-overlay-open .todo-column { display: none; }
+  /* .modal-close-btn.agenda-close-btn again (see the default-hidden rule,
+     above in the file) -- needs to match its specificity to actually win. */
+  .agenda-toggle-btn,
+  .side-panel-close-btn,
+  .modal-close-btn.agenda-close-btn { display: flex; }
+}
+
+@media (max-width: 640px) {
   /* Two side-by-side columns get cramped once the window itself is this
      narrow -- collapse back to one. The two column divs are still in the
      same order (earlier-due tasks' column first), so stacking them
