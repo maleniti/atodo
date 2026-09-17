@@ -87,7 +87,16 @@
     </div>
 
     <div class="side-panel">
-      <div id="side-panel-empty" class="side-panel-empty" data-i18n="sidePanel.empty">Click a task to see its notes and history.</div>
+      <div id="side-panel-empty" class="side-panel-empty">
+        <div class="side-panel-section-heading" data-i18n="sidePanel.agendaHeading">Today's agenda</div>
+        <div id="agenda-all-day" class="agenda-all-day"></div>
+        <div id="agenda-empty" class="todo-manage-empty hidden" data-i18n="sidePanel.agendaEmpty">No tasks today.</div>
+        <div id="agenda-timeline-wrap" class="agenda-timeline-wrap">
+          <div id="agenda-timeline" class="agenda-timeline">
+            <div id="agenda-tracks" class="agenda-tracks"></div>
+          </div>
+        </div>
+      </div>
       <div id="side-panel-content" class="side-panel-content hidden">
         <div class="side-panel-header">
           <div id="side-panel-title" class="side-panel-title hidden"></div>

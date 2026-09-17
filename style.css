@@ -86,10 +86,142 @@ main {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
+/* Today's agenda -- shown instead of the plain "click a task" hint this used
+   to be, so the space isn't just sitting empty (see renderTodayAgenda,
+   app.js). Same flex-column shape as .side-panel-content, just with its own
+   children instead. */
 .side-panel-empty {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.agenda-all-day {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+/* No margin at all when there's nothing to show today -- an empty flex
+   container still collapses to 0 height on its own, but the margin-bottom
+   above wouldn't, leaving a stray gap above the timeline. */
+.agenda-all-day:empty { display: none; }
+
+.agenda-all-day-pill {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #202124;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-timeline-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.agenda-timeline-wrap::-webkit-scrollbar { width: 6px; } /* Chromium */
+.agenda-timeline-wrap::-webkit-scrollbar-track { background: transparent; }
+.agenda-timeline-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+.agenda-timeline-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+
+/* Height set per hour (see AGENDA_HOUR_HEIGHT, app.js) -- 24 hours' worth,
+   so every block/band/hour-line inside can position itself with a plain
+   top/height in px rather than juggling percentages of a variable-height
+   container. */
+.agenda-timeline {
+  position: relative;
+  height: 1056px;
+}
+
+.agenda-hour-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* Fixed-width gutter at the line's own left edge, reserved for the hour
+   label -- .agenda-tracks below starts right after it, so a band/block can
+   never render on top of the label the way it did when both started at the
+   same left:0. */
+.agenda-hour-label {
+  position: absolute;
+  left: 0;
+  top: -6px;
+  width: 30px;
+  text-align: right;
+  padding-right: 4px;
+  font-size: 9px;
   color: #80868b;
-  font-size: 13px;
-  padding: 8px 4px;
+}
+
+/* Everything actually representing a task (bands/blocks) lives in here, not
+   directly in .agenda-timeline -- inset from the left by the hour label's
+   own gutter (see .agenda-hour-label) so labels stay legible instead of
+   getting painted over. Blocks/bands position themselves with plain 0-100%
+   left/width against this box, same as if it were the full timeline. */
+.agenda-tracks {
+  position: absolute;
+  top: 0;
+  left: 34px;
+  right: 0;
+  bottom: 0;
+}
+
+/* Covers from the top of the timeline (midnight) down to the task's own due
+   time -- unlike .agenda-block below, this never has a fixed duration of
+   its own, so it's just a low-alpha tint rather than a solid-enough-to-read
+   fill, with its label floating on top instead of inside a card. Sits
+   behind .agenda-block (painted first, see renderTodayAgenda) so a passive
+   task's own cover never obscures another task's real block. */
+.agenda-passive-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  padding: 2px 4px;
+  pointer-events: none;
+  overflow: hidden;
+}
+.agenda-passive-band-label {
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agenda-block {
+  position: absolute;
+  min-height: 16px;
+  border-radius: 6px;
+  padding: 2px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.agenda-block-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #202124;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agenda-block-time {
+  font-size: 10px;
+  color: #202124;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .side-panel-content {

@@ -87,7 +87,8 @@ const I18N = {
     'menu.hide': 'Hide',
     'menu.taskStats': 'Task stats',
 
-    'sidePanel.empty': 'Click a task to see its notes and history.',
+    'sidePanel.agendaHeading': "Today's agenda",
+    'sidePanel.agendaEmpty': 'No tasks today.',
     'sidePanel.occurrence': 'Occurrence',
     'sidePanel.occurrenceTitle': 'Just this occurrence',
     'sidePanel.task': 'Task',
@@ -312,7 +313,8 @@ const I18N = {
     'menu.hide': 'Sakrij',
     'menu.taskStats': 'Statistika zadatka',
 
-    'sidePanel.empty': 'Kliknite zadatak za prikaz bilješki i povijesti.',
+    'sidePanel.agendaHeading': 'Današnji raspored',
+    'sidePanel.agendaEmpty': 'Danas nema zadataka.',
     'sidePanel.occurrence': 'Pojava',
     'sidePanel.occurrenceTitle': 'Samo ova pojava',
     'sidePanel.task': 'Zadatak',
@@ -3494,6 +3496,7 @@ function renderTodo() {
   if (tasks.length === 0) {
     todoSectionEl.classList.remove('hidden');
     renderTodoEmptyState();
+    renderSidePanel();
     return;
   }
 
@@ -3646,6 +3649,10 @@ function ensureTimerTicking() {
 // ---------------------------------------------------------------------------
 
 const sidePanelEmptyEl = document.getElementById('side-panel-empty');
+const agendaAllDayEl = document.getElementById('agenda-all-day');
+const agendaEmptyEl = document.getElementById('agenda-empty');
+const agendaTimelineEl = document.getElementById('agenda-timeline');
+const agendaTracksEl = document.getElementById('agenda-tracks');
 const sidePanelContentEl = document.getElementById('side-panel-content');
 const sidePanelTitleEl = document.getElementById('side-panel-title');
 const sidePanelSummariesEl = document.getElementById('side-panel-task-summaries');
@@ -3725,6 +3732,223 @@ function buildSidePanelEmptyRow(text) {
   empty.className = 'todo-manage-empty';
   empty.textContent = text;
   return empty;
+}
+
+// ---------------------------------------------------------------------------
+// Today's agenda -- shown in the side panel in place of the notes/history
+// view (see renderSidePanel) whenever nothing is selected, since that space
+// would otherwise just sit empty. A simple day timeline: passive tasks as
+// semi-transparent bands from midnight to their due time, all-day tasks
+// (passive ones included) as pills above it, everything else as a block
+// positioned/sized around its own due time (see agendaBlockRange below).
+// ---------------------------------------------------------------------------
+
+const AGENDA_HOUR_HEIGHT = 44; // px per hour of the rendered timeline
+const AGENDA_DEFAULT_LEAD_MINUTES = 30;
+
+// Same colors, and the same override order, as .todo-item-name's own CSS
+// cascade (style.css) -- completed/failed/all-day/appointment/passive rules
+// there all target .todo-item-name at equal specificity, so whichever is
+// declared LAST in the stylesheet wins for an item tagged with more than one
+// (e.g. a completed all-day task). Reproduced here as sequential overwrites
+// in that same order so an occurrence's agenda color always matches its own
+// title color in the to-do list, whatever combination of flags it has.
+function resolveAgendaColor(task, completed, failed) {
+  let color = '#e8eaed';
+  if (completed) color = '#fff';
+  if (failed) color = '#f28b82';
+  if (task.allDay) color = '#8ab4f8';
+  if (task.appointment && !completed && !failed) color = '#81c995';
+  if (task.passive && !failed) color = '#bcaaa4';
+  return color;
+}
+
+function agendaHexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function agendaTimeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// Average (focused + timer) minutes per occurrence, counting only
+// occurrences that were both completed and actually had some measured focus
+// time logged against them -- an occurrence that was never focused on, or
+// never finished, says nothing about how long this task actually takes, so
+// both are excluded rather than dragging the average toward zero. null
+// (rather than 0) signals "no measurements at all", so callers can fall back
+// to a plain default instead of showing a zero-length block.
+function averageFocusedMinutesForCompletedOccurrences(task) {
+  let totalSeconds = 0;
+  let qualifyingCount = 0;
+  for (const t of tasksInSeries(task.seriesId)) {
+    for (const [date, entry] of Object.entries(t.focusLog || {})) {
+      const seconds = (entry.focusedSeconds || 0) + (entry.timerSeconds || 0);
+      if (seconds <= 0 || !t.completions[date]) continue;
+      totalSeconds += seconds;
+      qualifyingCount++;
+    }
+  }
+  return qualifyingCount === 0 ? null : totalSeconds / qualifyingCount / 60;
+}
+
+function agendaDurationMinutes(task) {
+  const avg = averageFocusedMinutesForCompletedOccurrences(task);
+  return avg === null ? AGENDA_DEFAULT_LEAD_MINUTES : avg;
+}
+
+// One entry per task occurring today, in whatever state it's currently in
+// (done, failed, neither) -- same derivation computeAllTasksItems uses, just
+// for today alone rather than a whole viewed month.
+function buildTodayAgendaItems() {
+  const now = new Date();
+  const todayISO = Recurrence.dateToISO(now);
+  const items = [];
+  for (const task of tasks) {
+    if (!Recurrence.occursOn(task, todayISO)) continue;
+    const completed = !!task.completions[todayISO];
+    const { failed } = completed ? { failed: false } : pastDueStatus(task, todayISO, completed, now);
+    items.push({ task, completed, failed, color: resolveAgendaColor(task, completed, failed) });
+  }
+  return items;
+}
+
+function buildAgendaAllDayPill(item) {
+  const pill = document.createElement('div');
+  pill.className = 'agenda-all-day-pill';
+  pill.style.background = agendaHexToRgba(item.color, 0.85);
+  pill.textContent = item.task.name;
+  pill.title = item.task.name;
+  return pill;
+}
+
+function buildAgendaHourLine(hour) {
+  const row = document.createElement('div');
+  row.className = 'agenda-hour-line';
+  row.style.top = `${hour * AGENDA_HOUR_HEIGHT}px`;
+  const label = document.createElement('span');
+  label.className = 'agenda-hour-label';
+  label.textContent = formatTimeOfDay(`${String(hour).padStart(2, '0')}:00`);
+  row.appendChild(label);
+  return row;
+}
+
+// Semi-transparent cover from the start of the day to the task's own due
+// time -- deliberately not a same-height-as-the-hour-grid opaque block like
+// .agenda-block below, since a passive task doesn't occupy a specific span
+// of time the way a real block does, it's just "not done yet, sometime
+// before this".
+function buildAgendaPassiveBand(item) {
+  const band = document.createElement('div');
+  band.className = 'agenda-passive-band';
+  const dueMinutes = agendaTimeToMinutes(item.task.dueTime);
+  band.style.height = `${(dueMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
+  band.style.background = agendaHexToRgba(item.color, 0.16);
+  const label = document.createElement('span');
+  label.className = 'agenda-passive-band-label';
+  label.style.color = item.color;
+  label.textContent = item.task.name;
+  band.appendChild(label);
+  band.title = `${item.task.name} · ${t('todo.due', { time: formatTimeOfDay(item.task.dueTime) })}`;
+  return band;
+}
+
+// Greedily assigns each block the first column whose last-placed block ends
+// at or before this one's own start, opening a new column otherwise --
+// standard interval-graph column packing, so two same-day blocks never
+// render on top of each other. Not scoped to just the specific cluster of
+// blocks that actually overlap (every block on the day shares the same
+// column count) -- simpler, at the cost of occasionally splitting a block
+// into a narrower column than it strictly needs when unrelated blocks
+// elsewhere in the day happen to need more columns.
+function assignAgendaColumns(blocks) {
+  const sorted = blocks.slice().sort((a, b) => a.startMinutes - b.startMinutes);
+  const columnEnds = [];
+  for (const block of sorted) {
+    let column = columnEnds.findIndex((end) => end <= block.startMinutes);
+    if (column === -1) {
+      column = columnEnds.length;
+      columnEnds.push(block.endMinutes);
+    } else {
+      columnEnds[column] = block.endMinutes;
+    }
+    block.column = column;
+  }
+  const totalColumns = columnEnds.length || 1;
+  for (const block of blocks) block.totalColumns = totalColumns;
+}
+
+// An ordinary task's block ends at its due time and starts agendaDuration-
+// Minutes before it (working *toward* the deadline); an appointment's block
+// instead starts at its due time and runs that same duration *past* it (the
+// due time is when it begins, not a deadline). Clamped to the visible day
+// (a very early due time with a long lead could otherwise start before
+// midnight) -- the block just starts at the top of the timeline instead.
+function agendaBlockRange(task) {
+  const dueMinutes = agendaTimeToMinutes(task.dueTime);
+  const durationMinutes = agendaDurationMinutes(task);
+  if (task.appointment) return { startMinutes: dueMinutes, endMinutes: dueMinutes + durationMinutes };
+  return { startMinutes: Math.max(0, dueMinutes - durationMinutes), endMinutes: dueMinutes };
+}
+
+function buildAgendaBlock(block) {
+  const el = document.createElement('div');
+  el.className = 'agenda-block';
+  el.style.top = `${(block.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
+  el.style.height = `${((block.endMinutes - block.startMinutes) / 60) * AGENDA_HOUR_HEIGHT}px`;
+  const widthPercent = 100 / block.totalColumns;
+  el.style.left = `${widthPercent * block.column}%`;
+  el.style.width = `calc(${widthPercent}% - 4px)`;
+  el.style.background = agendaHexToRgba(block.item.color, 0.85);
+
+  const name = document.createElement('div');
+  name.className = 'agenda-block-name';
+  name.textContent = block.item.task.name;
+  el.appendChild(name);
+
+  const time = document.createElement('div');
+  time.className = 'agenda-block-time';
+  time.textContent = formatTimeOfDay(block.item.task.dueTime);
+  el.appendChild(time);
+
+  el.title = block.item.task.name;
+  return el;
+}
+
+function renderTodayAgenda() {
+  const items = buildTodayAgendaItems();
+
+  agendaAllDayEl.innerHTML = '';
+  for (const item of items.filter((i) => i.task.allDay)) {
+    agendaAllDayEl.appendChild(buildAgendaAllDayPill(item));
+  }
+
+  // Hour lines/labels are direct children of .agenda-timeline (they span its
+  // full width, gutter included); .agenda-tracks is the one static child
+  // that must survive this clear -- everything actually representing a task
+  // goes in there instead (see .agenda-tracks, style.css).
+  agendaTimelineEl.querySelectorAll('.agenda-hour-line').forEach((el) => el.remove());
+  for (let h = 0; h < 24; h++) agendaTimelineEl.appendChild(buildAgendaHourLine(h));
+
+  agendaTracksEl.innerHTML = '';
+  const timedItems = items.filter((i) => !i.task.allDay);
+  for (const item of timedItems.filter((i) => i.task.passive)) {
+    agendaTracksEl.appendChild(buildAgendaPassiveBand(item));
+  }
+
+  const blocks = timedItems
+    .filter((i) => !i.task.passive)
+    .map((item) => ({ item, ...agendaBlockRange(item.task) }));
+  assignAgendaColumns(blocks);
+  for (const block of blocks) agendaTracksEl.appendChild(buildAgendaBlock(block));
+
+  agendaEmptyEl.classList.toggle('hidden', items.length > 0);
 }
 
 async function editCommentPrompt(comment) {
@@ -3849,6 +4073,7 @@ function renderSidePanel() {
     sidePanelTask = null;
     sidePanelEmptyEl.classList.remove('hidden');
     sidePanelContentEl.classList.add('hidden');
+    renderTodayAgenda();
     return;
   }
 
