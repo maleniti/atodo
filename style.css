@@ -701,18 +701,36 @@ main {
    its *natural* (unstuck) flow position, not its stuck one, so right as a
    header starts sticking, its own day's first card still briefly renders
    into the same box the header is now pinned over -- confirmed with
-   getBoundingClientRect, and reproducible with no photo background at all.
-   Any transparency here, blurred or not, leaves that card's checkbox/text
-   legible through it (tried both -- a fully see-through header was worse,
-   and even ~0.9 alpha still bled through noticeably), so this is opaque
-   rather than glass like every other panel in this file. */
+   getBoundingClientRect. This isn't a one-frame glitch either: for as long
+   as this header stays pinned, its own day's remaining cards keep scrolling
+   underneath it, same as any sticky section header. A light tint (~0.9
+   alpha) with only a slight blur still left checkbox/text edges legible --
+   what actually hides them is a strong blur, not the alpha, so this can
+   stay almost fully see-through (unlike .todo-item/.side-panel's own glass,
+   which leans on a dark, near-opaque tint plus a much lighter blur since
+   they don't need to mask anything moving underneath them) as long as the
+   blur radius is large enough to destroy the scrolled-under content's fine
+   detail rather than just soften it. Deliberately plain blur()/saturate(),
+   no url(#glass-distort) SVG reference like .todo-item/.side-panel use --
+   Firefox doesn't support an SVG filter as a backdrop-filter value at all,
+   dropping the whole declaration (see index.html), and unlike those other
+   panels this header has no opaque fallback tint to fall back on, so it
+   needs the blur to actually render in every browser, not just Chrome.
+   Border/border-radius/inset shadow match the same beveled-glass treatment
+   as .todo-item/.side-panel, just scaled down (this is a thin bar, not a
+   card or panel). */
 .todo-day-header.pinned {
   position: sticky;
   top: 0;
   z-index: 1;
-  /* Same dark tone as .todo-item's own base (not plain black) so it still
-     reads as part of the same dark surface instead of a stray solid block. */
-  background: rgb(24, 26, 28);
+  border-radius: 4px;
+  background: rgba(24, 26, 28, 0.18);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
 }
 /* Dims only the label text, not the header element itself -- opacity on the
    whole element would also fade its background, so a dimmed ("not today")

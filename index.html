@@ -17,6 +17,15 @@
       <feDisplacementMap in="SourceGraphic" in2="noise" scale="12" xChannelSelector="R" yChannelSelector="G" />
     </filter>
   </svg>
+  <!-- Firefox doesn't support an SVG filter (url(...)) as a backdrop-filter
+       value at all -- it drops the whole backdrop-filter declaration as
+       invalid, not just the url() part, which is also why #glass-distort
+       above silently does nothing in Firefox on .todo-item/.side-panel/
+       .modal today (unnoticed there since their base tint is opaque enough
+       on its own). .todo-day-header.pinned (style.css) can't rely on it at
+       all -- it's mostly transparent and needs the blur itself to hide
+       scrolled-under content -- so it uses plain blur()/saturate(), no
+       url(), which both engines support. -->
 
   <div id="login-screen" class="modal-overlay hidden">
     <div class="modal login-modal">
