@@ -518,14 +518,21 @@ function applyStaticTranslations() {
   document.documentElement.lang = currentUserLanguage;
 }
 
-// task.log ({ message, timestamp }[]) is the side panel's short activity
-// history -- lazily created like task.focusLog, not present on every task
-// from the start. Recorded per task record (not per taskId/seriesId); the
-// side panel merges every record's log together when it displays "this
-// task" or "this series" (see aggregateSidePanelRecords).
-function logTaskEvent(task, message) {
+// task.log ({ message, timestamp, occurrenceDate }[]) is the side panel's
+// short activity history -- lazily created like task.focusLog, not present
+// on every task from the start. Recorded per task record (not per
+// taskId/seriesId); the side panel merges every record's log together when
+// it displays "this task" or "this series" (see aggregateSidePanelRecords).
+// occurrenceDate is which occurrence the action was actually about (omit it
+// for an action on the task/series as a whole, e.g. a plain edit) --
+// recorded explicitly rather than left for buildSidePanelLogRow to infer
+// from the record's own task.dueDate, since a record's dueDate is its own
+// *base* due date (a whole recurring series' anchor, or -- after a split
+// edit/delete -- the split's continuation point), which often isn't the
+// occurrence the entry is actually about.
+function logTaskEvent(task, message, occurrenceDate) {
   if (!task.log) task.log = [];
-  task.log.push({ message, timestamp: Date.now() });
+  task.log.push({ message, timestamp: Date.now(), occurrenceDate: occurrenceDate || null });
 }
 
 // task.comments ({ text, timestamp }[]) -- the side panel's user-entered
@@ -1271,7 +1278,7 @@ function setActiveTaskId(newId, occurrenceDate) {
     } else {
       flushFocusOnlyElapsed(prevTask);
     }
-    logTaskEvent(prevTask, 'Unfocused');
+    logTaskEvent(prevTask, 'Unfocused', activeOccurrenceDate);
   }
   activeTaskId = newId;
   activeOccurrenceDate = newId ? occurrenceDate : null;
@@ -1287,7 +1294,7 @@ function setActiveTaskId(newId, occurrenceDate) {
     // occurrence that no longer shows as focused.
     if (timerMatchesOccurrence(nextTask.timer, activeOccurrenceDate)) nextTask.timer.runningSince = Date.now();
     else activeFocusOnlySince = Date.now();
-    logTaskEvent(nextTask, 'Focused');
+    logTaskEvent(nextTask, 'Focused', activeOccurrenceDate);
   }
   saveTasks();
 }
@@ -1516,7 +1523,7 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
       runningSince: null,
       occurrenceDate,
     };
-    logTaskEvent(task, 'Timer set');
+    logTaskEvent(task, 'Timer set', occurrenceDate);
     saveTasks();
     renderTodo();
     return;
@@ -1543,7 +1550,7 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
     runningSince: Date.now(),
     occurrenceDate,
   };
-  logTaskEvent(task, 'Timer set');
+  logTaskEvent(task, 'Timer set', occurrenceDate);
   saveTasks();
   setActiveTaskId(task.id, occurrenceDate);
   renderTodo();
@@ -1555,9 +1562,10 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
 // active afterward (cancelling doesn't itself un-focus it, just removes the
 // timer), it keeps being focused, now in plain focus-only mode.
 function cancelTaskTimer(task) {
+  const occurrenceDate = task.timer.occurrenceDate;
   flushTimerElapsed(task);
   task.timer = null;
-  logTaskEvent(task, 'Timer cancelled');
+  logTaskEvent(task, 'Timer cancelled', occurrenceDate);
   if (task.id === activeTaskId) activeFocusOnlySince = Date.now();
   saveTasks();
   renderTodo();
@@ -2341,7 +2349,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       markedFailed: wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {},
     };
     tasks.push(editedFragment);
-    logTaskEvent(editedFragment, 'Recurrence edited (only this occurrence)');
+    logTaskEvent(editedFragment, 'Recurrence edited (only this occurrence)', newOccurrenceDate);
 
     if (nextDate) {
       tasks.push({
@@ -2391,7 +2399,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       },
     };
     tasks.push(editedFragment);
-    logTaskEvent(editedFragment, 'Recurrence edited (this and following occurrences)');
+    logTaskEvent(editedFragment, 'Recurrence edited (this and following occurrences)', newOccurrenceDate);
   }
 }
 
@@ -2452,7 +2460,8 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
   if (loggedFragment) {
     logTaskEvent(
       loggedFragment,
-      scope === 'instance' ? 'Recurrence occurrence deleted' : 'Recurrence and following occurrences deleted'
+      scope === 'instance' ? 'Recurrence occurrence deleted' : 'Recurrence and following occurrences deleted',
+      occurrenceDate
     );
   }
 }
@@ -2607,10 +2616,10 @@ function toggleTaskCompletion(task, occurrenceDate) {
     if (occurrenceDate === Recurrence.dateToISO(new Date())) {
       restorePriorOccurrenceIfIncomplete(task, occurrenceDate);
     }
-    logTaskEvent(task, 'Marked not done');
+    logTaskEvent(task, 'Marked not done', occurrenceDate);
   } else {
     task.completions[occurrenceDate] = true;
-    logTaskEvent(task, 'Marked done');
+    logTaskEvent(task, 'Marked done', occurrenceDate);
     // Only this task's "today" or carried-over occurrence is ever checked
     // off this way (see the checkbox's disabled condition below), so
     // occurrenceDate is always on or before today here -- dismiss any
@@ -2680,10 +2689,10 @@ function toggleTaskFailedMark(task, occurrenceDate) {
   if (!task.markedFailed) task.markedFailed = {};
   if (task.markedFailed[occurrenceDate]) {
     delete task.markedFailed[occurrenceDate];
-    logTaskEvent(task, 'Marked not failed');
+    logTaskEvent(task, 'Marked not failed', occurrenceDate);
   } else {
     task.markedFailed[occurrenceDate] = true;
-    logTaskEvent(task, 'Marked failed');
+    logTaskEvent(task, 'Marked failed', occurrenceDate);
   }
   selectTaskForSidePanel(task);
   saveTasks();
@@ -3440,9 +3449,10 @@ function expireFinishedTimers() {
     const ranPastCap = timerElapsedSeconds(t.timer) >= MAX_TIMER_SECONDS;
     const countdownDone = t.timer.mode !== 'countup' && !t.timer.continuePastZero && remaining <= 0;
     if (countdownDone || ranPastCap) {
+      const occurrenceDate = t.timer.occurrenceDate;
       flushTimerElapsed(t);
       t.timer = null;
-      logTaskEvent(t, 'Timer elapsed');
+      logTaskEvent(t, 'Timer elapsed', occurrenceDate);
       changed = true;
       playTimerChime();
       if (t.id === activeTaskId) setActiveTaskId(null);
@@ -3773,12 +3783,15 @@ function buildSidePanelCommentRow(task, comment, showTaskInfo) {
 }
 
 // `task` is the specific record `entry` was logged against -- shown inline
-// (name + its own due/recurrence date) only when the panel is merging
-// multiple records together (series scope): in single-task scope every
-// entry already obviously belongs to the one task on screen, so naming it
-// again on every row would just be noise. Description isn't repeated here
+// (name + the occurrence it was actually about) only when the panel is
+// merging multiple records together (series scope): in single-task scope
+// every entry already obviously belongs to the one task on screen, so naming
+// it again on every row would just be noise. Description isn't repeated here
 // even in series scope -- it's already shown once per task in the
 // task-summaries block at the top of the panel (see buildSidePanelTaskSummary).
+// Falls back to task.dueDate for an entry with no occurrenceDate of its own
+// (an action on the task/series as a whole, e.g. a plain edit -- or an entry
+// logged before occurrenceDate started being recorded at all).
 function buildSidePanelLogRow(task, entry, showTaskInfo) {
   const item = document.createElement('div');
   item.className = 'side-panel-log-item';
@@ -3787,7 +3800,8 @@ function buildSidePanelLogRow(task, entry, showTaskInfo) {
   topRow.className = 'side-panel-log-top-row';
   const msg = document.createElement('span');
   msg.className = 'side-panel-log-message';
-  msg.textContent = showTaskInfo ? `${task.name}, ${task.dueDate} -- ${entry.message}` : entry.message;
+  const shownDate = entry.occurrenceDate || task.dueDate;
+  msg.textContent = showTaskInfo ? `${task.name}, ${shownDate} -- ${entry.message}` : entry.message;
   const time = document.createElement('span');
   time.className = 'side-panel-log-time';
   time.textContent = formatDateTime(entry.timestamp);
@@ -4183,7 +4197,7 @@ async function promptManualOccurrence(sourceTask) {
     markedFailed: {},
   };
   tasks.push(occurrence);
-  logTaskEvent(occurrence, 'Manual occurrence added');
+  logTaskEvent(occurrence, 'Manual occurrence added', occurrence.dueDate);
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
