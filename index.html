@@ -30,10 +30,11 @@
   <div id="login-screen" class="modal-overlay hidden">
     <div class="modal login-modal">
       <div class="modal-title" data-i18n="login.title">Log in</div>
+      <div id="login-message" class="modal-message hidden"></div>
       <form id="login-form">
         <div class="modal-field">
-          <label for="login-username" data-i18n="login.username">Username</label>
-          <input id="login-username" class="modal-input" type="text" autocomplete="username">
+          <label for="login-email" data-i18n="login.email">Email</label>
+          <input id="login-email" class="modal-input" type="email" autocomplete="username">
         </div>
         <div class="modal-field">
           <label for="login-password" data-i18n="login.password">Password</label>
@@ -42,7 +43,46 @@
         <div class="modal-actions">
           <button type="submit" class="modal-ok" data-i18n="login.submit">Log in</button>
         </div>
+        <div class="modal-link-row">
+          <span data-i18n="login.noAccount">Don't have an account?</span>
+          <a href="#" id="show-register-link" class="modal-link" data-i18n="login.registerLink">Create one</a>
+        </div>
       </form>
+    </div>
+  </div>
+
+  <div id="register-screen" class="modal-overlay hidden">
+    <div class="modal login-modal">
+      <div class="modal-title" data-i18n="register.title">Create account</div>
+      <div id="register-message" class="modal-message hidden"></div>
+      <form id="register-form">
+        <div class="modal-field">
+          <label for="register-email" data-i18n="login.email">Email</label>
+          <input id="register-email" class="modal-input" type="email" autocomplete="username">
+        </div>
+        <div class="modal-field">
+          <label for="register-password" data-i18n="login.password">Password</label>
+          <input id="register-password" class="modal-input" type="password" autocomplete="new-password">
+        </div>
+        <div class="modal-field">
+          <label for="register-password-confirm" data-i18n="register.confirmPassword">Confirm password</label>
+          <input id="register-password-confirm" class="modal-input" type="password" autocomplete="new-password">
+        </div>
+        <div class="field-hint" data-i18n="register.passwordHint">At least 8 characters.</div>
+        <div class="modal-actions">
+          <button type="submit" class="modal-ok" data-i18n="register.submit">Create account</button>
+        </div>
+        <div class="modal-link-row">
+          <span data-i18n="register.haveAccount">Already have an account?</span>
+          <a href="#" id="show-login-link" class="modal-link" data-i18n="register.loginLink">Log in</a>
+        </div>
+      </form>
+      <div id="register-success" class="hidden">
+        <div id="register-success-message" class="modal-message success"></div>
+        <div class="modal-actions">
+          <button type="button" id="register-success-back-btn" class="modal-ok" data-i18n="register.backToLogin">Back to log in</button>
+        </div>
+      </div>
     </div>
   </div>
 

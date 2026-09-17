@@ -33,8 +33,24 @@
     return false;
   }
 
+  // type="email" (already in isTextField's own whitelist above) doesn't
+  // actually support setSelectionRange, or even just reading selectionStart/
+  // selectionEnd, per spec -- only text/search/url/tel/password (and
+  // textarea) do; touching either throws InvalidStateError instead of being
+  // a no-op. Every place below that reads or sets selection state on a
+  // field goes through this instead of calling the element's own methods/
+  // properties directly, so an email field just silently skips the fancy
+  // cursor/selection handling rather than crashing the whole gesture.
+  function withSelection(el, fn) {
+    try {
+      fn();
+    } catch {
+      // Unsupported input type -- nothing to do.
+    }
+  }
+
   function selectAll(el) {
-    el.setSelectionRange(0, el.value.length, 'forward');
+    withSelection(el, () => el.setSelectionRange(0, el.value.length, 'forward'));
   }
 
   // Whether the element about to be clicked is currently unfocused --
@@ -68,7 +84,7 @@
     (e) => {
       if (!isTextField(e.target)) return;
       if (e.target === gestureTarget) gestureTarget = null;
-      e.target.setSelectionRange(e.target.selectionEnd, e.target.selectionEnd);
+      withSelection(e.target, () => e.target.setSelectionRange(e.target.selectionEnd, e.target.selectionEnd));
     },
     true
   );
@@ -113,8 +129,10 @@
       // collapses it back to a single point, depending on which rule
       // applies.
       setTimeout(() => {
-        if (startedUnfocused) el.setSelectionRange(el.selectionStart, el.selectionStart);
-        else el.setSelectionRange(el.selectionStart, el.selectionEnd, 'forward');
+        withSelection(el, () => {
+          if (startedUnfocused) el.setSelectionRange(el.selectionStart, el.selectionStart);
+          else el.setSelectionRange(el.selectionStart, el.selectionEnd, 'forward');
+        });
       }, 0);
     },
     true

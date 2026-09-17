@@ -23,9 +23,30 @@ function uid() {
 const I18N = {
   en: {
     'login.title': 'Log in',
-    'login.username': 'Username',
+    'login.email': 'Email',
     'login.password': 'Password',
     'login.submit': 'Log in',
+    'login.noAccount': "Don't have an account?",
+    'login.registerLink': 'Create one',
+    'login.invalidCredentials': 'Incorrect email or password.',
+    'login.notVerified': "That email hasn't been verified yet – check your inbox for the verification link.",
+    'login.verifiedSuccess': 'Email verified – you can now log in as {email}.',
+    'login.verifyExpired': 'That verification link has expired. Please register again.',
+    'login.verifyInvalid': 'That verification link is invalid or has already been used.',
+
+    'register.title': 'Create account',
+    'register.confirmPassword': 'Confirm password',
+    'register.passwordHint': 'At least 8 characters.',
+    'register.submit': 'Create account',
+    'register.haveAccount': 'Already have an account?',
+    'register.loginLink': 'Log in',
+    'register.backToLogin': 'Back to log in',
+    'register.passwordMismatch': "Passwords don't match.",
+    'register.passwordTooShort': 'Password must be at least 8 characters.',
+    'register.invalidEmail': 'Enter a valid email address.',
+    'register.emailTaken': 'An account with that email already exists.',
+    'register.genericError': 'Something went wrong – please try again.',
+    'register.checkEmail': "We've sent a verification link to {email}. Click it within 6 hours to activate your account.",
 
     'common.close': 'Close',
     'common.cancel': 'Cancel',
@@ -251,9 +272,30 @@ const I18N = {
   },
   hr: {
     'login.title': 'Prijava',
-    'login.username': 'Korisničko ime',
+    'login.email': 'E-mail',
     'login.password': 'Lozinka',
     'login.submit': 'Prijava',
+    'login.noAccount': 'Nemate račun?',
+    'login.registerLink': 'Napravite ga',
+    'login.invalidCredentials': 'Netočan e-mail ili lozinka.',
+    'login.notVerified': 'Taj e-mail još nije potvrđen – provjerite poštanski sandučić za poveznicu za potvrdu.',
+    'login.verifiedSuccess': 'E-mail potvrđen – sada se možete prijaviti kao {email}.',
+    'login.verifyExpired': 'Ta poveznica za potvrdu je istekla. Molimo registrirajte se ponovno.',
+    'login.verifyInvalid': 'Ta poveznica za potvrdu nije valjana ili je već iskorištena.',
+
+    'register.title': 'Napravi račun',
+    'register.confirmPassword': 'Potvrdite lozinku',
+    'register.passwordHint': 'Najmanje 8 znakova.',
+    'register.submit': 'Napravi račun',
+    'register.haveAccount': 'Već imate račun?',
+    'register.loginLink': 'Prijavite se',
+    'register.backToLogin': 'Natrag na prijavu',
+    'register.passwordMismatch': 'Lozinke se ne podudaraju.',
+    'register.passwordTooShort': 'Lozinka mora imati najmanje 8 znakova.',
+    'register.invalidEmail': 'Unesite valjanu e-mail adresu.',
+    'register.emailTaken': 'Račun s tom e-mail adresom već postoji.',
+    'register.genericError': 'Nešto je pošlo po zlu – pokušajte ponovno.',
+    'register.checkEmail': 'Poslali smo poveznicu za potvrdu na {email}. Kliknite je unutar 6 sati kako biste aktivirali račun.',
 
     'common.close': 'Zatvori',
     'common.cancel': 'Odustani',
@@ -1041,20 +1083,147 @@ function showFormModal(title, fields, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Auth -- entirely fake for now; there's no backend yet to actually check
-// credentials against or issue real tokens. login()/getMe() have the same
-// async, token-in/token-out shape a real backend's equivalent endpoints
-// will eventually have, so swapping their bodies for real fetch() calls
-// later shouldn't need to touch any caller. Every username/password
-// combination "succeeds" and resolves to the one real user (FAKE_USER_ID).
-// The token itself is a base64'd JSON blob (not a real JWT -- there's no
-// signature, nothing else to actually verify it), just enough structure
-// that a real backend swap only changes what's inside, not how it's used.
+// Auth -- login()/getMe()/register() have the same async, token-in/token-out
+// shape a real backend's equivalent endpoints will eventually have, so
+// swapping their bodies for real fetch() calls later shouldn't need to touch
+// any caller. The token itself is a base64'd JSON blob (not a real JWT --
+// there's no signature, nothing else to actually verify it), just enough
+// structure that a real backend swap only changes what's inside, not how
+// it's used.
+//
+// Credentials are real (see USERS_STORAGE_KEY/registerUser/login below),
+// but everything past login is still the fake-single-user shortcut this app
+// started as (see loadTasks/saveTasks, loadUserProfile/saveUserProfile
+// below) -- multiple real accounts can register, verify, and log in
+// independently now, but they all still see the same shared to-do list;
+// giving each account its own is a bigger change than this pass covers.
 // ---------------------------------------------------------------------------
 
 const AUTH_TOKEN_KEY = 'advanced-todo-auth-token';
 const FAKE_USER_ID = 'nikola';
 const FAKE_USER_NICKNAME = 'Nikola';
+
+// Registered accounts (email + salted/hashed password) -- separate from
+// task/profile data above, and, unlike those, actually keyed per account
+// (see login/registerUser). pendingRegistrations holds an account that's
+// registered but not yet verified (see registerUser/verifyEmailToken); once
+// verified it moves over to `users` and is removed from here.
+const USERS_STORAGE_KEY = 'advanced-todo-users';
+const PENDING_REGISTRATIONS_KEY = 'advanced-todo-pending-registrations';
+// How long a verification link stays valid after registerUser sends it.
+const VERIFICATION_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+function loadUsers() {
+  try {
+    return JSON.parse(localStorage.getItem(USERS_STORAGE_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+function saveUsers(users) {
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+}
+function loadPendingRegistrations() {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_REGISTRATIONS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+function savePendingRegistrations(pending) {
+  localStorage.setItem(PENDING_REGISTRATIONS_KEY, JSON.stringify(pending));
+}
+
+function randomHex(byteLength) {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// SHA-256 of `${salt}:${password}`, hex-encoded -- not a real password KDF
+// (no bcrypt/scrypt/argon2 available without a library or a backend), but
+// still salted and hashed rather than stored in plain text, via the Web
+// Crypto API every modern browser already has built in.
+async function hashPassword(password, salt) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${password}`));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// The account that was already using this app before real login existed
+// (see FAKE_USER_ID) needs real credentials to keep logging in at all --
+// seeded once, the first time `users` is empty, with the *same* id so it
+// keeps whatever task/profile data is already saved under it. A genuinely
+// fresh install seeds nothing here (there's no pre-existing user to carry
+// forward); its first real account comes from registerUser instead.
+const SEED_USER_EMAIL = 'nikola@clab.hr';
+const SEED_USER_PASSWORD = 'todolist-2026';
+async function seedInitialUserIfNeeded() {
+  if (loadUsers().length > 0) return;
+  const salt = randomHex(16);
+  const passwordHash = await hashPassword(SEED_USER_PASSWORD, salt);
+  saveUsers([{ id: FAKE_USER_ID, email: SEED_USER_EMAIL, salt, passwordHash }]);
+}
+
+function codeError(code) {
+  const err = new Error(code);
+  err.code = code;
+  return err;
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// No real backend/email service to send this from yet (see CLAUDE.md) --
+// dumped to the console instead, as what would actually get emailed, so the
+// verify-by-link flow can still be exercised end-to-end locally.
+function sendVerificationEmail(email, token) {
+  const url = new URL(location.href);
+  url.search = `?verify=${token}`;
+  url.hash = '';
+  console.log(
+    `[email] To: ${email}\nSubject: Verify your email address\n\n` +
+      `Click the link below to verify your email (expires in 6 hours):\n${url.toString()}`
+  );
+}
+
+// Registers a new (unverified) account -- throws a codeError('INVALID_EMAIL'
+// | 'EMAIL_TAKEN') for the form to translate and show. Registering again
+// with an email that's already pending (not yet verified) just resends a
+// fresh link rather than erroring -- the first one may have gone missing or
+// already expired, and there's no harm starting it over.
+async function registerUser(email, password) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!isValidEmail(normalizedEmail)) throw codeError('INVALID_EMAIL');
+  await seedInitialUserIfNeeded();
+  if (loadUsers().some((u) => u.email.toLowerCase() === normalizedEmail)) throw codeError('EMAIL_TAKEN');
+
+  const salt = randomHex(16);
+  const passwordHash = await hashPassword(password, salt);
+  const token = randomHex(24);
+  const pending = loadPendingRegistrations().filter((p) => p.email.toLowerCase() !== normalizedEmail);
+  pending.push({ id: uid(), email: normalizedEmail, salt, passwordHash, token, createdAt: Date.now() });
+  savePendingRegistrations(pending);
+  sendVerificationEmail(normalizedEmail, token);
+}
+
+// Resolves a verification link's token: moves the matching pending
+// registration over to `users` (and removes it from pending) if it's still
+// within its window, otherwise just removes it and reports why. A token is
+// single-use either way -- expired or not, it's consumed as soon as it's
+// looked up here, so revisiting the same link again always reports
+// INVALID_TOKEN on the second try rather than re-verifying or re-expiring.
+function verifyEmailToken(token) {
+  const pending = loadPendingRegistrations();
+  const index = pending.findIndex((p) => p.token === token);
+  if (index === -1) return { ok: false, code: 'INVALID_TOKEN' };
+  const [entry] = pending.splice(index, 1);
+  savePendingRegistrations(pending);
+  if (Date.now() - entry.createdAt > VERIFICATION_WINDOW_MS) return { ok: false, code: 'EXPIRED' };
+  const users = loadUsers();
+  users.push({ id: entry.id, email: entry.email, salt: entry.salt, passwordHash: entry.passwordHash });
+  saveUsers(users);
+  return { ok: true, email: entry.email };
+}
 
 // User profile (nickname + avatar + time format) -- the only per-user
 // settings that exist so far, editable via the Settings modal. Same
@@ -1092,8 +1261,22 @@ function saveUserProfile(profile, userId = currentUserId) {
   localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
-async function login(username, password) {
-  return { token: btoa(JSON.stringify({ sub: FAKE_USER_ID, issuedAt: Date.now() })) };
+// Throws codeError('INVALID_CREDENTIALS' | 'EMAIL_NOT_VERIFIED') for the
+// form to translate and show -- the latter only once an account genuinely
+// exists but hasn't verified yet, so someone who mistypes an email they
+// never registered still just gets the generic "incorrect email or
+// password" instead of a hint about which emails are/aren't registered.
+async function login(email, password) {
+  await seedInitialUserIfNeeded();
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = loadUsers().find((u) => u.email.toLowerCase() === normalizedEmail);
+  if (!user) {
+    const isPending = loadPendingRegistrations().some((p) => p.email.toLowerCase() === normalizedEmail);
+    throw codeError(isPending ? 'EMAIL_NOT_VERIFIED' : 'INVALID_CREDENTIALS');
+  }
+  const passwordHash = await hashPassword(password, user.salt);
+  if (passwordHash !== user.passwordHash) throw codeError('INVALID_CREDENTIALS');
+  return { token: btoa(JSON.stringify({ sub: user.id, issuedAt: Date.now() })) };
 }
 
 async function getMe(token) {
@@ -5434,8 +5617,25 @@ backgroundSearchInput.onkeydown = (e) => {
 // ---------------------------------------------------------------------------
 
 const loginScreenEl = document.getElementById('login-screen');
+const loginMessageEl = document.getElementById('login-message');
+const registerScreenEl = document.getElementById('register-screen');
+const registerMessageEl = document.getElementById('register-message');
+const registerFormEl = document.getElementById('register-form');
+const registerSuccessEl = document.getElementById('register-success');
+const registerSuccessMessageEl = document.getElementById('register-success-message');
 const appMainEl = document.getElementById('app-main');
 const appTitleEl = document.getElementById('app-title');
+
+// Shared by the login and register screens' own feedback area -- kind is
+// 'error' | 'success', styling .modal-message accordingly (see style.css).
+function showAuthMessage(el, kind, text) {
+  el.textContent = text;
+  el.className = `modal-message ${kind}`;
+}
+function clearAuthMessage(el) {
+  el.textContent = '';
+  el.className = 'modal-message hidden';
+}
 
 // Falls back to the generic title if a user's nickname isn't known yet (e.g.
 // briefly, before getMe() resolves) -- see startApp().
@@ -5468,6 +5668,36 @@ function startApp(needsLanguageDetection) {
   }
 }
 
+// Handles a `?verify=<token>` URL (see sendVerificationEmail) if one's
+// present -- shows the result on the login screen and strips the token back
+// out of the URL either way (via replaceState, no reload/history entry) so
+// refreshing the page afterward doesn't try to re-consume the same
+// already-used token. Runs before any token check in boot() below: this can
+// land on a browser that's never logged in at all (a brand new account) or
+// one that's currently logged in elsewhere/already logged out -- either way
+// it's independent of whatever boot() does next.
+function handleEmailVerificationLink() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('verify');
+  if (!token) return;
+  params.delete('verify');
+  const newSearch = params.toString();
+  history.replaceState(null, '', location.pathname + (newSearch ? `?${newSearch}` : '') + location.hash);
+
+  const result = verifyEmailToken(token);
+  loginScreenEl.classList.remove('hidden');
+  if (result.ok) {
+    showAuthMessage(loginMessageEl, 'success', t('login.verifiedSuccess', { email: result.email }));
+    document.getElementById('login-email').value = result.email;
+  } else {
+    showAuthMessage(
+      loginMessageEl,
+      'error',
+      result.code === 'EXPIRED' ? t('login.verifyExpired') : t('login.verifyInvalid')
+    );
+  }
+}
+
 function boot() {
   // Applied even before a token exists so the login screen itself already
   // respects a previously-saved language (e.g. after logging out) -- there's
@@ -5476,9 +5706,11 @@ function boot() {
   // detectLanguageAndTimeFormatFromLocation.
   currentUserLanguage = loadUserProfile().language || 'en';
   applyStaticTranslations();
+  handleEmailVerificationLink();
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) {
     loginScreenEl.classList.remove('hidden');
+    seedInitialUserIfNeeded(); // fire-and-forget -- idempotent, and login() also awaits it directly
     return;
   }
   appMainEl.classList.remove('hidden');
@@ -5495,9 +5727,20 @@ function boot() {
 
 document.getElementById('login-form').onsubmit = async (e) => {
   e.preventDefault();
-  const username = document.getElementById('login-username').value.trim();
+  clearAuthMessage(loginMessageEl);
+  const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  const { token } = await login(username, password);
+  let token;
+  try {
+    ({ token } = await login(email, password));
+  } catch (err) {
+    showAuthMessage(
+      loginMessageEl,
+      'error',
+      err.code === 'EMAIL_NOT_VERIFIED' ? t('login.notVerified') : t('login.invalidCredentials')
+    );
+    return;
+  }
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   const user = await getMe(token);
   currentUserId = user.id;
@@ -5509,6 +5752,55 @@ document.getElementById('login-form').onsubmit = async (e) => {
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
   startApp(user.language == null);
+};
+
+document.getElementById('show-register-link').onclick = (e) => {
+  e.preventDefault();
+  clearAuthMessage(loginMessageEl);
+  loginScreenEl.classList.add('hidden');
+  registerScreenEl.classList.remove('hidden');
+};
+document.getElementById('show-login-link').onclick = (e) => {
+  e.preventDefault();
+  clearAuthMessage(registerMessageEl);
+  registerScreenEl.classList.add('hidden');
+  loginScreenEl.classList.remove('hidden');
+};
+document.getElementById('register-success-back-btn').onclick = () => {
+  registerSuccessEl.classList.add('hidden');
+  registerFormEl.classList.remove('hidden');
+  registerFormEl.reset();
+  registerScreenEl.classList.add('hidden');
+  loginScreenEl.classList.remove('hidden');
+};
+
+registerFormEl.onsubmit = async (e) => {
+  e.preventDefault();
+  clearAuthMessage(registerMessageEl);
+  const email = document.getElementById('register-email').value.trim();
+  const password = document.getElementById('register-password').value;
+  const confirmPassword = document.getElementById('register-password-confirm').value;
+  if (password.length < 8) {
+    showAuthMessage(registerMessageEl, 'error', t('register.passwordTooShort'));
+    return;
+  }
+  if (password !== confirmPassword) {
+    showAuthMessage(registerMessageEl, 'error', t('register.passwordMismatch'));
+    return;
+  }
+  try {
+    await registerUser(email, password);
+  } catch (err) {
+    showAuthMessage(
+      registerMessageEl,
+      'error',
+      err.code === 'INVALID_EMAIL' ? t('register.invalidEmail') : err.code === 'EMAIL_TAKEN' ? t('register.emailTaken') : t('register.genericError')
+    );
+    return;
+  }
+  registerSuccessMessageEl.textContent = t('register.checkEmail', { email });
+  registerFormEl.classList.add('hidden');
+  registerSuccessEl.classList.remove('hidden');
 };
 
 boot();

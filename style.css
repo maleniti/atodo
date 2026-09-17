@@ -577,6 +577,43 @@ main {
 }
 .field-hint a { color: #8ab4f8; }
 
+/* Login/register feedback -- one shared look, tinted red or green via a
+   modifier class (see showLoginMessage/showRegisterMessage, app.js) rather
+   than two separate near-identical classes. */
+.modal-message {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.modal-message.error {
+  background: rgba(217, 48, 37, 0.15);
+  border: 1px solid rgba(217, 48, 37, 0.4);
+  color: #f28b82;
+}
+.modal-message.success {
+  background: rgba(129, 201, 149, 0.15);
+  border: 1px solid rgba(129, 201, 149, 0.4);
+  color: #81c995;
+}
+
+/* The "Don't have an account? / Already have one?" switch between the
+   login and register screens -- small and understated, not another
+   .modal-ok-weight action, since it isn't this form's own primary action. */
+.modal-link-row {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #9aa0a6;
+  text-align: center;
+}
+.modal-link {
+  color: #8ab4f8;
+  text-decoration: none;
+  margin-left: 4px;
+}
+.modal-link:hover { text-decoration: underline; }
+
 .login-modal {
   width: 260px;
 }
