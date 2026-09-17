@@ -3192,7 +3192,7 @@ function buildTodoItemRow(item, isToday) {
     // exact record last interacted with, not just a matching id, since a
     // recurring task's own separate occurrences are still separate rows.
     (item.task === sidePanelTask ? ' previewed' : '') +
-    (isToday && !item.completed ? '' : ' not-today');
+    (isToday ? '' : ' not-today');
 
   // A reverse progress bar behind the row's own content -- full at the
   // start, empties out to nothing as the timer counts down to zero.

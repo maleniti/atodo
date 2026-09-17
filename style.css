@@ -812,6 +812,14 @@ main {
    glance, without going back to the low-opacity look that was hard to read
    over a busy background photo (see applyBackground in app.js). */
 .todo-item.not-today { background: rgba(70, 72, 75, 0.75); }
+/* A today occurrence that's done needs its own tone too -- it used to just
+   fall back to .not-today's lighter gray (buildTodoItemRow, app.js), but
+   that gray is meant to tell other days' occurrences apart from today's, not
+   to tell done from pending, so a completed today task ended up looking like
+   it belonged to some other day. :not(.not-today) keeps this scoped to
+   today's own completed rows -- a completed occurrence from another day
+   still gets the plain .not-today tone above, unchanged. */
+.todo-item.completed:not(.not-today) { background: rgba(10, 11, 12, 0.92); }
 .todo-item.active { background: rgba(50, 80, 130, 0.75); }
 /* Hover-only -- a permanent border on every today task (as opposed to
    .not-today's own background tone doing that job) made all of them look
