@@ -353,4 +353,108 @@ const allDayDailyWithEnd = { allDay: true, endDate: '2026-03-20', frequency: { t
 assert.ok(!R.isOverdue(allDayDailyWithEnd, '2026-03-15', new Date('2026-03-20T23:59:00')), 'still on/before its end date');
 assert.ok(R.isOverdue(allDayDailyWithEnd, '2026-03-15', new Date('2026-03-21T00:00:01')), 'overdue once truly past the end date');
 
+// -- recurUntilCompleted: occursOn chain membership -----------------------
+// dueDate/frequency are irrelevant to occursOn here -- only dueDate itself
+// and pendingReschedules matter (see occursOn's own comment on the field).
+const recurUntilCompletedTask = {
+  dueDate: '2026-03-10',
+  pendingReschedules: ['2026-03-11', '2026-03-12'],
+  recurUntilCompleted: true,
+  frequency: { type: 'days', interval: 1 },
+};
+assert.ok(R.occursOn(recurUntilCompletedTask, '2026-03-10'), 'the chain\'s own anchor (dueDate)');
+assert.ok(R.occursOn(recurUntilCompletedTask, '2026-03-11'), 'first reschedule');
+assert.ok(R.occursOn(recurUntilCompletedTask, '2026-03-12'), 'second reschedule');
+assert.ok(!R.occursOn(recurUntilCompletedTask, '2026-03-13'), 'not (yet) pushed this far');
+assert.ok(!R.occursOn(recurUntilCompletedTask, '2026-03-09'), 'before the chain even started');
+
+// endDate is deliberately ignored for a recurUntilCompleted task -- occursOn
+// never even reaches that check for one (see occursOn's own comment).
+const recurUntilCompletedPastEndDate = { ...recurUntilCompletedTask, endDate: '2026-03-10' };
+assert.ok(R.occursOn(recurUntilCompletedPastEndDate, '2026-03-12'), 'endDate is ignored for this kind of task');
+
+// -- recurUntilCompleted: advanceRecurUntilCompletedChain -----------------
+const freshTask = { dueDate: '2026-03-10', pendingReschedules: [] };
+assert.deepStrictEqual(R.advanceRecurUntilCompletedChain(freshTask, '2026-03-10'), [], 'not overdue yet -- nothing to push');
+assert.deepStrictEqual(R.advanceRecurUntilCompletedChain(freshTask, '2026-03-11'), ['2026-03-11'], 'one day overdue -- push tomorrow');
+assert.deepStrictEqual(
+  R.advanceRecurUntilCompletedChain(freshTask, '2026-03-13'),
+  ['2026-03-11', '2026-03-12', '2026-03-13'],
+  'several days unattended -- every missed day is backfilled, not just today'
+);
+const midChainTask = { dueDate: '2026-03-10', pendingReschedules: ['2026-03-11'] };
+assert.deepStrictEqual(
+  R.advanceRecurUntilCompletedChain(midChainTask, '2026-03-12'),
+  ['2026-03-11', '2026-03-12'],
+  'continues from the chain\'s own last entry, not dueDate'
+);
+assert.deepStrictEqual(
+  R.advanceRecurUntilCompletedChain(midChainTask, '2026-03-11'),
+  midChainTask.pendingReschedules,
+  "already caught up to today -- doesn't duplicate it"
+);
+
+// -- recurUntilCompleted: nextRecurUntilCompletedDueDate -------------------
+// recurUntilCompleted: true + a non-empty pendingReschedules on every
+// fixture here, deliberately -- exactly the shape a real task has when this
+// actually gets called (see resolveRecurUntilCompletedOccurrence, app.js).
+// Omitting them let a real bug slip through once already: occursOn short-
+// circuits to chain-membership for a recurUntilCompleted task (see its own
+// comment), which nextOccurrenceAfter's scan (used internally here) needs
+// to NOT do -- these fixtures make sure that's actually exercised.
+assert.strictEqual(
+  R.nextRecurUntilCompletedDueDate(
+    { dueDate: '2026-03-10', pendingReschedules: ['2026-03-11', '2026-03-12', '2026-03-13'], recurUntilCompleted: true, frequency: { type: 'once' } },
+    '2026-03-13'
+  ),
+  null,
+  "a 'once' task has no next occurrence, however late it was completed"
+);
+assert.strictEqual(
+  R.nextRecurUntilCompletedDueDate(
+    { dueDate: '2026-03-10', pendingReschedules: ['2026-03-11', '2026-03-12', '2026-03-13'], recurUntilCompleted: true, frequency: { type: 'days', interval: 1 } },
+    '2026-03-13'
+  ),
+  '2026-03-14',
+  'daily: next occurrence is the day after completion, not the day after the original due date'
+);
+assert.strictEqual(
+  R.nextRecurUntilCompletedDueDate(
+    { dueDate: '2026-03-10', pendingReschedules: ['2026-03-11', '2026-03-12', '2026-03-13'], recurUntilCompleted: true, frequency: { type: 'days', interval: 3 } },
+    '2026-03-13'
+  ),
+  '2026-03-16',
+  'every-3-days: re-anchored at the completion date, so 3 days after *that*'
+);
+// Weekly due Monday 2026-07-06, completed the following Thursday (2026-07-16,
+// after slipping through two reschedules) instead -- next occurrence is a
+// week after the actual completion (2026-07-23), not the following Monday.
+assert.strictEqual(
+  R.nextRecurUntilCompletedDueDate(
+    {
+      dueDate: '2026-07-06',
+      pendingReschedules: ['2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', '2026-07-11', '2026-07-12', '2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'],
+      recurUntilCompleted: true,
+      frequency: { type: 'weeks', interval: 1 },
+    },
+    '2026-07-16'
+  ),
+  '2026-07-23',
+  'weekly: re-anchors the whole weekly pattern to the completion date'
+);
+assert.strictEqual(
+  R.nextRecurUntilCompletedDueDate(
+    {
+      dueDate: '2026-03-10',
+      pendingReschedules: ['2026-03-11', '2026-03-12', '2026-03-13'],
+      recurUntilCompleted: true,
+      endDate: '2026-03-13',
+      frequency: { type: 'days', interval: 1 },
+    },
+    '2026-03-13'
+  ),
+  null,
+  'still bounded by endDate -- no next occurrence once past it'
+);
+
 console.log('recurrence.test.js: all assertions passed');

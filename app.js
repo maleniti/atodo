@@ -172,6 +172,8 @@ const I18N = {
       "Appointment – its due date is an expiration, not a standing reminder: if not done by then, it's marked failed (crossed out, red) instead of staying overdue. Can still be checked off as done afterward.",
     'taskForm.passiveDesc':
       "Passive – a plain reminder, not an actionable task: can't be focused on or timed, and its checkbox marks it failed instead of done. Never auto-resolves once overdue – stays visible until you mark it failed or, once it's no longer due today, dismiss it.",
+    'taskForm.recurUntilCompletedDesc':
+      "Recur until completed – never marked overdue or failed: if not done by its due time, it's rescheduled to the next day instead (same time), and the missed occurrence stays visible alongside the new one until either is checked off. A recurring task's next occurrence is then counted from whenever it's actually completed, not the original schedule.",
     'taskForm.endDateBeforeDue': "End date can't be before the due date.",
 
     'manualOccurrence.title': 'Add manual occurrence',
@@ -398,6 +400,8 @@ const I18N = {
       "Termin – datum dospijeća je rok, a ne stalni podsjetnik: ako nije obavljen do tada, označava se kao neuspješan (precrtano, crveno) umjesto da ostane zakašnjelo. Ipak se može naknadno označiti kao obavljeno.",
     'taskForm.passiveDesc':
       "Pasivno – običan podsjetnik, a ne izvediv zadatak: ne može se fokusirati niti mjeriti vrijeme, a njegova kvačica označava neuspjeh umjesto dovršenosti. Nikad se automatski ne rješava nakon isteka roka – ostaje vidljivo dok ga ne označite neuspješnim ili, kad više nije na redu za danas, ga uklonite.",
+    'taskForm.recurUntilCompletedDesc':
+      "Ponavljaj do dovršetka – nikad se ne označava kao zakašnjelo ili neuspješno: ako nije obavljeno do roka, premješta se na sljedeći dan (isto vrijeme), a propušteni rok ostaje vidljiv uz novi sve dok jedan od njih ne označite obavljenim. Sljedeća pojava ponavljajućeg zadatka tada se računa od trenutka kad je stvarno dovršen, a ne prema izvornom rasporedu.",
     'taskForm.endDateBeforeDue': 'Datum završetka ne može biti prije datuma dospijeća.',
 
     'manualOccurrence.title': 'Dodaj ručnu pojavu',
@@ -1843,6 +1847,7 @@ function describeTaskSchedule(task) {
   const withEnd = task.endDate ? `${scheduleBase} until ${task.endDate}` : scheduleBase;
   if (task.passive) return `${withEnd} · Passive (reminder only)`;
   if (task.appointment) return `${withEnd} · Appointment (expires)`;
+  if (task.recurUntilCompleted) return `${withEnd} · Recurs until completed`;
   return withEnd;
 }
 
@@ -2177,6 +2182,14 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
         options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
         required: false,
       },
+      {
+        name: 'recurUntilCompleted',
+        label: '',
+        type: 'checkboxes',
+        value: existingTask && existingTask.recurUntilCompleted ? ['recurUntilCompleted'] : [],
+        options: [{ value: 'recurUntilCompleted', label: t('taskForm.recurUntilCompletedDesc') }],
+        required: false,
+      },
     ],
     { okLabel: existingTask ? t('common.save') : t('common.add'), deleteLabel: existingTask ? t('common.delete') : undefined }
   );
@@ -2208,6 +2221,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
   const dueTime = allDay ? null : result.dueTime;
   const appointment = result.appointment.length > 0;
   const passive = result.passive.length > 0;
+  const recurUntilCompleted = result.recurUntilCompleted.length > 0;
   const frequency = result.repeats.length > 0 ? decodeFrequency(result.frequencyType, result.interval, result) : { type: 'once', interval: 1 };
 
   // getSeriesName falls back to the earliest member's own name when no
@@ -2238,6 +2252,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       allDay,
       appointment,
       passive,
+      recurUntilCompleted,
       frequency,
       endDate,
     });
@@ -2250,6 +2265,11 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     existingTask.allDay = allDay;
     existingTask.appointment = appointment;
     existingTask.passive = passive;
+    // Only cleared when turning the flag off -- otherwise editing anything
+    // else about a task mid-chain (e.g. its name) would silently wipe out
+    // however far its current reschedule chain has already gotten.
+    if (!recurUntilCompleted) existingTask.pendingReschedules = [];
+    existingTask.recurUntilCompleted = recurUntilCompleted;
     existingTask.frequency = frequency;
     existingTask.endDate = endDate;
     logTaskEvent(existingTask, 'Edited');
@@ -2266,6 +2286,8 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       allDay,
       appointment,
       passive,
+      recurUntilCompleted,
+      pendingReschedules: [],
       endDate,
       frequency,
       completions: {},
@@ -2344,6 +2366,8 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       allDay: edited.allDay,
       appointment: edited.appointment,
       passive: edited.passive,
+      recurUntilCompleted: edited.recurUntilCompleted,
+      pendingReschedules: [],
       frequency: { type: 'once', interval: 1 },
       endDate: null,
       completions: wasOriginalOccurrenceDone ? { [newOccurrenceDate]: true } : {},
@@ -2367,6 +2391,8 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         allDay: originalTask.allDay,
         appointment: originalTask.appointment,
         passive: originalTask.passive,
+        recurUntilCompleted: originalTask.recurUntilCompleted,
+        pendingReschedules: [],
         frequency: originalTask.frequency,
         endDate: originalEndDate,
         completions: { ...originalCompletions },
@@ -2388,6 +2414,8 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       allDay: edited.allDay,
       appointment: edited.appointment,
       passive: edited.passive,
+      recurUntilCompleted: edited.recurUntilCompleted,
+      pendingReschedules: [],
       frequency: edited.frequency,
       endDate: edited.endDate,
       completions: {
@@ -2450,6 +2478,8 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
       allDay: originalTask.allDay,
       appointment: originalTask.appointment,
       passive: originalTask.passive,
+      recurUntilCompleted: originalTask.recurUntilCompleted,
+      pendingReschedules: [],
       frequency: originalTask.frequency,
       endDate: originalEndDate,
       completions: { ...originalCompletions },
@@ -2600,6 +2630,31 @@ function deleteTask(taskId) {
   refreshTodoManageModal();
 }
 
+// Resolves a task.recurUntilCompleted task's current occurrence once
+// whichever instance of it is marked done (see toggleTaskCompletion) --
+// task.dueDate becomes wherever `frequency` lands *next*, counted from
+// *today* (real time, when this actually runs) rather than completedDate
+// itself (see Recurrence.nextRecurUntilCompletedDueDate) -- "the date of
+// completion" is when the task was actually done, not whichever backlogged
+// instance's row happened to get clicked. Using completedDate instead would
+// make completing an old backlogged instance (rather than the most recent
+// one) immediately fall behind again by however many days separate them,
+// needing another whole run of catch-up reschedules right on the next
+// render, instead of actually resolving anything. pendingReschedules is
+// cleared either way -- every date that was in it (and task's own previous
+// dueDate, now superseded) stops being a valid occurrence at all the
+// instant this runs (see occursOn's own comment on the field), which is
+// what actually makes them "removed from schedule" rather than merely
+// hidden. A 'once' task (or one whose task.endDate is now behind it) has no
+// next occurrence -- task.dueDate just becomes completedDate itself, so it
+// stays visible (crossed out, same as any other completed task) instead of
+// vanishing outright.
+function resolveRecurUntilCompletedOccurrence(task, completedDate) {
+  const todayISO = Recurrence.dateToISO(new Date());
+  task.dueDate = Recurrence.nextRecurUntilCompletedDueDate(task, todayISO) || completedDate;
+  task.pendingReschedules = [];
+}
+
 function toggleTaskCompletion(task, occurrenceDate) {
   if (task.completions[occurrenceDate]) {
     delete task.completions[occurrenceDate];
@@ -2622,18 +2677,29 @@ function toggleTaskCompletion(task, occurrenceDate) {
   } else {
     task.completions[occurrenceDate] = true;
     logTaskEvent(task, 'Marked done', occurrenceDate);
-    // Only this task's "today" or carried-over occurrence is ever checked
-    // off this way (see the checkbox's disabled condition below), so
-    // occurrenceDate is always on or before today here -- dismiss any
-    // earlier occurrence(s) skipped without ever being explicitly checked
-    // off (e.g. missed a few days), otherwise they'd stay shown in the data
-    // forever and can resurface as "ghost" carried-over items if the task's
-    // recurrence is edited later. Their completions entry is untouched --
-    // they're dismissed, not retroactively marked done, so an appointment's
-    // genuinely missed occurrences stay recorded as failed. Scheduled with
-    // the same short linger as an ordinary completion, not instant, so
-    // unchecking this one right back still has a window to cancel it.
-    scheduleOccurrencesDismissalBefore(task, occurrenceDate);
+    if (task.recurUntilCompleted) {
+      // Whichever instance of the chain this was (task.dueDate itself, or
+      // one it's since been pushed to -- see occursOn's own comment on the
+      // field), completing it resolves the whole chain: every other date in
+      // it stops being a valid occurrence at all (see resolveRecur
+      // UntilCompletedOccurrence), rather than lingering as a dismissed-once-
+      // the-more-recent-one-completes carried-over item the way an ordinary
+      // task's missed occurrences do below.
+      resolveRecurUntilCompletedOccurrence(task, occurrenceDate);
+    } else {
+      // Only this task's "today" or carried-over occurrence is ever checked
+      // off this way (see the checkbox's disabled condition below), so
+      // occurrenceDate is always on or before today here -- dismiss any
+      // earlier occurrence(s) skipped without ever being explicitly checked
+      // off (e.g. missed a few days), otherwise they'd stay shown in the data
+      // forever and can resurface as "ghost" carried-over items if the task's
+      // recurrence is edited later. Their completions entry is untouched --
+      // they're dismissed, not retroactively marked done, so an appointment's
+      // genuinely missed occurrences stay recorded as failed. Scheduled with
+      // the same short linger as an ordinary completion, not instant, so
+      // unchecking this one right back still has a window to cancel it.
+      scheduleOccurrencesDismissalBefore(task, occurrenceDate);
+    }
     // A running timer stops making sense once its task is done -- cancelled
     // outright rather than just frozen. renderTodo's own "no longer
     // eligible" check un-marks it as active right after this, via
@@ -2676,6 +2742,11 @@ function toggleTaskCompletion(task, occurrenceDate) {
 // chance to instead mark it failed (task.markedFailed) or dismiss it (see
 // dismissOccurrence) before it's cleared away on its own.
 function pastDueStatus(task, occurrenceDate, completed, now) {
+  // Never overdue or failed -- a missed occurrence is rescheduled to the
+  // next day instead (see advanceRecurUntilCompletedTasks/occursOn's own
+  // comment on the field), so there's nothing here for it to carry over or
+  // expire as.
+  if (task.recurUntilCompleted) return { overdue: false, failed: false };
   if (task.passive) {
     if (task.markedFailed && task.markedFailed[occurrenceDate]) return { overdue: false, failed: true };
     return { overdue: Recurrence.isOverdue(task, occurrenceDate, now), failed: false };
@@ -3481,6 +3552,10 @@ function autoDismissStaleCarriedOverOccurrences() {
   const yesterdayISO = Recurrence.dateToISO(Recurrence.addDays(new Date(), -1));
   let changed = false;
   for (const task of tasks) {
+    // A recurUntilCompleted task's missed occurrences are deliberately never
+    // auto-dismissed -- they stay visible (see advanceRecurUntilCompletedTasks)
+    // until the chain actually resolves, however old they get.
+    if (task.recurUntilCompleted) continue;
     const priorDate = Recurrence.previousOccurrenceBefore(task, todayISO);
     if (!priorDate || task.dismissed[priorDate]) continue;
     if (priorDate < yesterdayISO) {
@@ -3491,10 +3566,35 @@ function autoDismissStaleCarriedOverOccurrences() {
   if (changed) saveTasks();
 }
 
+// A recurUntilCompleted task's current occurrence, once its due date has
+// passed without being completed, gets pushed one day at a time (same due
+// time) rather than going overdue/failed (see pastDueStatus) -- this is
+// what actually does that pushing, backfilling one entry per day since the
+// app was last open (see Recurrence.advanceRecurUntilCompletedChain), not
+// just today's. The previous entries stay in task.pendingReschedules (not
+// replaced) -- occursOn treats every one of them as its own still-live
+// occurrence until the chain is finally resolved (see
+// resolveRecurUntilCompletedOccurrence), which is what keeps each of them
+// visible on the to-do list rather than just the latest.
+function advanceRecurUntilCompletedTasks() {
+  const todayISO = Recurrence.dateToISO(new Date());
+  let changed = false;
+  for (const task of tasks) {
+    if (!task.recurUntilCompleted) continue;
+    const grown = Recurrence.advanceRecurUntilCompletedChain(task, todayISO);
+    if (grown !== task.pendingReschedules) {
+      task.pendingReschedules = grown;
+      changed = true;
+    }
+  }
+  if (changed) saveTasks();
+}
+
 function renderTodo() {
   todoSeriesLabelCache = new Map();
   expireFinishedTimers();
   autoDismissStaleCarriedOverOccurrences();
+  advanceRecurUntilCompletedTasks();
   updateTodoViewToggleButton();
   updateTodoMonthNav();
 
@@ -4472,6 +4572,8 @@ async function promptManualOccurrence(sourceTask) {
     allDay,
     appointment: sourceTask.appointment,
     passive: sourceTask.passive,
+    recurUntilCompleted: sourceTask.recurUntilCompleted,
+    pendingReschedules: [],
     endDate,
     frequency,
     completions: {},

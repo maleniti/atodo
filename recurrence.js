@@ -153,7 +153,20 @@ function monthlyRecurrenceAnchorMonth(task) {
 //     dayMode 'multi-weekday-offset': same anchor as 'multi-weekday', then
 //       shifted `offsetDays` (0-6) days `offsetDirection` ('before'/'after')
 //       -- deliberately allowed to land in the adjacent month.
+//
+// task.recurUntilCompleted short-circuits all of the above: its current
+// occurrence isn't at a date `frequency` computes, it's wherever
+// advanceRecurUntilCompletedChain (below) last pushed it, so occursOn just
+// checks membership in that chain -- task.dueDate itself (the chain's own
+// anchor -- see resolveRecurUntilCompletedOccurrence) plus every date it's
+// been pushed to since (task.pendingReschedules). `frequency` still matters
+// for this kind of task, just not here -- see
+// nextRecurUntilCompletedDueDate, which uses it to find the occurrence
+// *after* this one once it's finally completed.
 function occursOn(task, dateISO) {
+  if (task.recurUntilCompleted) {
+    return dateISO === task.dueDate || (task.pendingReschedules || []).includes(dateISO);
+  }
   if (task.endDate && dateISO > task.endDate) return false;
   const diffDays = daysBetween(task.dueDate, dateISO);
   if (diffDays < 0) return false;
@@ -345,6 +358,50 @@ function isOverdue(task, occurrenceDateISO, now) {
   return hasOccurrenceEnded(task, occurrenceDateISO, now);
 }
 
+// task.recurUntilCompleted's own reschedule chain: the current (not yet
+// completed) occurrence's own due date, plus every date it's been pushed to
+// since -- see occursOn's own comment on the field. Returns the chain's
+// *current* pendingReschedules array, unchanged (a new array only when it
+// actually needed to grow), backfilling one entry per day between the
+// chain's last date and todayISO rather than jumping straight to todayISO --
+// the app isn't running in the background, so a gap here (the app wasn't
+// open for a few days) is caught up in one pass the next time it is, same
+// as if each day had ticked over one at a time while it was.
+function advanceRecurUntilCompletedChain(task, todayISO) {
+  const pendingReschedules = task.pendingReschedules || [];
+  let cursor = pendingReschedules.length ? pendingReschedules[pendingReschedules.length - 1] : task.dueDate;
+  if (cursor >= todayISO) return pendingReschedules; // not overdue (yet) -- nothing to push
+  const grown = pendingReschedules.slice();
+  while (cursor < todayISO) {
+    cursor = dateToISO(addDays(new Date(cursor + 'T00:00:00'), 1));
+    grown.push(cursor);
+  }
+  return grown;
+}
+
+// The occurrence a task.recurUntilCompleted task's *next* recurrence lands
+// on, given completedDateISO -- the date whichever instance of the current
+// occurrence was actually checked off (not necessarily task.dueDate itself;
+// see occursOn's own comment on the field, and the chain it describes).
+// Re-anchors `frequency` at completedDateISO rather than task.dueDate, so a
+// late completion shifts every future occurrence with it instead of
+// snapping back to the original schedule -- e.g. a weekly task due Monday,
+// completed the following Thursday instead, recurs from *that* Thursday
+// (next Thursday), not the following Monday. null for a 'once' task (no
+// next occurrence) or once task.endDate is behind completedDateISO.
+//
+// recurUntilCompleted: false on the pseudo-task below is deliberate, not a
+// copy-paste slip -- occursOn (which nextOccurrenceAfter's own scan calls)
+// special-cases a real recurUntilCompleted task to just check chain
+// membership (see its own comment), never falling through to the plain
+// `frequency` math this function actually needs. Without turning that back
+// off here, the scan below would only ever match completedDateISO itself
+// (already excluded, being the search's own starting point) and never find
+// a next occurrence at all.
+function nextRecurUntilCompletedDueDate(task, completedDateISO) {
+  return nextOccurrenceAfter({ ...task, dueDate: completedDateISO, recurUntilCompleted: false }, completedDateISO);
+}
+
 const api = {
   dateToISO,
   addDays,
@@ -357,6 +414,8 @@ const api = {
   previousOccurrenceBefore,
   isOverdue,
   hasOccurrenceEnded,
+  advanceRecurUntilCompletedChain,
+  nextRecurUntilCompletedDueDate,
 };
 
 if (typeof module !== 'undefined' && module.exports) {
