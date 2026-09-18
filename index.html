@@ -173,7 +173,7 @@
         </div>
         <div id="side-panel-task-summaries" class="side-panel-task-summaries"></div>
         <textarea id="side-panel-comment-input" class="modal-input side-panel-comment-input" placeholder="Add a note about this task&hellip;" data-i18n-placeholder="sidePanel.commentPlaceholder"></textarea>
-        <button id="side-panel-comment-add" class="menu-btn-small" data-i18n="sidePanel.addNote">Add note</button>
+        <button id="side-panel-comment-add" class="menu-btn-small">Add note</button>
         <div class="side-panel-section-heading" data-i18n="sidePanel.notes">Notes</div>
         <div id="side-panel-comments" class="side-panel-comments"></div>
         <div class="side-panel-section-heading" data-i18n="sidePanel.activity">Activity</div>
@@ -288,6 +288,13 @@
         </div>
       </div>
       <div class="modal-field">
+        <label data-i18n="settings.subscription">Subscription</label>
+        <div class="settings-subscription-row">
+          <span id="settings-subscription-status"></span>
+          <button id="settings-subscribe-btn" type="button" class="menu-btn-small" data-i18n="subscribe.cta">Start free trial&hellip;</button>
+        </div>
+      </div>
+      <div class="modal-field">
         <label data-i18n="settings.data">Data</label>
         <div class="settings-avatar-row">
           <button id="settings-download-data-btn" type="button" class="menu-btn-small" data-i18n="settings.downloadData">Download my data&hellip;</button>
@@ -298,6 +305,26 @@
       <div class="modal-actions">
         <button id="settings-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
         <button id="settings-save" class="modal-ok" data-i18n="common.save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="subscribe-overlay" class="modal-overlay hidden">
+    <div class="modal subscribe-modal">
+      <button id="subscribe-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-title" data-i18n="subscribe.title">Upgrade to A-To-Do Pro</div>
+      <div id="subscribe-reason" class="modal-message subscribe-reason"></div>
+      <ul class="subscribe-benefits">
+        <li data-i18n="subscribe.benefitTasks">Unlimited tasks, recurring or not</li>
+        <li data-i18n="subscribe.benefitNotes">Unlimited notes on every task</li>
+        <li data-i18n="subscribe.benefitAds">No more subscription reminders cluttering your list</li>
+      </ul>
+      <div class="field-hint" data-i18n="subscribe.priceHint">Just 2 EUR/month afterwards -- start with a free 14-day trial, no payment required now.</div>
+      <div class="modal-actions">
+        <button id="subscribe-cancel" class="modal-cancel" data-i18n="subscribe.maybeLater">Maybe later</button>
+        <button id="subscribe-start-trial" class="modal-ok" data-i18n="subscribe.cta">Start free trial&hellip;</button>
       </div>
     </div>
   </div>

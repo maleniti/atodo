@@ -566,6 +566,36 @@ main {
   background-position: center;
 }
 
+.settings-subscription-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#settings-subscription-status {
+  font-size: 13px;
+  color: #e8eaed;
+}
+
+.subscribe-modal {
+  width: 380px;
+}
+/* Reuses the plain (unmodified, i.e. neither .error nor .success) look of
+   .modal-message -- a neutral tint for "here's why you're seeing this",
+   not a warning or a confirmation. */
+.subscribe-reason {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e8eaed;
+}
+.subscribe-benefits {
+  margin: 0 0 4px;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e8eaed;
+}
+
 /* Small muted note under a field, e.g. the background picker's "where do
    these come from / where's my key stored" explanation -- same secondary
    text color used throughout (side-panel-empty, empty-state, ...). */
@@ -1084,12 +1114,13 @@ main {
 }
 
 /* A positioned (absolute) element without its own z-index still paints
-   above ordinary in-flow content regardless of DOM order -- these three are
-   the row's only other direct children, given position: relative (so their
-   own default z-index: auto stacks them, in DOM order, above the bar below
+   above ordinary in-flow content regardless of DOM order -- these are the
+   row's only other direct children, given position: relative (so their own
+   default z-index: auto stacks them, in DOM order, above the bar below
    rather than at the same level as ordinary flow content). */
 .todo-item > input[type="checkbox"],
 .todo-item > .todo-item-text,
+.todo-item > .todo-item-lock,
 .todo-item > .todo-focus-btn {
   position: relative;
 }
@@ -1108,6 +1139,23 @@ main {
   accent-color: #8ab4f8;
   cursor: pointer;
 }
+
+/* Takes a checkbox's place (same size/position) on an occurrence beyond a
+   lapsed subscription's grandfathered set -- see canCompleteOrNoteTask/
+   buildTodoItemRow. Clickable, same as the checkbox it replaces, but always
+   opens the upgrade modal instead of ever resolving the task. */
+.todo-item-lock {
+  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #80868b;
+  cursor: pointer;
+}
+.todo-item-lock svg { width: 13px; height: 13px; }
 
 /* A failed appointment's checkbox -- same size/position/click behavior as
    the normal checkbox (still a real <input type="checkbox">, still toggles
@@ -1264,6 +1312,17 @@ main {
   transition: background 0.15s;
 }
 .menu-btn-small:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* The side panel's "Add note" button prefixes this same padlock (see
+   LOCK_ICON/renderSidePanel) when the selected task is beyond a lapsed
+   subscription's grandfathered set -- sized/aligned to sit next to the
+   button's own text rather than at the .todo-item-lock/manage-modal sizes. */
+#side-panel-comment-add.locked svg {
+  width: 12px;
+  height: 12px;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
 
 .menu-btn-wide {
   display: block;
@@ -1474,6 +1533,13 @@ main,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.todo-manage-item-lock {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-left: 5px;
+  color: #80868b;
+}
+.todo-manage-item-lock svg { width: 12px; height: 12px; }
 
 .todo-manage-item-meta {
   font-size: 11px;

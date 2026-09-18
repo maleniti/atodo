@@ -244,9 +244,33 @@ const I18N = {
     'settings.uploadImage': 'Upload image…',
     'settings.background': 'Background',
     'settings.changeBackground': 'Change background…',
+    'settings.subscription': 'Subscription',
+    'settings.subscriptionFree': 'Free',
+    'settings.subscriptionTrial': 'Trial (ends at: {date})',
+    'settings.subscriptionTrialExpired': 'Trial (ended at: {date})',
+    'settings.subscriptionPro': 'Pro (billed {interval}, next billing at: {date})',
+    'settings.subscriptionProExpired': 'Pro (expired at: {date})',
+    'settings.billingMonthly': 'monthly',
+    'settings.billingAnnual': 'annually',
     'settings.data': 'Data',
     'settings.downloadData': 'Download my data…',
     'settings.importData': 'Import data…',
+
+    'subscribe.title': 'Upgrade to A-To-Do Pro',
+    'subscribe.cta': 'Start free trial…',
+    'subscribe.maybeLater': 'Maybe later',
+    'subscribe.benefitTasks': 'Unlimited tasks, recurring or not',
+    'subscribe.benefitNotes': 'Unlimited notes on every task',
+    'subscribe.benefitAds': 'No more subscription reminders cluttering your list',
+    'subscribe.priceHint': "Just 2 EUR/month afterwards – start with a free 14-day trial, no payment required now.",
+    'subscribe.reasonRecurringLimit': "You've reached the free limit of {limit} recurring tasks.",
+    'subscribe.reasonOnceLimit': "You've reached the free limit of {limit} tasks.",
+    'subscribe.reasonNotesLimit': "You've reached the free limit of {limit} notes on this task.",
+    'subscribe.reasonTaskLimit': "This task is beyond your free plan's limit, so it can't be completed or noted on.",
+    'subscribe.taskName': 'Subscribe to A-To-Do',
+    'subscribe.taskDescription': "It's only 2 EUR/month",
+    'subscribe.taskDetails':
+      'Unlock A-To-Do Pro:\n– Unlimited tasks, recurring or not\n– Unlimited notes on every task\n– No more subscription reminders cluttering your list',
 
     'background.title': 'Change background',
     'background.accessKeyLabel': 'Unsplash Access Key',
@@ -493,9 +517,33 @@ const I18N = {
     'settings.uploadImage': 'Učitaj sliku…',
     'settings.background': 'Pozadina',
     'settings.changeBackground': 'Promijeni pozadinu…',
+    'settings.subscription': 'Pretplata',
+    'settings.subscriptionFree': 'Besplatno',
+    'settings.subscriptionTrial': 'Probno razdoblje (do: {date})',
+    'settings.subscriptionTrialExpired': 'Probno razdoblje (isteklo: {date})',
+    'settings.subscriptionPro': 'Pro (naplata {interval}, sljedeća naplata: {date})',
+    'settings.subscriptionProExpired': 'Pro (isteklo: {date})',
+    'settings.billingMonthly': 'mjesečno',
+    'settings.billingAnnual': 'godišnje',
     'settings.data': 'Podaci',
     'settings.downloadData': 'Preuzmi moje podatke…',
     'settings.importData': 'Uvezi podatke…',
+
+    'subscribe.title': 'Nadogradite na A-To-Do Pro',
+    'subscribe.cta': 'Isprobajte besplatno…',
+    'subscribe.maybeLater': 'Možda kasnije',
+    'subscribe.benefitTasks': 'Neograničen broj zadataka, ponavljajućih ili ne',
+    'subscribe.benefitNotes': 'Neograničen broj bilješki na svakom zadatku',
+    'subscribe.benefitAds': 'Bez podsjetnika za pretplatu koji zatrpavaju popis',
+    'subscribe.priceHint': 'Nakon toga samo 2 EUR/mjesečno – započnite s besplatnim probnim razdobljem od 14 dana, bez plaćanja sada.',
+    'subscribe.reasonRecurringLimit': 'Dosegli ste besplatno ograničenje od {limit} ponavljajućih zadataka.',
+    'subscribe.reasonOnceLimit': 'Dosegli ste besplatno ograničenje od {limit} zadataka.',
+    'subscribe.reasonNotesLimit': 'Dosegli ste besplatno ograničenje od {limit} bilješki na ovom zadatku.',
+    'subscribe.reasonTaskLimit': 'Ovaj zadatak je izvan ograničenja besplatnog plana, pa se ne može završiti ni komentirati.',
+    'subscribe.taskName': 'Pretplatite se na A-To-Do',
+    'subscribe.taskDescription': 'Samo 2 EUR/mjesečno',
+    'subscribe.taskDetails':
+      'Otključajte A-To-Do Pro:\n– Neograničen broj zadataka, ponavljajućih ili ne\n– Neograničen broj bilješki na svakom zadatku\n– Bez podsjetnika za pretplatu koji zatrpavaju popis',
 
     'background.title': 'Promjena pozadine',
     'background.accessKeyLabel': 'Unsplash API ključ',
@@ -1261,6 +1309,62 @@ function saveUserProfile(profile, userId = currentUserId) {
   localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
+// Subscription -- embedded in the bearer token itself (see mintToken/login/
+// getMe below), so every limit check elsewhere in the app reads it from the
+// decoded token rather than from some separately-mutable place the UI could
+// poke directly -- the same way a real backend would embed a subscription
+// claim in a signed JWT after checking its own database. Same caveat as the
+// rest of this mock auth (see the file-top comment): this token has no
+// signature, so embedding it here isn't actually tamper-proof yet -- it's
+// structured to swap cleanly for a real signed claim later, not a real
+// security boundary today.
+//
+// null (never subscribed) | { id, plan: 'trial' | 'pro', billingInterval:
+// 'monthly' | 'annual' | null (null for a trial), startedAt, expiresAt }.
+// Only the current/most recent subscription is kept, no history -- there's
+// no backend yet to reconcile a real billing history against. "Active" is
+// never cached as its own flag: it's always Date.now() < expiresAt, checked
+// live wherever it matters (see describeSubscription), so an expired trial
+// is correctly detected without needing a fresh token just because time
+// passed.
+const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
+
+function mintToken(user) {
+  return btoa(JSON.stringify({ sub: user.id, issuedAt: Date.now(), subscription: user.subscription || null }));
+}
+
+function describeSubscription(subscription) {
+  if (!subscription) return { plan: 'free', active: false, subscription: null };
+  return { plan: subscription.plan, active: Date.now() < subscription.expiresAt, subscription };
+}
+
+// Starts a 14-day trial for `userId` -- identical to a paid Pro subscription
+// while it lasts (see canCreateTaskOfKind/canCompleteOrNoteTask below). The
+// only way to "subscribe" until a real payment backend exists; see the
+// paywall modal and the Settings subscription section, both of which call
+// this. Returns a freshly minted token reflecting the new subscription, to
+// replace whatever's in localStorage -- re-minting a token outside of
+// login() is new; nothing else in this file does that today, since nothing
+// else changes a claim the token carries.
+//
+// Deliberately doesn't check for a prior trial -- repeat trials are fine for
+// now (useful for testing); a real backend is expected to allow only one
+// trial per account, but that's not enforced here yet.
+function startTrialSubscription(userId) {
+  const users = loadUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) return null;
+  user.subscription = {
+    id: uid(),
+    plan: 'trial',
+    billingInterval: null,
+    startedAt: Date.now(),
+    expiresAt: Date.now() + TRIAL_DURATION_MS,
+  };
+  saveUsers(users);
+  return mintToken(user);
+}
+
 // Throws codeError('INVALID_CREDENTIALS' | 'EMAIL_NOT_VERIFIED') for the
 // form to translate and show -- the latter only once an account genuinely
 // exists but hasn't verified yet, so someone who mistypes an email they
@@ -1276,7 +1380,7 @@ async function login(email, password) {
   }
   const passwordHash = await hashPassword(password, user.salt);
   if (passwordHash !== user.passwordHash) throw codeError('INVALID_CREDENTIALS');
-  return { token: btoa(JSON.stringify({ sub: user.id, issuedAt: Date.now() })) };
+  return { token: mintToken(user) };
 }
 
 async function getMe(token) {
@@ -1289,6 +1393,7 @@ async function getMe(token) {
     timeFormat: profile.timeFormat,
     background: profile.background,
     language: profile.language,
+    subscription: payload.subscription || null,
   };
 }
 
@@ -1307,6 +1412,11 @@ let currentUserAvatar = null; // data URL, or null for the initials fallback
 let currentUserTimeFormat = '24'; // '12' | '24' -- see formatTimeOfDay/formatDateTime
 let currentUserBackground = null; // same shape as the profile's background field, or null -- see applyBackground
 let currentUserLanguage = 'en'; // 'en' | 'hr' -- see the i18n section up top (t()/currentLocaleTag())
+// Same shape as getMe()'s subscription field (null | { id, plan, ... }) --
+// see describeSubscription/isSubscriptionActive. Refreshed after boot()/
+// login resolve a token and again after subscribeCurrentUserToTrial() mints
+// a fresh one, same as the profile fields above.
+let currentUserSubscription = null;
 
 // Applies a (possibly new) language everywhere it matters -- called on
 // startup and whenever Settings' Save button changes it. No page reload
@@ -1315,6 +1425,7 @@ let currentUserLanguage = 'en'; // 'en' | 'hr' -- see the i18n section up top (t
 // change immediately, the same as any other Settings field.
 function applyLanguage(language) {
   currentUserLanguage = language;
+  ensureSubscriptionPromptTask(); // refreshes the nag task's own text into the new language, see its own comment
   applyStaticTranslations();
   renderAppTitle();
   renderTodo();
@@ -1391,11 +1502,19 @@ const ACTIVE_OCCURRENCE_STORAGE_KEY = 'advanced-todo-active-occurrence';
 // correct value to backfill beyond "distinct from everything else". Shared
 // by loadTasks and importUserData, since an imported backup can be just as
 // old as whatever's already in localStorage.
+//
+// Tasks saved before createdAt existed (see the free-tier task/note limits
+// below) get their array index instead -- small integers that always sort
+// before any real Date.now() timestamp, so pre-existing tasks are treated as
+// the very earliest ones ever created (and so never unexpectedly frozen out
+// by a limit that postdates them) while still sorting stably relative to
+// each other.
 function normalizeLoadedTasks(loaded) {
-  for (const task of loaded) {
+  loaded.forEach((task, index) => {
     if (!task.seriesId) task.seriesId = uid();
     if (!task.taskId) task.taskId = uid();
-  }
+    if (!task.createdAt) task.createdAt = index;
+  });
   return loaded;
 }
 
@@ -1788,8 +1907,11 @@ document.addEventListener('keydown', (e) => {
 // regardless, even if the task somehow stopped being eligible in the
 // meantime. Everything except Task stats/Edit is hidden entirely for a
 // not-yet-due tomorrow/upcoming preview row -- there's nothing to mark
-// done/failed, hide, or focus on something that isn't due yet.
-function showTodoContextMenu(event, item, canWorkOnNow) {
+// done/failed, hide, or focus on something that isn't due yet. A locked
+// occurrence (isLockedByLimit -- see buildTodoItemRow) goes further still:
+// nothing at all is actionable on it until it's unlocked, so only Task
+// stats is offered, same as if every other group here were empty.
+function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
   const { task, occurrenceDate, completed, failed, kind } = item;
   // Whether THIS row's own occurrence, specifically, is the focused one --
   // not just whether the task is focused on some other occurrence of itself
@@ -1807,6 +1929,7 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
   // leaving a stray/doubled-up separator next to its neighbor.
   const groups = [[], [], [], []];
   function addItem(groupIndex, label, onClick) {
+    if (isLockedByLimit && groupIndex !== 3) return;
     groups[groupIndex].push({ label, onClick });
   }
 
@@ -1842,11 +1965,11 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
   }
 
   if (!isFutureItem) {
-    if (!task.passive && !completed) {
-      addItem(1, t('menu.markDone'), () => toggleTaskCompletion(task, occurrenceDate));
+    if (!task.passive && !completed && !isProtectedTask(task)) {
+      addItem(1, t('menu.markDone'), () => attemptResolveTaskOccurrence(task, occurrenceDate, toggleTaskCompletion));
     }
-    if (task.passive && !failed) {
-      addItem(1, t('menu.markFailed'), () => toggleTaskFailedMark(task, occurrenceDate));
+    if (task.passive && !failed && !isProtectedTask(task)) {
+      addItem(1, t('menu.markFailed'), () => attemptResolveTaskOccurrence(task, occurrenceDate, toggleTaskFailedMark));
     }
 
     if (canWorkOnNow && !isActiveHere) {
@@ -1871,7 +1994,7 @@ function showTodoContextMenu(event, item, canWorkOnNow) {
     }
   }
 
-  addItem(2, t('common.edit'), () => editTaskOccurrence(task, occurrenceDate));
+  if (!isProtectedTask(task)) addItem(2, t('common.edit'), () => editTaskOccurrence(task, occurrenceDate));
   addItem(3, t('menu.taskStats'), () => showTaskStatsModal(task));
 
   for (const group of groups) {
@@ -2034,6 +2157,199 @@ function describeTaskSchedule(task) {
   return withEnd;
 }
 
+// ---------------------------------------------------------------------------
+// Subscriptions & free-tier limits -- a free (never-subscribed) account can
+// create at most FREE_TASK_LIMITS.once non-recurring tasks and
+// FREE_TASK_LIMITS.recurring recurring tasks (a live cap: deleting one frees
+// a slot), and write at most NOTES_PER_TASK_LIMIT notes on any one of them.
+// A lapsed trial/subscription keeps every task and note it already has, but
+// only its first FREE_TASK_LIMITS.once/.recurring tasks EVER CREATED (by
+// createdAt, backfilled by the next-oldest survivor if one of those is
+// deleted) can still be completed or noted on -- see unlockedTaskIds. An
+// active subscription (see isSubscriptionActive) lifts every limit here.
+//
+// "Task" throughout this section means task.taskId, not task.id -- editing a
+// recurring task ("this occurrence" / "this and following", see
+// applySplitEdit) creates new task.id records for the SAME logical task, so
+// counting by task.id would let ordinary editing silently eat into someone's
+// quota. A taskId counts as "recurring" if any of its still-existing
+// fragments has frequency.type !== 'once' -- see applySplitEdit's own
+// comment for why a single taskId can span a mix of 'once' and recurring
+// fragments at once.
+// ---------------------------------------------------------------------------
+
+const FREE_TASK_LIMITS = { once: 10, recurring: 5 };
+const NOTES_PER_TASK_LIMIT = 5;
+
+// The permanent, unremovable nag task a free/lapsed account gets (see
+// ensureSubscriptionPromptTask) -- a fixed id/taskId rather than an extra
+// flag, so "is this the nag task" needs nothing more to survive save/load,
+// and "does it already exist" is a single lookup.
+const SUBSCRIPTION_PROMPT_TASK_ID = 'subscription-prompt';
+
+function isProtectedTask(task) {
+  return !!task && task.id === SUBSCRIPTION_PROMPT_TASK_ID;
+}
+
+function isSubscriptionActive() {
+  return describeSubscription(currentUserSubscription).active;
+}
+
+function isTaskIdRecurring(taskId) {
+  return tasks.some((t) => t.taskId === taskId && t.frequency.type !== 'once');
+}
+
+// Every distinct real (non-nag) taskId currently on the list.
+function distinctRealTaskIds() {
+  const ids = new Set();
+  for (const t of tasks) {
+    if (!isProtectedTask(t)) ids.add(t.taskId);
+  }
+  return ids;
+}
+
+// The earliest createdAt among a taskId's surviving fragments -- they're all
+// carried forward from the same original value (see applySplitEdit/
+// applySplitDelete/promptManualOccurrence), so any one would do; Math.min is
+// just cheap insurance against them ever drifting apart.
+function taskIdCreatedAt(taskId) {
+  let earliest = Infinity;
+  for (const t of tasks) {
+    if (t.taskId === taskId && t.createdAt < earliest) earliest = t.createdAt;
+  }
+  return earliest;
+}
+
+// null => unlimited (active subscription) -- every task can be completed/
+// noted on. Otherwise the Set of taskIds still allowed to be: the first
+// FREE_TASK_LIMITS.once non-recurring and .recurring recurring taskIds ever
+// created, among ones that still exist. A never-subscribed account can never
+// have exceeded these counts in the first place (see canCreateTaskOfKind),
+// so this ends up covering everything it has; a lapsed trial/subscription
+// may have created more while still licensed -- those extra ones are
+// excluded (frozen, not deleted) here instead.
+function unlockedTaskIds() {
+  if (isSubscriptionActive()) return null;
+  const once = [];
+  const recurring = [];
+  for (const taskId of distinctRealTaskIds()) {
+    (isTaskIdRecurring(taskId) ? recurring : once).push(taskId);
+  }
+  once.sort((a, b) => taskIdCreatedAt(a) - taskIdCreatedAt(b));
+  recurring.sort((a, b) => taskIdCreatedAt(a) - taskIdCreatedAt(b));
+  return new Set([...once.slice(0, FREE_TASK_LIMITS.once), ...recurring.slice(0, FREE_TASK_LIMITS.recurring)]);
+}
+
+function canCompleteOrNoteTask(task) {
+  const unlocked = unlockedTaskIds();
+  return unlocked === null || unlocked.has(task.taskId);
+}
+
+// Gates creating a genuinely NEW task (a fresh taskId) -- not editing one,
+// and not a split/manual-occurrence fragment of an existing one, neither of
+// which mint a new taskId (see the section comment above).
+function canCreateTaskOfKind(isRecurring) {
+  if (isSubscriptionActive()) return true;
+  const limit = isRecurring ? FREE_TASK_LIMITS.recurring : FREE_TASK_LIMITS.once;
+  let count = 0;
+  for (const taskId of distinctRealTaskIds()) {
+    if (isTaskIdRecurring(taskId) === isRecurring) count++;
+  }
+  return count < limit;
+}
+
+function notesUsedFor(task) {
+  return tasks.filter((t) => t.taskId === task.taskId).reduce((sum, t) => sum + (t.comments ? t.comments.length : 0), 0);
+}
+
+function canAddNoteToTask(task) {
+  if (!canCompleteOrNoteTask(task)) return false;
+  if (isSubscriptionActive()) return true;
+  return notesUsedFor(task) < NOTES_PER_TASK_LIMIT;
+}
+
+// Checks whether creating a task of this kind is currently allowed,
+// prompting the subscription paywall first if it isn't (see
+// offerSubscriptionUpgrade) and re-checking afterward -- so a successful
+// subscribe there lets the caller's already-validated form data go through
+// immediately instead of being discarded.
+async function ensureCanCreateTaskOfKind(isRecurring) {
+  if (canCreateTaskOfKind(isRecurring)) return true;
+  const reason = isRecurring
+    ? t('subscribe.reasonRecurringLimit', { limit: FREE_TASK_LIMITS.recurring })
+    : t('subscribe.reasonOnceLimit', { limit: FREE_TASK_LIMITS.once });
+  return offerSubscriptionUpgrade(reason);
+}
+
+// Idempotent -- call freely. A free/lapsed account gets a permanent daily
+// all-day task nagging it to subscribe (can't be edited or deleted, see
+// isProtectedTask's other call sites; doesn't count against
+// FREE_TASK_LIMITS.recurring, see distinctRealTaskIds excluding it); an
+// active subscription removes it again. Also called from applyLanguage --
+// unlike every other string in the app, this task's name/description/
+// details are plain data on a task record, not recomputed by t() at render
+// time, so a language change needs this to explicitly refresh them on the
+// existing record instead of just re-rendering. Otherwise only re-evaluated
+// at login/subscribe time (see startApp/subscribeCurrentUserToTrial), not on
+// every render -- a trial silently expiring mid-session while the tab stays
+// open won't bring this back until the next reload, an acceptable gap for a
+// mock feature like this one.
+function ensureSubscriptionPromptTask() {
+  const existing = tasks.find((t) => t.id === SUBSCRIPTION_PROMPT_TASK_ID);
+  if (isSubscriptionActive()) {
+    if (existing) {
+      tasks = tasks.filter((t) => t.id !== SUBSCRIPTION_PROMPT_TASK_ID);
+      saveTasks();
+    }
+    return;
+  }
+  if (existing) {
+    existing.name = t('subscribe.taskName');
+    existing.description = t('subscribe.taskDescription');
+    existing.details = t('subscribe.taskDetails');
+    saveTasks();
+    return;
+  }
+  tasks.push({
+    id: SUBSCRIPTION_PROMPT_TASK_ID,
+    taskId: SUBSCRIPTION_PROMPT_TASK_ID,
+    seriesId: SUBSCRIPTION_PROMPT_TASK_ID,
+    name: t('subscribe.taskName'),
+    description: t('subscribe.taskDescription'),
+    details: t('subscribe.taskDetails'),
+    dueDate: Recurrence.dateToISO(new Date()),
+    dueTime: null,
+    allDay: true,
+    appointment: false,
+    passive: false,
+    recurUntilCompleted: false,
+    pendingReschedules: [],
+    endDate: null,
+    frequency: { type: 'days', interval: 1 },
+    completions: {},
+    dismissed: {},
+    markedFailed: {},
+    createdAt: Date.now(),
+  });
+  saveTasks();
+}
+
+// Mints and stores a fresh trial subscription for the current account (see
+// startTrialSubscription), then refreshes every bit of state that snapshot
+// touches -- the stored bearer token, the in-memory subscription, the nag
+// task, and the render.
+async function subscribeCurrentUserToTrial() {
+  const token = startTrialSubscription(currentUserId);
+  if (!token) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const user = await getMe(token);
+  currentUserSubscription = user.subscription;
+  ensureSubscriptionPromptTask();
+  saveTasks();
+  renderTodo();
+  renderSettingsSubscriptionSection();
+}
+
 // Every one of these option lists is a function, not a plain array -- called
 // fresh each time openTaskForm actually builds the field list, so a
 // language change (see applyLanguage) is reflected the next time the form
@@ -2134,6 +2450,7 @@ const isMultiWeekdayMonthlyMode = (monthlyMode) => monthlyMode === 'multi-weekda
 // used by each to-do day header's own "+" button so the form opens
 // pre-filled with that day's date instead of always defaulting to today.
 async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOptions = {}) {
+  if (existingTask && isProtectedTask(existingTask)) return; // can't be edited or deleted (its own Delete button lives inside this same form) -- see the section comment above isProtectedTask
   const formTitle = splitContext
     ? splitContext.scope === 'instance'
       ? t('taskForm.editOccurrence')
@@ -2457,6 +2774,8 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     existingTask.endDate = endDate;
     logTaskEvent(existingTask, 'Edited');
   } else {
+    const isRecurring = frequency.type !== 'once';
+    if (!(await ensureCanCreateTaskOfKind(isRecurring))) return;
     const newTask = {
       id: uid(),
       taskId: uid(),
@@ -2476,6 +2795,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       completions: {},
       dismissed: {},
       markedFailed: {},
+      createdAt: Date.now(),
     };
     // Joining an existing series -- carry its saved name over so
     // getSeriesName can find it on this record too, not just whichever
@@ -2509,6 +2829,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
 //    (no separate "original settings continue" task -- there's nothing left
 //    of the old pattern after this point).
 function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDate, scope }, edited) {
+  if (isProtectedTask(originalTask)) return;
   const originalTaskId = originalTask.taskId;
   const originalCompletions = originalTask.completions || {};
   const originalDismissed = originalTask.dismissed || {};
@@ -2556,6 +2877,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       completions: wasOriginalOccurrenceDone ? { [newOccurrenceDate]: true } : {},
       dismissed: {},
       markedFailed: wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {},
+      createdAt: originalTask.createdAt,
     };
     tasks.push(editedFragment);
     logTaskEvent(editedFragment, 'Recurrence edited (only this occurrence)', newOccurrenceDate);
@@ -2581,6 +2903,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         completions: { ...originalCompletions },
         dismissed: { ...originalDismissed },
         markedFailed: { ...originalMarkedFailed },
+        createdAt: originalTask.createdAt,
       });
     }
   } else if (scope === 'following') {
@@ -2610,6 +2933,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
         ...originalMarkedFailed,
         ...(wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {}),
       },
+      createdAt: originalTask.createdAt,
     };
     tasks.push(editedFragment);
     logTaskEvent(editedFragment, 'Recurrence edited (this and following occurrences)', newOccurrenceDate);
@@ -2626,6 +2950,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
 //    continuation task -- there's nothing left of the series past this
 //    point.
 function applySplitDelete(originalTask, occurrenceDate, scope) {
+  if (isProtectedTask(originalTask)) return;
   const originalTaskId = originalTask.taskId;
   const originalCompletions = originalTask.completions || {};
   const originalDismissed = originalTask.dismissed || {};
@@ -2668,6 +2993,7 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
       completions: { ...originalCompletions },
       dismissed: { ...originalDismissed },
       markedFailed: { ...originalMarkedFailed },
+      createdAt: originalTask.createdAt,
     };
     tasks.push(continuation);
     loggedFragment = continuation;
@@ -2790,6 +3116,7 @@ function showEditScopeChoice() {
 // 'once' task has no recurrence to split, so it skips straight to editing
 // it -- only recurring tasks get the "which occurrence(s)" choice.
 async function editTaskOccurrence(task, occurrenceDate) {
+  if (isProtectedTask(task)) return;
   if (task.frequency.type === 'once') {
     openTaskForm(task);
     return;
@@ -2805,7 +3132,7 @@ async function editTaskOccurrence(task, occurrenceDate) {
 
 function deleteTask(taskId) {
   const task = tasks.find((t) => t.id === taskId);
-  if (!task) return;
+  if (!task || isProtectedTask(task)) return;
   tasks = tasks.filter((t) => t.id !== taskId);
   if (activeTaskId === taskId) setActiveTaskId(null);
   saveTasks();
@@ -2956,6 +3283,20 @@ function toggleTaskFailedMark(task, occurrenceDate) {
   if (!isNarrowLayout()) selectTaskForSidePanel(task);
   saveTasks();
   renderTodo();
+}
+
+// Shared gate in front of toggleTaskCompletion/toggleTaskFailedMark (the
+// checkbox and the context menu's Mark done/Mark failed items) -- only
+// blocks the transition INTO done/failed, never out of it, so un-checking
+// something that was completed/failed before a subscription lapsed always
+// stays possible. See canCompleteOrNoteTask for what "allowed" means here.
+async function attemptResolveTaskOccurrence(task, occurrenceDate, resolveFn) {
+  const alreadyResolved = task.passive ? !!(task.markedFailed && task.markedFailed[occurrenceDate]) : !!task.completions[occurrenceDate];
+  if (!alreadyResolved && !canCompleteOrNoteTask(task)) {
+    const accepted = await offerSubscriptionUpgrade(t('subscribe.reasonTaskLimit'));
+    if (!accepted) return;
+  }
+  resolveFn(task, occurrenceDate);
 }
 
 // Immediately clears any task's carried-over (yesterday-or-earlier)
@@ -3421,6 +3762,14 @@ const DISMISS_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>';
 const SHOW_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>';
+// Shown in place of a checkbox (see buildTodoItemRow), prefixed onto the
+// side panel's "Add note" button (see renderSidePanel), and next to a name
+// in the Manage Tasks modal (see buildSeriesMemberRow) -- everywhere a task
+// is beyond canCompleteOrNoteTask's grandfathered set for a lapsed
+// subscription. width/height set per call site, not baked in here, since
+// the three spots use different sizes.
+const LOCK_ICON =
+  '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6z"/></svg>';
 
 // Builds a single to-do row -- extracted from renderTodo's per-day loop so
 // it can be appended into either of a day's two columns rather than always
@@ -3476,25 +3825,46 @@ function buildTodoItemRow(item, isToday) {
     row.appendChild(bar);
   }
 
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  // A passive task has no "done" state to check off -- its box means
-  // "marked failed" instead (see toggleTaskFailedMark), so it reflects
-  // item.failed rather than item.completed (which is always false for it
-  // anyway, see pastDueStatus).
-  checkbox.checked = item.task.passive ? item.failed : item.completed;
-  // Styled as a red "X" instead of the usual checkbox (see
-  // .todo-checkbox-failed) purely to read as "failed", not to change what
-  // clicking it does -- a failed appointment (or a passive task marked
-  // failed) stays toggleable like any other carried-over task.
-  if (item.failed) checkbox.classList.add('todo-checkbox-failed');
-  checkbox.disabled = item.kind === 'tomorrow' || item.kind === 'upcoming';
-  checkbox.onclick = (e) => {
-    e.stopPropagation();
-    if (item.task.passive) toggleTaskFailedMark(item.task, item.occurrenceDate);
-    else toggleTaskCompletion(item.task, item.occurrenceDate);
-  };
-  row.appendChild(checkbox);
+  // Whether this occurrence is still unresolved AND beyond a lapsed
+  // subscription's grandfathered set (see canCompleteOrNoteTask) -- shown as
+  // a padlock instead of a checkbox (below) rather than just a disabled one,
+  // so "this needs a subscription" reads differently from "not due yet"
+  // (tomorrow/upcoming) or "this is the nag task itself". Never true once
+  // already resolved: completing/failing it while still licensed and only
+  // losing that license afterward doesn't retroactively hide the result.
+  const isResolved = item.task.passive ? item.failed : item.completed;
+  const isLockedByLimit = !isResolved && !isProtectedTask(item.task) && !canCompleteOrNoteTask(item.task);
+
+  if (isLockedByLimit) {
+    const lock = document.createElement('span');
+    lock.className = 'todo-item-lock';
+    lock.title = t('subscribe.reasonTaskLimit');
+    lock.innerHTML = LOCK_ICON;
+    lock.onclick = (e) => {
+      e.stopPropagation();
+      offerSubscriptionUpgrade(t('subscribe.reasonTaskLimit'));
+    };
+    row.appendChild(lock);
+  } else {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    // A passive task has no "done" state to check off -- its box means
+    // "marked failed" instead (see toggleTaskFailedMark), so it reflects
+    // item.failed rather than item.completed (which is always false for it
+    // anyway, see pastDueStatus).
+    checkbox.checked = item.task.passive ? item.failed : item.completed;
+    // Styled as a red "X" instead of the usual checkbox (see
+    // .todo-checkbox-failed) purely to read as "failed", not to change what
+    // clicking it does -- a failed appointment (or a passive task marked
+    // failed) stays toggleable like any other carried-over task.
+    if (item.failed) checkbox.classList.add('todo-checkbox-failed');
+    checkbox.disabled = item.kind === 'tomorrow' || item.kind === 'upcoming' || isProtectedTask(item.task);
+    checkbox.onclick = (e) => {
+      e.stopPropagation();
+      attemptResolveTaskOccurrence(item.task, item.occurrenceDate, item.task.passive ? toggleTaskFailedMark : toggleTaskCompletion);
+    };
+    row.appendChild(checkbox);
+  }
 
   const text = document.createElement('div');
   text.className = 'todo-item-text';
@@ -3582,8 +3952,10 @@ function buildTodoItemRow(item, isToday) {
   // be focused however long it's been carried over. Shared with the context
   // menu below: its own Focus/Unfocus items do exactly this, and starting a
   // timer is the same kind of voluntary "work on this now", just worded for
-  // the timer instead.
-  const canWorkOnNow = !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed;
+  // the timer instead. Excludes a locked occurrence too (see isLockedByLimit
+  // above) -- there's nothing to work toward on a task that can't actually
+  // be resolved right now.
+  const canWorkOnNow = !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed && !isLockedByLimit;
   if (canWorkOnNow) {
     const workOnBtn = document.createElement('button');
     workOnBtn.className = 'todo-focus-btn' + (isActiveHere ? ' active' : '');
@@ -3625,13 +3997,15 @@ function buildTodoItemRow(item, isToday) {
   }
 
   // Always available -- Task stats and Edit are plain actions with no
-  // eligibility requirement of their own. Everything else showTodoContextMenu
-  // offers is gated the same as the buttons above (and hidden entirely for a
-  // not-yet-due tomorrow/upcoming preview row).
+  // eligibility requirement of their own (except on a locked occurrence,
+  // where showTodoContextMenu hides everything but Task stats -- see
+  // isLockedByLimit). Everything else showTodoContextMenu offers is gated
+  // the same as the buttons above (and hidden entirely for a not-yet-due
+  // tomorrow/upcoming preview row).
   row.oncontextmenu = (e) => {
     e.preventDefault();
     selectTaskForSidePanel(item.task);
-    showTodoContextMenu(e, item, canWorkOnNow);
+    showTodoContextMenu(e, item, canWorkOnNow, isLockedByLimit);
   };
 
   // Plain click (anything not otherwise handled above -- those all
@@ -3650,7 +4024,11 @@ function buildTodoItemRow(item, isToday) {
     else selectTaskForSidePanel(item.task);
   };
 
-  row.ondblclick = () => editTaskOccurrence(item.task, item.occurrenceDate);
+  // A locked occurrence has nothing to edit right now (see
+  // isLockedByLimit/showTodoContextMenu's own equivalent above) -- offers
+  // the same upgrade prompt instead of opening a form whose Save/Delete
+  // couldn't do anything useful anyway.
+  row.ondblclick = () => (isLockedByLimit ? offerSubscriptionUpgrade(t('subscribe.reasonTaskLimit')) : editTaskOccurrence(item.task, item.occurrenceDate));
 
   return row;
 }
@@ -3957,6 +4335,7 @@ const sidePanelScopeToggleThumb = sidePanelScopeToggleEl.querySelector('.side-pa
 const sidePanelScopeOpts = Array.from(sidePanelScopeToggleEl.querySelectorAll('.side-panel-scope-opt'));
 const sidePanelEditToggleBtn = document.getElementById('side-panel-edit-toggle-btn');
 const sidePanelCommentInput = document.getElementById('side-panel-comment-input');
+const sidePanelCommentAddBtn = document.getElementById('side-panel-comment-add');
 const sidePanelCommentsEl = document.getElementById('side-panel-comments');
 const sidePanelLogEl = document.getElementById('side-panel-log');
 
@@ -4436,6 +4815,15 @@ function renderSidePanel() {
   sidePanelEditToggleBtn.title = sidePanelEditMode ? t('sidePanel.stopEditing') : t('sidePanel.editOrDelete');
   sidePanelEditToggleBtn.classList.toggle('active', sidePanelEditMode);
 
+  // Prefixes the same padlock used in the to-do list/Manage Tasks modal onto
+  // the label -- managed here (not via data-i18n on the button itself, see
+  // index.html) since the label alone can't express the lock, and
+  // applyStaticTranslations' plain `textContent = t(...)` would wipe out an
+  // icon child on every language change anyway.
+  const commentAddLocked = !isProtectedTask(sidePanelTask) && !canCompleteOrNoteTask(sidePanelTask);
+  sidePanelCommentAddBtn.innerHTML = (commentAddLocked ? LOCK_ICON : '') + t('sidePanel.addNote');
+  sidePanelCommentAddBtn.classList.toggle('locked', commentAddLocked);
+
   const records = sidePanelRecords();
   // Only single-record ('occurrence') scope has just the one selected
   // record's own name/description/details to show -- 'task' and 'series'
@@ -4493,10 +4881,15 @@ sidePanelEditToggleBtn.onclick = () => {
   renderSidePanel();
 };
 
-document.getElementById('side-panel-comment-add').onclick = () => {
-  if (!sidePanelTask) return;
+sidePanelCommentAddBtn.onclick = async () => {
+  if (!sidePanelTask || isProtectedTask(sidePanelTask)) return;
   const text = sidePanelCommentInput.value.trim();
   if (!text) return;
+  if (!canAddNoteToTask(sidePanelTask)) {
+    const reason = canCompleteOrNoteTask(sidePanelTask) ? t('subscribe.reasonNotesLimit', { limit: NOTES_PER_TASK_LIMIT }) : t('subscribe.reasonTaskLimit');
+    const accepted = await offerSubscriptionUpgrade(reason);
+    if (!accepted) return;
+  }
   addTaskComment(sidePanelTask, text);
   sidePanelCommentInput.value = '';
   saveTasks();
@@ -4586,6 +4979,7 @@ function computeSeriesMonthGroups() {
   const monthsMap = new Map();
 
   for (const task of tasks) {
+    if (isProtectedTask(task)) continue; // nothing to manage -- can't be edited/deleted/moved, see openTaskForm's own guard
     const startMonth = monthKeyOf(task.dueDate);
     const endMonth = task.endDate
       ? monthKeyOf(task.endDate)
@@ -4696,6 +5090,7 @@ function renderTodoManageMonths() {
 // instead of collapsing to a single occurrence. A one-off source just gets
 // another independent 'once' record, as before.
 async function promptManualOccurrence(sourceTask) {
+  if (isProtectedTask(sourceTask)) return;
   const isRecurring = sourceTask.frequency.type !== 'once';
   const hasEndDate = !!sourceTask.endDate;
 
@@ -4766,6 +5161,7 @@ async function promptManualOccurrence(sourceTask) {
     completions: {},
     dismissed: {},
     markedFailed: {},
+    createdAt: sourceTask.createdAt,
   };
   tasks.push(occurrence);
   logTaskEvent(occurrence, 'Manual occurrence added', occurrence.dueDate);
@@ -4783,6 +5179,17 @@ function buildSeriesMemberRow(task) {
   const name = document.createElement('div');
   name.className = 'todo-manage-item-name';
   name.textContent = task.name;
+  // Same padlock as the to-do list/side panel (see LOCK_ICON) for a task
+  // beyond a lapsed subscription's grandfathered set -- this modal never
+  // sees the nag task itself (excluded in computeSeriesMonthGroups), so no
+  // isProtectedTask check is needed here.
+  if (!canCompleteOrNoteTask(task)) {
+    const lock = document.createElement('span');
+    lock.className = 'todo-manage-item-lock';
+    lock.title = t('subscribe.reasonTaskLimit');
+    lock.innerHTML = LOCK_ICON;
+    name.appendChild(lock);
+  }
   info.appendChild(name);
   const meta = document.createElement('div');
   meta.className = 'todo-manage-item-meta';
@@ -5228,6 +5635,8 @@ const settingsLanguageSelect = document.getElementById('settings-language-select
 const settingsAvatarPreviewImg = document.getElementById('settings-avatar-preview-img');
 const settingsAvatarPreviewInitials = document.getElementById('settings-avatar-preview-initials');
 const settingsAvatarFileInput = document.getElementById('settings-avatar-file-input');
+const settingsSubscriptionStatusEl = document.getElementById('settings-subscription-status');
+const settingsSubscribeBtn = document.getElementById('settings-subscribe-btn');
 
 const AVATAR_SIZE = 128; // px, square
 
@@ -5272,6 +5681,29 @@ function renderSettingsAvatarPreview() {
   settingsAvatarPreviewInitials.classList.toggle('hidden', hasImage);
 }
 
+// Free/Trial (ends at: ...)/Pro (billed monthly|annually, next billing at:
+// ...) -- see describeSubscription. The button doubles as the only way to
+// subscribe outside the paywall modal: always "Start free trial", since
+// that's the only plan clicking it can actually start until a real payment
+// backend exists (see startTrialSubscription) -- hidden once a subscription
+// is already active, there being nothing more to start.
+function renderSettingsSubscriptionSection() {
+  const { plan, active, subscription } = describeSubscription(currentUserSubscription);
+  if (plan === 'free') {
+    settingsSubscriptionStatusEl.textContent = t('settings.subscriptionFree');
+  } else if (plan === 'trial') {
+    settingsSubscriptionStatusEl.textContent = active
+      ? t('settings.subscriptionTrial', { date: formatDateTime(subscription.expiresAt) })
+      : t('settings.subscriptionTrialExpired', { date: formatDateTime(subscription.expiresAt) });
+  } else {
+    const intervalLabel = subscription.billingInterval === 'annual' ? t('settings.billingAnnual') : t('settings.billingMonthly');
+    settingsSubscriptionStatusEl.textContent = active
+      ? t('settings.subscriptionPro', { interval: intervalLabel, date: formatDateTime(subscription.expiresAt) })
+      : t('settings.subscriptionProExpired', { date: formatDateTime(subscription.expiresAt) });
+  }
+  settingsSubscribeBtn.classList.toggle('hidden', active);
+}
+
 function openSettingsModal() {
   settingsNicknameInput.value = currentUserNickname || '';
   settingsTimeFormatSelect.value = currentUserTimeFormat;
@@ -5279,6 +5711,7 @@ function openSettingsModal() {
   settingsPendingAvatar = undefined;
   renderSettingsAvatarPreview();
   renderSettingsBackgroundPreview();
+  renderSettingsSubscriptionSection();
   settingsOverlay.classList.remove('hidden');
 }
 
@@ -5321,6 +5754,54 @@ document.getElementById('settings-save').onclick = () => {
   applyLanguage(language);
   closeSettingsModal();
 };
+
+settingsSubscribeBtn.onclick = () => subscribeCurrentUserToTrial();
+
+// ---------------------------------------------------------------------------
+// Subscription paywall modal -- shown when a free/lapsed account hits one of
+// the free-tier limits above (a 6th recurring task, 11th non-recurring task,
+// or 6th note on one task), and reused as the actual mechanism behind the
+// Settings section's own "Start free trial" button. Same
+// resolve-on-button-click promise shape as showFormModal, but a dedicated
+// bit of markup rather than that generic field-list engine -- this needs a
+// benefits list and a reason line, not a form.
+// ---------------------------------------------------------------------------
+
+const subscribeOverlay = document.getElementById('subscribe-overlay');
+const subscribeReasonEl = document.getElementById('subscribe-reason');
+let subscribeModalResolve = null;
+
+function showSubscribeModal(reasonText) {
+  return new Promise((resolve) => {
+    subscribeModalResolve = resolve;
+    subscribeReasonEl.textContent = reasonText;
+    subscribeOverlay.classList.remove('hidden');
+  });
+}
+
+function closeSubscribeModal(accepted) {
+  subscribeOverlay.classList.add('hidden');
+  if (subscribeModalResolve) {
+    subscribeModalResolve(accepted);
+    subscribeModalResolve = null;
+  }
+}
+
+document.getElementById('subscribe-close').onclick = () => closeSubscribeModal(false);
+document.getElementById('subscribe-cancel').onclick = () => closeSubscribeModal(false);
+document.getElementById('subscribe-start-trial').onclick = async () => {
+  await subscribeCurrentUserToTrial();
+  closeSubscribeModal(true);
+};
+
+// Shows the paywall with `reasonText` explaining why, and starts a trial if
+// the user accepts -- the single entry point every limit check above calls
+// (ensureCanCreateTaskOfKind, attemptResolveTaskOccurrence, the note-add
+// handler), so there's one place deciding what "offering a subscription"
+// actually does.
+async function offerSubscriptionUpgrade(reasonText) {
+  return showSubscribeModal(reasonText);
+}
 
 // ---------------------------------------------------------------------------
 // Settings modal -- data export/import. Bundles everything this app stores
@@ -5383,6 +5864,7 @@ settingsImportDataFileInput.onchange = async () => {
   if (!confirm(t('data.importConfirm'))) return;
 
   tasks = normalizeLoadedTasks(data.tasks);
+  ensureSubscriptionPromptTask(); // re-derive from the current account's subscription, not whatever the imported file happened to contain
   saveTasks();
 
   const profile = { ...DEFAULT_USER_PROFILE, ...(data.userProfile || {}) };
@@ -5658,6 +6140,7 @@ function renderAppTitle() {
 // in the background, applying and saving it whenever it resolves.
 function startApp(needsLanguageDetection) {
   tasks = loadTasks(currentUserId);
+  ensureSubscriptionPromptTask();
   applyStaticTranslations();
   renderAppTitle();
   renderUserAvatar();
@@ -5725,6 +6208,7 @@ function boot() {
     currentUserTimeFormat = user.timeFormat;
     currentUserBackground = user.background;
     currentUserLanguage = user.language || 'en';
+    currentUserSubscription = user.subscription;
     startApp(user.language == null);
   });
 }
@@ -5753,6 +6237,7 @@ document.getElementById('login-form').onsubmit = async (e) => {
   currentUserTimeFormat = user.timeFormat;
   currentUserBackground = user.background;
   currentUserLanguage = user.language || 'en';
+  currentUserSubscription = user.subscription;
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
   startApp(user.language == null);
