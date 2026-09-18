@@ -315,6 +315,10 @@ const I18N = {
     'data.notJson': "That file isn't valid JSON.",
     'data.notExport': "That file doesn't look like an advanced-todo data export.",
     'data.importConfirm': "Importing will replace all of your current tasks and settings with what's in this file. Continue?",
+    'data.importLimitedByFreePlan':
+      "Your free plan's limits apply to imports too, so some of this file's tasks and/or notes were left out. Subscribe to import everything.",
+    'data.importSaveFailed':
+      "Your tasks were imported here, but saving them to your account failed, so they may not actually be there yet: {message} Try again in a bit, and if it keeps happening, please contact support and attach the file you tried to import so we can look into it.",
   },
   hr: {
     'login.title': 'Prijava',
@@ -607,6 +611,10 @@ const I18N = {
     'data.notJson': 'Ta datoteka nije valjani JSON.',
     'data.notExport': 'Čini se da ta datoteka nije izvoz podataka iz ove aplikacije.',
     'data.importConfirm': 'Uvoz će zamijeniti sve vaše trenutne zadatke i postavke sadržajem ove datoteke. Želite li nastaviti?',
+    'data.importLimitedByFreePlan':
+      'Ograničenja vašeg besplatnog plana vrijede i za uvoz, pa su neki zadaci i/ili bilješke iz ove datoteke izostavljeni. Pretplatite se za potpuni uvoz.',
+    'data.importSaveFailed':
+      'Zadaci su uvezeni ovdje, ali njihovo spremanje na vaš račun nije uspjelo, pa možda još nisu tamo: {message} Pokušajte ponovno za koji trenutak, a ako se problem nastavi, javite se podršci i priložite datoteku koju ste pokušali uvesti kako bismo to mogli istražiti.',
   },
 };
 
@@ -2162,6 +2170,56 @@ function canAddNoteToTask(task) {
   if (!canCompleteOrNoteTask(task)) return false;
   if (isSubscriptionActive()) return true;
   return notesUsedFor(task) < NOTES_PER_TASK_LIMIT;
+}
+
+// Settings' data import (see settingsImportDataFileInput.onchange) bulk-
+// replaces the whole task list in one shot, bypassing canCreateTaskOfKind/
+// canAddNoteToTask -- both only ever gate one new task/note at a time, so an
+// imported backup could otherwise hand a free/lapsed account far more tasks
+// and notes than it could ever have created on its own. Enforce the same
+// numeric limits here instead of just leaving the excess to sit permanently
+// padlocked (see unlockedTaskIds): drop taskIds/notes beyond the limit
+// outright, same grandfather-by-createdAt/timestamp order as the rest of
+// this section, rather than importing them just to freeze them. Returns the
+// possibly-trimmed array unchanged if the account already has an active
+// subscription.
+function applyFreeTierLimitsToImportedTasks(imported) {
+  if (isSubscriptionActive()) return imported;
+
+  const isRecurringTaskId = (taskId) => imported.some((t) => t.taskId === taskId && t.frequency.type !== 'once');
+  const earliestCreatedAt = (taskId) => Math.min(...imported.filter((t) => t.taskId === taskId).map((t) => t.createdAt));
+
+  const taskIds = [...new Set(imported.filter((t) => !isProtectedTask(t)).map((t) => t.taskId))];
+  const once = taskIds.filter((id) => !isRecurringTaskId(id)).sort((a, b) => earliestCreatedAt(a) - earliestCreatedAt(b));
+  const recurring = taskIds.filter((id) => isRecurringTaskId(id)).sort((a, b) => earliestCreatedAt(a) - earliestCreatedAt(b));
+  const allowedTaskIds = new Set([...once.slice(0, FREE_TASK_LIMITS.once), ...recurring.slice(0, FREE_TASK_LIMITS.recurring)]);
+
+  const kept = imported.filter((t) => isProtectedTask(t) || allowedTaskIds.has(t.taskId));
+
+  // Notes are stored per record but counted per taskId across all of a
+  // taskId's fragments (see notesUsedFor) -- pool them across fragments,
+  // keep only the earliest NOTES_PER_TASK_LIMIT by timestamp, same as if
+  // they'd been added one at a time on a free account.
+  const entriesByTaskId = {};
+  for (const task of kept) {
+    for (const comment of task.comments || []) {
+      (entriesByTaskId[task.taskId] || (entriesByTaskId[task.taskId] = [])).push({ task, comment });
+    }
+  }
+  for (const taskId in entriesByTaskId) {
+    const dropped = new Set(
+      entriesByTaskId[taskId]
+        .sort((a, b) => a.comment.timestamp - b.comment.timestamp)
+        .slice(NOTES_PER_TASK_LIMIT)
+        .map((entry) => entry.comment)
+    );
+    if (!dropped.size) continue;
+    for (const task of kept) {
+      if (task.taskId === taskId && task.comments) task.comments = task.comments.filter((c) => !dropped.has(c));
+    }
+  }
+
+  return kept;
 }
 
 // Checks whether creating a task of this kind is currently allowed,
@@ -5757,9 +5815,14 @@ async function offerSubscriptionUpgrade(reasonText) {
 // ---------------------------------------------------------------------------
 // Settings modal -- data export/import. Bundles everything this app stores
 // per-user (tasks, profile, active-task/timer state, view mode) into one
-// JSON file, and can load that same file back in wholesale -- the closest
-// thing to a backup/account-migration story this fake-single-user app has,
-// since there's no real backend to sync across devices with.
+// JSON file, and can load that same file back in wholesale as a manual
+// backup/account-migration path, on top of (not instead of) this account's
+// normal server-side storage -- imported tasks are saved via the same
+// PUT /tasks every other task edit uses (awaited here, unlike saveTasks()'s
+// usual fire-and-forget callers, so a failed save can be surfaced -- see the
+// import handler below), subject to the same free-tier limits a free/lapsed
+// account would hit creating them one at a time (see
+// applyFreeTierLimitsToImportedTasks below).
 // ---------------------------------------------------------------------------
 
 const settingsDownloadDataBtn = document.getElementById('settings-download-data-btn');
@@ -5818,9 +5881,26 @@ settingsImportDataFileInput.onchange = async () => {
   }
   if (!confirm(t('data.importConfirm'))) return;
 
-  tasks = normalizeLoadedTasks(data.tasks);
+  const normalized = normalizeLoadedTasks(data.tasks);
+  const commentsBefore = normalized.reduce((sum, task) => sum + (task.comments ? task.comments.length : 0), 0);
+  tasks = applyFreeTierLimitsToImportedTasks(normalized);
+  const commentsAfter = tasks.reduce((sum, task) => sum + (task.comments ? task.comments.length : 0), 0);
+  if (tasks.length < normalized.length || commentsAfter < commentsBefore) alert(t('data.importLimitedByFreePlan'));
+
   ensureSubscriptionPromptTask(); // re-derive from the current account's subscription, not whatever the imported file happened to contain
-  saveTasks();
+
+  // Unlike saveTasks()'s usual fire-and-forget callers, this one has to
+  // actually know whether the save landed: a failed import silently leaves
+  // the account's server-side tasks untouched while the screen shows the
+  // imported ones as if they'd been saved (a real incident once did exactly
+  // this, caused by a backend bug since fixed) -- awaited here so a failure
+  // can be surfaced instead of just console.error'd.
+  try {
+    await apiFetch('/tasks', { method: 'PUT', body: tasks });
+  } catch (err) {
+    console.error('Failed to save imported tasks:', err);
+    alert(t('data.importSaveFailed', { message: err.message }));
+  }
 
   const profile = { ...DEFAULT_USER_PROFILE, ...(data.userProfile || {}) };
   saveUserProfile(profile);
