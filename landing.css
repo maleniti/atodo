@@ -41,6 +41,36 @@ a { color: inherit; }
 }
 .site-header .login-link:hover { color: #e8eaed; }
 
+.site-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* EN/HR switch -- see site-i18n.js's initSitePage. Present on every page in
+   this flow, always in the same spot, so switching languages mid-flow
+   doesn't require hunting for the control on each new page. */
+.lang-toggle {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.lang-toggle button {
+  border: 0;
+  background: transparent;
+  color: #9aa0a6;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.lang-toggle button.active {
+  background: #8ab4f8;
+  color: #0b0f14;
+}
+.lang-toggle button:not(.active):hover { color: #e8eaed; }
+
 .hero {
   text-align: center;
   padding: 48px 24px 32px;
@@ -204,6 +234,21 @@ a { color: inherit; }
 .flow-card h1 { font-size: 22px; color: #fff; margin: 0 0 12px; }
 .flow-card p { font-size: 14px; color: #9aa0a6; line-height: 1.5; margin: 0 0 24px; }
 .flow-card .btn { width: 100%; }
+
+/* privacy.html/terms.html's plain prose layout. */
+.legal-content {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 24px 64px;
+  line-height: 1.6;
+}
+.legal-content h1 { font-size: 28px; color: #fff; margin: 0 0 4px; }
+.legal-content .updated { color: #80868b; font-size: 13px; margin: 0 0 32px; }
+.legal-content h2 { font-size: 18px; color: #fff; margin: 32px 0 12px; }
+.legal-content p, .legal-content li { color: #c4c7c5; font-size: 14px; }
+.legal-content ul { padding-left: 20px; }
+.legal-content li { margin-bottom: 6px; }
+.legal-content a { color: #8ab4f8; }
 
 .spinner {
   width: 40px;

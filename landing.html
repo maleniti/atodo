@@ -9,15 +9,18 @@
 <body>
   <header class="site-header">
     <a class="logo" href="landing.html">A-To-Do</a>
-    <a class="login-link" href="index.html">Log in</a>
+    <div class="site-header-right">
+      <div class="lang-toggle"><button type="button" data-lang="en">EN</button><button type="button" data-lang="hr">HR</button></div>
+      <a class="login-link js-login-link" href="index.html" data-i18n="nav.login">Log in</a>
+    </div>
   </header>
 
   <section class="hero">
-    <h1>The to-do list that actually keeps up with you</h1>
-    <p>Recurring tasks, overdue &amp; failed-appointment tracking, work timers, and per-task notes -- all in one fast, no-nonsense list.</p>
+    <h1 data-i18n="hero.title">The to-do list that actually keeps up with you</h1>
+    <p data-i18n="hero.subtitle">Recurring tasks, overdue &amp; failed-appointment tracking, work timers, and per-task notes -- all in one fast, no-nonsense list.</p>
     <div class="hero-actions">
-      <a class="btn btn-primary" href="index.html">Get started free</a>
-      <a class="btn btn-secondary" href="#pricing">See pricing</a>
+      <a class="btn btn-primary js-login-link" href="index.html" data-i18n="hero.getStarted">Get started free</a>
+      <a class="btn btn-secondary" href="#pricing" data-i18n="hero.seePricing">See pricing</a>
     </div>
   </section>
 
@@ -25,36 +28,36 @@
     <div id="video-frame" class="video-frame hidden">
       <iframe id="video-iframe" src="" title="A-To-Do walkthrough" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
     </div>
-    <div id="video-placeholder" class="video-placeholder">Video walkthrough coming soon.</div>
+    <div id="video-placeholder" class="video-placeholder" data-i18n="hero.videoPlaceholder">Video walkthrough coming soon.</div>
   </section>
 
   <section class="section">
     <div class="wrap">
-      <h2>What you get</h2>
+      <h2 data-i18n="features.heading">What you get</h2>
       <div class="feature-grid">
         <div class="feature-card">
-          <h3>Flexible recurring tasks</h3>
-          <p>Daily, weekly, or monthly patterns -- specific weekdays, "the 2nd Tuesday", or a handful of exact days each month.</p>
+          <h3 data-i18n="features.recurringTitle">Flexible recurring tasks</h3>
+          <p data-i18n="features.recurringBody">Daily, weekly, or monthly patterns -- specific weekdays, "the 2nd Tuesday", or a handful of exact days each month.</p>
         </div>
         <div class="feature-card">
-          <h3>Overdue &amp; failed tracking</h3>
-          <p>A missed task carries over until you deal with it; an appointment past its due date is marked failed instead, so nothing quietly slips away.</p>
+          <h3 data-i18n="features.overdueTitle">Overdue &amp; failed tracking</h3>
+          <p data-i18n="features.overdueBody">A missed task carries over until you deal with it; an appointment past its due date is marked failed instead, so nothing quietly slips away.</p>
         </div>
         <div class="feature-card">
-          <h3>Work timers &amp; focus mode</h3>
-          <p>Start a countdown or count-up timer on whatever you're working on right now, and pick it back up later exactly where you left off.</p>
+          <h3 data-i18n="features.timersTitle">Work timers &amp; focus mode</h3>
+          <p data-i18n="features.timersBody">Start a countdown or count-up timer on whatever you're working on right now, and pick it back up later exactly where you left off.</p>
         </div>
         <div class="feature-card">
-          <h3>Notes &amp; activity history</h3>
-          <p>Keep context on every task -- notes you wrote, and a running log of everything that happened to it.</p>
+          <h3 data-i18n="features.notesTitle">Notes &amp; activity history</h3>
+          <p data-i18n="features.notesBody">Keep context on every task -- notes you wrote, and a running log of everything that happened to it.</p>
         </div>
         <div class="feature-card">
-          <h3>Today's agenda</h3>
-          <p>A side panel that always shows what's actually on your plate today, without digging through the full list.</p>
+          <h3 data-i18n="features.agendaTitle">Today's agenda</h3>
+          <p data-i18n="features.agendaBody">A side panel that always shows what's actually on your plate today, without digging through the full list.</p>
         </div>
         <div class="feature-card">
-          <h3>Works everywhere</h3>
-          <p>A responsive layout that works as well on your phone as it does on your desktop.</p>
+          <h3 data-i18n="features.responsiveTitle">Works everywhere</h3>
+          <p data-i18n="features.responsiveBody">A responsive layout that works as well on your phone as it does on your desktop.</p>
         </div>
       </div>
     </div>
@@ -62,47 +65,50 @@
 
   <section class="section" id="pricing">
     <div class="wrap">
-      <h2>Pricing</h2>
+      <h2 data-i18n="pricing.heading">Pricing</h2>
       <div class="pricing-grid">
         <div class="pricing-card">
-          <h3>Free</h3>
+          <h3 data-i18n="pricing.freeTitle">Free</h3>
           <div class="price">&euro;0</div>
           <ul>
-            <li>Up to 10 one-off tasks</li>
-            <li>Up to 5 recurring tasks</li>
-            <li>Up to 5 notes per task</li>
+            <li data-i18n="pricing.freeLimit1">Up to 10 one-off tasks</li>
+            <li data-i18n="pricing.freeLimit2">Up to 5 recurring tasks</li>
+            <li data-i18n="pricing.freeLimit3">Up to 5 notes per task</li>
           </ul>
-          <a class="btn btn-secondary" href="index.html">Get started free</a>
+          <a class="btn btn-secondary js-login-link" href="index.html" data-i18n="hero.getStarted">Get started free</a>
         </div>
         <div class="pricing-card">
-          <h3>Pro -- Monthly</h3>
-          <div class="price">&euro;2 <span>/ month</span></div>
+          <h3 data-i18n="pricing.monthlyTitle">Pro -- Monthly</h3>
+          <div class="price">&euro;2 <span data-i18n="pricing.perMonth">/ month</span></div>
           <ul>
-            <li>Unlimited tasks, recurring or not</li>
-            <li>Unlimited notes on every task</li>
-            <li>No more subscription reminders cluttering your list</li>
+            <li data-i18n="pricing.proBenefit1">Unlimited tasks, recurring or not</li>
+            <li data-i18n="pricing.proBenefit2">Unlimited notes on every task</li>
+            <li data-i18n="pricing.proBenefit3">No more subscription reminders cluttering your list</li>
           </ul>
-          <button type="button" class="btn btn-primary" data-plan="monthly">Subscribe monthly</button>
+          <button type="button" class="btn btn-primary" data-plan="monthly" data-i18n="pricing.subscribeMonthly">Subscribe monthly</button>
         </div>
         <div class="pricing-card highlight">
-          <h3>Pro -- Yearly</h3>
-          <div class="price">&euro;20 <span>/ year</span></div>
-          <p class="save">Save ~17% vs. monthly</p>
+          <h3 data-i18n="pricing.yearlyTitle">Pro -- Yearly</h3>
+          <div class="price">&euro;20 <span data-i18n="pricing.perYear">/ year</span></div>
+          <p class="save" data-i18n="pricing.save">Save ~17% vs. monthly</p>
           <ul>
-            <li>Unlimited tasks, recurring or not</li>
-            <li>Unlimited notes on every task</li>
-            <li>No more subscription reminders cluttering your list</li>
+            <li data-i18n="pricing.proBenefit1">Unlimited tasks, recurring or not</li>
+            <li data-i18n="pricing.proBenefit2">Unlimited notes on every task</li>
+            <li data-i18n="pricing.proBenefit3">No more subscription reminders cluttering your list</li>
           </ul>
-          <button type="button" class="btn btn-primary" data-plan="annual">Subscribe yearly</button>
+          <button type="button" class="btn btn-primary" data-plan="annual" data-i18n="pricing.subscribeYearly">Subscribe yearly</button>
         </div>
       </div>
     </div>
   </section>
 
-  <footer class="site-footer">A-To-Do &middot; <a href="index.html">Log in</a></footer>
+  <footer class="site-footer">
+    A-To-Do &middot; <a class="js-login-link" href="index.html" data-i18n="nav.login">Log in</a> &middot; <a href="privacy.html" data-i18n="nav.privacy">Privacy Policy</a> &middot; <a href="terms.html" data-i18n="nav.terms">Terms of Service</a>
+  </footer>
 
   <script src="config.js"></script>
   <script src="auth.js"></script>
+  <script src="site-i18n.js"></script>
   <script src="landing.js"></script>
 </body>
 </html>

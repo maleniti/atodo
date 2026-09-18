@@ -7,12 +7,24 @@
 <link rel="stylesheet" href="landing.css">
 </head>
 <body>
+  <header class="site-header">
+    <a class="logo" href="landing.html">A-To-Do</a>
+    <div class="lang-toggle"><button type="button" data-lang="en">EN</button><button type="button" data-lang="hr">HR</button></div>
+  </header>
+
   <div class="flow-page">
     <div class="flow-card">
-      <h1>No charge made</h1>
-      <p>Your payment was cancelled and you haven't been charged. You can pick a plan again any time.</p>
-      <a class="btn btn-primary" href="landing.html#pricing">Back to pricing</a>
+      <h1 data-i18n="cancel.title">No charge made</h1>
+      <p data-i18n="cancel.body">Your payment was cancelled and you haven't been charged. You can pick a plan again any time.</p>
+      <a class="btn btn-primary" href="landing.html#pricing" data-i18n="cancel.backToPricing">Back to pricing</a>
     </div>
   </div>
+
+  <footer class="site-footer">
+    A-To-Do &middot; <a href="privacy.html" data-i18n="nav.privacy">Privacy Policy</a> &middot; <a href="terms.html" data-i18n="nav.terms">Terms of Service</a>
+  </footer>
+
+  <script src="site-i18n.js"></script>
+  <script src="cancel.js"></script>
 </body>
 </html>

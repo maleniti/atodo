@@ -604,6 +604,20 @@ main {
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* See scheduleAccountDeletion (auth.js)/openDeleteAccountModal (app.js) --
+   only ever shown alongside an active subscription that's already headed
+   for cancellation, so it reads as a continuation of that state, not a
+   fresh alarm. */
+.settings-scheduled-deletion-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #f28b82;
+}
 #settings-subscription-status {
   font-size: 13px;
   color: #e8eaed;
@@ -675,6 +689,23 @@ main {
   margin-left: 4px;
 }
 .modal-link:hover { text-decoration: underline; }
+
+/* Below the login/register form itself (see index.html) -- opens in a new
+   tab (target="_blank") since these navigate away from the SPA entirely,
+   unlike every other link/button on this screen. */
+.auth-legal-links {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+  font-size: 11px;
+}
+.auth-legal-links a {
+  color: #80868b;
+  text-decoration: none;
+  margin: 0 6px;
+}
+.auth-legal-links a:hover { color: #e8eaed; text-decoration: underline; }
 
 .login-modal {
   width: 260px;
@@ -1308,6 +1339,10 @@ main {
   font-size: 13px;
   color: #e8eaed;
   cursor: pointer;
+  /* Only matters for the Privacy Policy/Terms of Service items (see
+     index.html), the only ones that are real <a> links rather than a plain
+     div with an onclick -- harmless on the rest. */
+  text-decoration: none;
 }
 .menu-item:hover { background: rgba(255, 255, 255, 0.08); }
 

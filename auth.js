@@ -48,16 +48,19 @@ function decodeToken(token) {
 //
 // null (never subscribed) | { id, plan: 'trial' | 'pro', billingInterval:
 // 'monthly' | 'annual' | null (null for a trial), startedAt, expiresAt,
-// cancelAtPeriodEnd }. Only the current/most recent subscription is kept, no
-// history -- there's no backend yet to reconcile a real billing history
-// against. "Active" is never cached as its own flag: it's always Date.now()
-// < expiresAt, checked live wherever it matters (see describeSubscription),
-// so an expired trial/subscription is correctly detected without needing a
-// fresh token just because time passed. cancelAtPeriodEnd doesn't change
-// that -- it only changes what the Settings section displays (see
-// renderSettingsSubscriptionSection in app.js); nothing in this mock
-// actually auto-renews a subscription past its expiresAt anyway, so
-// "cancelling" one has no other effect here yet.
+// cancelAtPeriodEnd, scheduledDeletion }. Only the current/most recent
+// subscription is kept, no history -- there's no backend yet to reconcile a
+// real billing history against. "Active" is never cached as its own flag:
+// it's always Date.now() < expiresAt, checked live wherever it matters (see
+// describeSubscription), so an expired trial/subscription is correctly
+// detected without needing a fresh token just because time passed.
+// cancelAtPeriodEnd doesn't change that -- it only changes what the
+// Settings section displays (see renderSettingsSubscriptionSection in
+// app.js); nothing in this mock actually auto-renews a subscription past
+// its expiresAt anyway, so "cancelling" one has no other effect here yet.
+// scheduledDeletion is the one exception: once expiresAt passes, getMe() in
+// app.js checks it and actually deletes the account (see
+// scheduleAccountDeletion/cancelScheduledAccountDeletion below).
 const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 const MONTHLY_BILLING_MS = 30 * 24 * 60 * 60 * 1000;
 const ANNUAL_BILLING_MS = 365 * 24 * 60 * 60 * 1000;
@@ -92,6 +95,7 @@ function startTrialSubscription(userId) {
     startedAt: Date.now(),
     expiresAt: Date.now() + TRIAL_DURATION_MS,
     cancelAtPeriodEnd: false,
+    scheduledDeletion: false,
   };
   saveUsers(users);
   return mintToken(user);
@@ -113,6 +117,7 @@ function startPaidSubscription(userId, billingInterval) {
     startedAt: Date.now(),
     expiresAt: Date.now() + durationMs,
     cancelAtPeriodEnd: false,
+    scheduledDeletion: false,
   };
   saveUsers(users);
   return mintToken(user);
@@ -130,6 +135,69 @@ function cancelSubscription(userId) {
   user.subscription.cancelAtPeriodEnd = true;
   saveUsers(users);
   return mintToken(user);
+}
+
+// The alternative to deleting a paying subscriber's account outright (see
+// the Settings "Delete account" flow in app.js) -- keeps full access until
+// the current period ends, same as cancelSubscription above (which this
+// also does -- a subscription slated for deletion has nothing left to
+// renew into), then getMe() in app.js deletes it for real once expiresAt
+// passes and nobody's undone it via cancelScheduledAccountDeletion below.
+// No-ops (returns null) if there's no active subscription to schedule
+// against.
+function scheduleAccountDeletion(userId) {
+  const users = loadUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user || !user.subscription || !describeSubscription(user.subscription).active) return null;
+  user.subscription.cancelAtPeriodEnd = true;
+  user.subscription.scheduledDeletion = true;
+  saveUsers(users);
+  return mintToken(user);
+}
+
+// Undoes scheduleAccountDeletion -- deliberately leaves cancelAtPeriodEnd
+// alone (see its own comment): "cancel the deletion" only promises to keep
+// the account around, not to silently resume billing the user never asked
+// to resume. No-ops (returns null) if there's no subscription at all.
+function cancelScheduledAccountDeletion(userId) {
+  const users = loadUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user || !user.subscription) return null;
+  user.subscription.scheduledDeletion = false;
+  saveUsers(users);
+  return mintToken(user);
+}
+
+// Data-retention policy (see the Privacy Policy): an account untouched for
+// 12 months is deleted -- see login()/getMe() in app.js, the only two
+// callers of isUserInactive/recordUserActivity below. A fixed 365 days,
+// same approximation-of-a-calendar-period style as TRIAL_DURATION_MS/
+// MONTHLY_BILLING_MS/ANNUAL_BILLING_MS above.
+const INACTIVITY_LIMIT_MS = 365 * 24 * 60 * 60 * 1000;
+
+// lastLoginAt (set only by a fresh email/password login) and lastActiveAt
+// (also touched by simply resuming an already-stored token, see getMe) are
+// deliberately separate fields -- lastActiveAt is the one that actually
+// gates deletion (see isUserInactive), so an account someone keeps using via
+// a long-lived token, without ever re-entering their password, still reads
+// as active. Both are meant to eventually live on a real backend's user
+// row, same as everything else in this file.
+function recordUserActivity(userId) {
+  const users = loadUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) return;
+  user.lastActiveAt = Date.now();
+  saveUsers(users);
+}
+
+// Falls back to lastLoginAt, then to "now" (never treats an account that
+// simply predates these fields as already-expired -- same
+// don't-punish-pre-existing-data reasoning as normalizeLoadedTasks'
+// createdAt backfill in app.js) for an account that's never had either
+// field recorded.
+function isUserInactive(user) {
+  const lastActive = user.lastActiveAt || user.lastLoginAt || Date.now();
+  return Date.now() - lastActive > INACTIVITY_LIMIT_MS;
 }
 
 // The visitor id behind whatever token is currently stored, or null if

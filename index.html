@@ -48,6 +48,10 @@
           <a href="#" id="show-register-link" class="modal-link" data-i18n="login.registerLink">Create one</a>
         </div>
       </form>
+      <div class="auth-legal-links">
+        <a class="js-legal-link" href="privacy.html" target="_blank" rel="noopener" data-i18n="menu.privacyPolicy">Privacy Policy</a>
+        <a class="js-legal-link" href="terms.html" target="_blank" rel="noopener" data-i18n="menu.termsOfService">Terms of Service</a>
+      </div>
     </div>
   </div>
 
@@ -77,6 +81,10 @@
           <a href="#" id="show-login-link" class="modal-link" data-i18n="register.loginLink">Log in</a>
         </div>
       </form>
+      <div class="auth-legal-links">
+        <a class="js-legal-link" href="privacy.html" target="_blank" rel="noopener" data-i18n="menu.privacyPolicy">Privacy Policy</a>
+        <a class="js-legal-link" href="terms.html" target="_blank" rel="noopener" data-i18n="menu.termsOfService">Terms of Service</a>
+      </div>
       <div id="register-success" class="hidden">
         <div id="register-success-message" class="modal-message success"></div>
         <div class="modal-actions">
@@ -100,6 +108,9 @@
             <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
               <div id="user-menu-manage-tasks" class="menu-item" data-i18n="menu.manageTasks">Manage tasks&hellip;</div>
               <div id="user-menu-settings" class="menu-item" data-i18n="menu.settings">Settings&hellip;</div>
+              <div class="menu-separator"></div>
+              <a class="menu-item js-legal-link" href="privacy.html" target="_blank" rel="noopener" data-i18n="menu.privacyPolicy">Privacy Policy</a>
+              <a class="menu-item js-legal-link" href="terms.html" target="_blank" rel="noopener" data-i18n="menu.termsOfService">Terms of Service</a>
               <div class="menu-separator"></div>
               <div id="user-menu-logout" class="menu-item" title="Log out (for testing the login screen)" data-i18n="menu.logout" data-i18n-title="menu.logoutTitle">Log out</div>
             </div>
@@ -295,6 +306,10 @@
           <button id="settings-subscribe-btn" type="button" class="menu-btn-small" data-i18n="subscribe.cta">Start free trial&hellip;</button>
           <button id="settings-cancel-subscription-btn" type="button" class="menu-btn-small hidden" data-i18n="settings.cancelSubscription">Cancel subscription</button>
         </div>
+        <div id="settings-scheduled-deletion-notice" class="settings-scheduled-deletion-notice hidden">
+          <span data-i18n="settings.scheduledDeletionNotice">This account will be deleted upon subscription expiration.</span>
+          <button id="settings-cancel-scheduled-deletion-btn" type="button" class="menu-btn-small" data-i18n="settings.cancelScheduledDeletion">Cancel scheduled deletion</button>
+        </div>
       </div>
       <div class="modal-field">
         <label data-i18n="settings.data">Data</label>
@@ -322,9 +337,11 @@
       </button>
       <div class="modal-title" data-i18n="deleteAccount.title">Delete account</div>
       <div class="modal-message error" data-i18n="deleteAccount.warning">This permanently deletes your account and every task, note, and setting tied to it -- immediately, with no way to undo it.</div>
+      <div id="delete-account-subscriber-notice" class="modal-message error hidden" data-i18n="deleteAccount.subscriberNotice">You have an active Pro subscription. Deleting immediately forfeits the rest of your paid period with no refund, and cuts off access right away. You can instead schedule deletion for when your subscription ends -- it'll be cancelled now, but you'll keep full access until then.</div>
       <button id="delete-account-download-btn" type="button" class="menu-btn-small" data-i18n="settings.downloadData">Download my data&hellip;</button>
       <div class="modal-actions">
         <button id="delete-account-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
+        <button id="delete-account-schedule" class="modal-secondary hidden"></button>
         <button id="delete-account-confirm" class="modal-delete confirm" data-i18n="deleteAccount.confirm">Delete my account permanently</button>
       </div>
     </div>

@@ -32,6 +32,8 @@ const I18N = {
     'login.registerLink': 'Create one',
     'login.invalidCredentials': 'Incorrect email or password.',
     'login.notVerified': "That email hasn't been verified yet – check your inbox for the verification link.",
+    'login.accountExpired': "This account was automatically deleted after 12 months of inactivity, along with all its data. You're welcome to create a new one.",
+    'login.accountDeletedScheduled': "This account was deleted, as scheduled, once its subscription ended, along with all its data. You're welcome to create a new one.",
     'login.verifiedSuccess': 'Email verified – you can now log in as {email}.',
     'login.verifyExpired': 'That verification link has expired. Please register again.',
     'login.verifyInvalid': 'That verification link is invalid or has already been used.',
@@ -63,6 +65,8 @@ const I18N = {
     'avatar.accountMenu': 'Account menu',
     'menu.manageTasks': 'Manage tasks…',
     'menu.settings': 'Settings…',
+    'menu.privacyPolicy': 'Privacy Policy',
+    'menu.termsOfService': 'Terms of Service',
     'menu.logout': 'Log out',
     'menu.logoutTitle': 'Log out (for testing the login screen)',
 
@@ -256,6 +260,8 @@ const I18N = {
     'settings.billingMonthly': 'monthly',
     'settings.billingAnnual': 'annually',
     'settings.cancelSubscription': 'Cancel subscription',
+    'settings.scheduledDeletionNotice': 'This account will be deleted upon subscription expiration.',
+    'settings.cancelScheduledDeletion': 'Cancel scheduled deletion',
     'settings.data': 'Data',
     'settings.downloadData': 'Download my data…',
     'settings.importData': 'Import data…',
@@ -265,7 +271,11 @@ const I18N = {
     'deleteAccount.title': 'Delete account',
     'deleteAccount.warning':
       "This permanently deletes your account and every task, note, and setting tied to it – immediately, with no way to undo it. Download a copy first if you want to keep it.",
+    'deleteAccount.subscriberNotice':
+      "You have an active Pro subscription. Deleting immediately forfeits the rest of your paid period with no refund, and cuts off access right away. You can instead schedule deletion for when your subscription ends – it'll be cancelled now, but you'll keep full access until then.",
     'deleteAccount.confirm': 'Delete my account permanently',
+    'deleteAccount.confirmImmediate': 'Delete immediately',
+    'deleteAccount.schedule': 'Schedule deletion for {date}',
 
     'subscribe.title': 'Upgrade to A-To-Do Pro',
     'subscribe.cta': 'Start free trial…',
@@ -313,6 +323,8 @@ const I18N = {
     'login.registerLink': 'Napravite ga',
     'login.invalidCredentials': 'Netočan e-mail ili lozinka.',
     'login.notVerified': 'Taj e-mail još nije potvrđen – provjerite poštanski sandučić za poveznicu za potvrdu.',
+    'login.accountExpired': 'Ovaj račun je automatski izbrisan nakon 12 mjeseci neaktivnosti, zajedno sa svim podacima. Slobodno otvorite novi.',
+    'login.accountDeletedScheduled': 'Ovaj račun je izbrisan, kako je zakazano, po isteku pretplate, zajedno sa svim podacima. Slobodno otvorite novi.',
     'login.verifiedSuccess': 'E-mail potvrđen – sada se možete prijaviti kao {email}.',
     'login.verifyExpired': 'Ta poveznica za potvrdu je istekla. Molimo registrirajte se ponovno.',
     'login.verifyInvalid': 'Ta poveznica za potvrdu nije valjana ili je već iskorištena.',
@@ -344,6 +356,8 @@ const I18N = {
     'avatar.accountMenu': 'Izbornik računa',
     'menu.manageTasks': 'Upravljanje zadacima…',
     'menu.settings': 'Postavke…',
+    'menu.privacyPolicy': 'Pravila privatnosti',
+    'menu.termsOfService': 'Uvjeti korištenja',
     'menu.logout': 'Odjava',
     'menu.logoutTitle': 'Odjava (za testiranje zaslona za prijavu)',
 
@@ -537,6 +551,8 @@ const I18N = {
     'settings.billingMonthly': 'mjesečno',
     'settings.billingAnnual': 'godišnje',
     'settings.cancelSubscription': 'Otkaži pretplatu',
+    'settings.scheduledDeletionNotice': 'Ovaj račun će biti izbrisan po isteku pretplate.',
+    'settings.cancelScheduledDeletion': 'Otkaži zakazano brisanje',
     'settings.data': 'Podaci',
     'settings.downloadData': 'Preuzmi moje podatke…',
     'settings.importData': 'Uvezi podatke…',
@@ -546,7 +562,11 @@ const I18N = {
     'deleteAccount.title': 'Izbriši račun',
     'deleteAccount.warning':
       'Ovime se trajno briše vaš račun te svaki zadatak, bilješka i postavka vezana uz njega – odmah, bez mogućnosti poništenja. Preuzmite kopiju prije brisanja ako je želite zadržati.',
+    'deleteAccount.subscriberNotice':
+      'Imate aktivnu Pro pretplatu. Trenutačno brisanje znači gubitak preostalog plaćenog razdoblja bez povrata novca, te odmah gubite pristup. Umjesto toga možete zakazati brisanje za trenutak isteka pretplate – pretplata će se odmah otkazati, ali pristup ćete imati do tada.',
     'deleteAccount.confirm': 'Trajno izbriši moj račun',
+    'deleteAccount.confirmImmediate': 'Izbriši odmah',
+    'deleteAccount.schedule': 'Zakaži brisanje za {date}',
 
     'subscribe.title': 'Nadogradite na A-To-Do Pro',
     'subscribe.cta': 'Isprobajte besplatno…',
@@ -630,6 +650,22 @@ function applyStaticTranslations() {
     el.title = t(el.dataset.i18nTitle);
   });
   document.documentElement.lang = currentUserLanguage;
+  updateOutboundLegalLinks();
+}
+
+// The reverse of site-i18n.js's own a.js-login-link handling: every link
+// out of the app into the separately-i18n'd marketing/legal flow (the
+// avatar menu's Privacy Policy/Terms of Service, the same two below the
+// login/register form, and the header's Subscribe button) gets `?lang=`
+// set to the app's own current language, so the destination page opens
+// already matching it instead of falling back to its own stored
+// preference/IP guess (see resolveInitialSiteLanguage there).
+function updateOutboundLegalLinks() {
+  document.querySelectorAll('a.js-legal-link, #app-header-subscribe-btn').forEach((el) => {
+    const url = new URL(el.getAttribute('href'), location.href);
+    url.searchParams.set('lang', currentUserLanguage);
+    el.setAttribute('href', url.pathname + '?' + url.searchParams.toString() + url.hash);
+  });
 }
 
 // task.log ({ message, timestamp, occurrenceDate }[]) is the side panel's
@@ -1325,21 +1361,57 @@ function saveUserProfile(profile, userId = currentUserId) {
 // exists but hasn't verified yet, so someone who mistypes an email they
 // never registered still just gets the generic "incorrect email or
 // password" instead of a hint about which emails are/aren't registered.
+// Doesn't check inactivity itself (see getMe below, the only place that
+// does) -- every caller here calls getMe() with the fresh token immediately
+// after, so checking there instead covers this path too without duplicating
+// the check in two places.
 async function login(email, password) {
   await seedInitialUserIfNeeded();
   const normalizedEmail = email.trim().toLowerCase();
-  const user = loadUsers().find((u) => u.email.toLowerCase() === normalizedEmail);
+  const users = loadUsers();
+  const user = users.find((u) => u.email.toLowerCase() === normalizedEmail);
   if (!user) {
     const isPending = loadPendingRegistrations().some((p) => p.email.toLowerCase() === normalizedEmail);
     throw codeError(isPending ? 'EMAIL_NOT_VERIFIED' : 'INVALID_CREDENTIALS');
   }
   const passwordHash = await hashPassword(password, user.salt);
   if (passwordHash !== user.passwordHash) throw codeError('INVALID_CREDENTIALS');
+  user.lastLoginAt = Date.now();
+  saveUsers(users);
   return { token: mintToken(user) };
 }
 
+// The one place a token actually gets resolved into a live session --
+// called both by boot()'s existing-token path and right after a fresh
+// login() (see both below), so it's also the one place that can tell a
+// still-valid account apart from one that's gone: a token alone can't
+// answer that (see mintToken/describeSubscription in auth.js -- it's an
+// unsigned snapshot from whenever it was minted, not live truth), so this
+// re-checks the current `users` record instead of trusting the token's
+// claims wholesale. Throws codeError('ACCOUNT_NOT_FOUND') if the account
+// behind the token is simply gone (deleted from Settings, or from another
+// tab), codeError('ACCOUNT_EXPIRED_INACTIVITY') -- our data-retention
+// policy (see the Privacy Policy) -- if it hasn't been used in 12 months,
+// or codeError('ACCOUNT_DELETED_SCHEDULED') if it was a paying subscriber
+// who chose "schedule deletion" over losing access immediately (see
+// scheduleAccountDeletion in auth.js and the Settings "Delete account"
+// flow below) and their subscription has since actually expired. All three
+// delete the account right here before returning anything (see
+// wipeAccountData). Every caller must treat any of them as "not logged
+// in", not silently proceed with whatever's left in profile/task storage.
 async function getMe(token) {
   const payload = decodeToken(token);
+  const user = loadUsers().find((u) => u.id === payload.sub);
+  if (!user) throw codeError('ACCOUNT_NOT_FOUND');
+  if (isUserInactive(user)) {
+    wipeAccountData(user.id);
+    throw codeError('ACCOUNT_EXPIRED_INACTIVITY');
+  }
+  if (user.subscription && user.subscription.scheduledDeletion && !describeSubscription(user.subscription).active) {
+    wipeAccountData(user.id);
+    throw codeError('ACCOUNT_DELETED_SCHEDULED');
+  }
+  recordUserActivity(user.id);
   const profile = loadUserProfile(payload.sub);
   return {
     id: payload.sub,
@@ -1350,6 +1422,17 @@ async function getMe(token) {
     language: profile.language,
     subscription: payload.subscription || null,
   };
+}
+
+// Shared by boot()'s and the login form's own catch blocks below --
+// ACCOUNT_NOT_FOUND has no specific copy of its own (rare enough in
+// practice, see getMe's comment, that "wrong email or password"/a plain
+// return to the login screen is an acceptable generic fallback).
+function describeAuthError(err) {
+  if (err.code === 'EMAIL_NOT_VERIFIED') return t('login.notVerified');
+  if (err.code === 'ACCOUNT_EXPIRED_INACTIVITY') return t('login.accountExpired');
+  if (err.code === 'ACCOUNT_DELETED_SCHEDULED') return t('login.accountDeletedScheduled');
+  return t('login.invalidCredentials');
 }
 
 // Set once boot()/the login form resolves a user -- every call site below
@@ -2316,6 +2399,18 @@ async function cancelCurrentUserSubscription() {
   currentUserSubscription = user.subscription;
   renderSettingsSubscriptionSection();
   renderSubscribeHeaderButton();
+}
+
+// "Cancel scheduled deletion" in Settings (see scheduleAccountDeletion in
+// auth.js) -- deliberately doesn't touch cancelAtPeriodEnd itself, see
+// cancelScheduledAccountDeletion's own comment.
+async function cancelCurrentUserScheduledDeletion() {
+  const token = cancelScheduledAccountDeletion(currentUserId);
+  if (!token) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const user = await getMe(token);
+  currentUserSubscription = user.subscription;
+  renderSettingsSubscriptionSection();
 }
 
 // Every one of these option lists is a function, not a plain array -- called
@@ -5616,6 +5711,8 @@ const settingsAvatarFileInput = document.getElementById('settings-avatar-file-in
 const settingsSubscriptionStatusEl = document.getElementById('settings-subscription-status');
 const settingsSubscribeBtn = document.getElementById('settings-subscribe-btn');
 const settingsCancelSubscriptionBtn = document.getElementById('settings-cancel-subscription-btn');
+const settingsScheduledDeletionNoticeEl = document.getElementById('settings-scheduled-deletion-notice');
+const settingsCancelScheduledDeletionBtn = document.getElementById('settings-cancel-scheduled-deletion-btn');
 
 const AVATAR_SIZE = 128; // px, square
 
@@ -5686,6 +5783,11 @@ function renderSettingsSubscriptionSection() {
   }
   settingsSubscribeBtn.classList.toggle('hidden', active);
   settingsCancelSubscriptionBtn.classList.toggle('hidden', !(plan === 'pro' && active && !subscription.cancelAtPeriodEnd));
+  // See scheduleAccountDeletion in auth.js -- only meaningful while the
+  // subscription it's tied to is still active (once it lapses, getMe()
+  // deletes the account for real on the next login, so there's nothing left
+  // here to show by then).
+  settingsScheduledDeletionNoticeEl.classList.toggle('hidden', !(active && subscription.scheduledDeletion));
 }
 
 function openSettingsModal() {
@@ -5741,6 +5843,7 @@ document.getElementById('settings-save').onclick = () => {
 
 settingsSubscribeBtn.onclick = () => subscribeCurrentUserToTrial();
 settingsCancelSubscriptionBtn.onclick = () => cancelCurrentUserSubscription();
+settingsCancelScheduledDeletionBtn.onclick = () => cancelCurrentUserScheduledDeletion();
 
 // ---------------------------------------------------------------------------
 // Subscription paywall modal -- shown when a free/lapsed account hits one of
@@ -5891,10 +5994,24 @@ settingsImportDataFileInput.onchange = async () => {
 
 const settingsDeleteAccountBtn = document.getElementById('settings-delete-account-btn');
 const deleteAccountOverlay = document.getElementById('delete-account-overlay');
+const deleteAccountSubscriberNoticeEl = document.getElementById('delete-account-subscriber-notice');
 const deleteAccountDownloadBtn = document.getElementById('delete-account-download-btn');
+const deleteAccountScheduleBtn = document.getElementById('delete-account-schedule');
 const deleteAccountConfirmBtn = document.getElementById('delete-account-confirm');
 
+// A paying (active Pro) subscriber gets a choice the modal's plain single
+// button doesn't cover: deleting right now forfeits the rest of what they
+// already paid for with no refund, so offer scheduling deletion for
+// whenever the subscription would end instead (see scheduleAccountDeletion
+// in auth.js) -- everyone else (free, trial, or a lapsed subscription) has
+// nothing to lose either way, so they only ever see the one option.
 function openDeleteAccountModal() {
+  const { plan, active, subscription } = describeSubscription(currentUserSubscription);
+  const isPayingSubscriber = plan === 'pro' && active;
+  deleteAccountSubscriberNoticeEl.classList.toggle('hidden', !isPayingSubscriber);
+  deleteAccountScheduleBtn.classList.toggle('hidden', !isPayingSubscriber);
+  deleteAccountConfirmBtn.textContent = t(isPayingSubscriber ? 'deleteAccount.confirmImmediate' : 'deleteAccount.confirm');
+  if (isPayingSubscriber) deleteAccountScheduleBtn.textContent = t('deleteAccount.schedule', { date: formatDateTime(subscription.expiresAt) });
   deleteAccountOverlay.classList.remove('hidden');
 }
 function closeDeleteAccountModal() {
@@ -5906,13 +6023,14 @@ document.getElementById('delete-account-close').onclick = closeDeleteAccountModa
 document.getElementById('delete-account-cancel').onclick = closeDeleteAccountModal;
 deleteAccountDownloadBtn.onclick = downloadUserDataExport;
 
-// Wipes every bit of storage this account's data lives in and reloads --
-// simplest way to guarantee every one of this file's many in-memory globals
-// (tasks, currentUser*, activeTaskId, todoViewMode, ...) resets cleanly,
-// same as a real fresh visit. boot() then finds no token and shows the login
-// screen. Deliberately doesn't touch loadUnsplashAccessKey's per-device key
-// (see collectUserDataExport's own comment) -- that's a device credential,
-// not this account's data, same distinction the data export already draws.
+// Wipes every bit of storage `userId`'s data lives in -- removes the account
+// itself from `users`, plus everything else. Shared by the Settings "Delete
+// account" flow below (a deliberate, user-initiated deletion) and login()'s
+// own 12-month-inactivity check above (an automatic one) -- same end state
+// either way. Deliberately doesn't touch loadUnsplashAccessKey's per-device
+// key (see collectUserDataExport's own comment) -- that's a device
+// credential, not this account's data, same distinction the data export
+// already draws.
 //
 // SHORTCUT (see loadTasks/saveTasks above): tasks/profile/active-task/view-
 // mode are still one shared blob, not actually partitioned per account, so
@@ -5920,18 +6038,45 @@ deleteAccountDownloadBtn.onclick = downloadUserDataExport;
 // correct for the single real account this app is used by today, but would
 // need to scope to just this account's own rows once a real per-account
 // backend exists.
-function deleteCurrentUserAccount() {
-  saveUsers(loadUsers().filter((u) => u.id !== currentUserId));
+function wipeAccountData(userId) {
+  saveUsers(loadUsers().filter((u) => u.id !== userId));
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(TASKS_STORAGE_KEY);
   localStorage.removeItem(USER_PROFILE_STORAGE_KEY);
   localStorage.removeItem(ACTIVE_TASK_STORAGE_KEY);
   localStorage.removeItem(ACTIVE_OCCURRENCE_STORAGE_KEY);
   localStorage.removeItem(TODO_VIEW_MODE_KEY);
+}
+
+// Reloads afterward -- simplest way to guarantee every one of this file's
+// many in-memory globals (tasks, currentUser*, activeTaskId, todoViewMode,
+// ...) resets cleanly, same as a real fresh visit. boot() then finds no
+// token and shows the login screen.
+function deleteCurrentUserAccount() {
+  wipeAccountData(currentUserId);
   location.reload();
 }
 
 deleteAccountConfirmBtn.onclick = deleteCurrentUserAccount;
+
+// The other choice offered to a paying subscriber (see openDeleteAccountModal
+// above) -- keeps everything working normally until the subscription's
+// current period ends, at which point getMe() actually deletes it (see
+// scheduleAccountDeletion's own comment in auth.js). No reload needed: the
+// account isn't gone yet, so just refresh the bits of chrome that show
+// subscription/deletion status.
+async function scheduleCurrentUserAccountDeletion() {
+  const token = scheduleAccountDeletion(currentUserId);
+  if (!token) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const user = await getMe(token);
+  currentUserSubscription = user.subscription;
+  closeDeleteAccountModal();
+  renderSettingsSubscriptionSection();
+  renderSubscribeHeaderButton();
+}
+
+deleteAccountScheduleBtn.onclick = scheduleCurrentUserAccountDeletion;
 
 // ---------------------------------------------------------------------------
 // Background picker (Unsplash) -- opened via Settings' "Change background"
@@ -6234,6 +6379,25 @@ function boot() {
   // visit, so it stays English until the first successful login runs
   // detectLanguageAndTimeFormatFromLocation.
   currentUserLanguage = loadUserProfile().language || 'en';
+  // A `?lang=en|hr` handoff from the marketing/legal flow (see
+  // site-i18n.js/landing.html etc.) -- lets clicking through to "Log in"
+  // from one of those pages show the login/register screen in the language
+  // the visitor was just reading, without touching any saved profile.
+  // Purely a pre-login display default: the moment a real login succeeds,
+  // the account's own saved language (if any) takes back over below, same
+  // as always.
+  const bootUrlParams = new URLSearchParams(location.search);
+  const langHandoff = bootUrlParams.get('lang');
+  if (langHandoff === 'en' || langHandoff === 'hr') {
+    currentUserLanguage = langHandoff;
+    // Consumed once -- stripped so it doesn't linger in the address bar or
+    // get treated as still-pending on a later reload, same idea as
+    // handleEmailVerificationLink's own `verify` token below. `next`/`plan`
+    // (if present, see the login form's own submit handler) are left alone.
+    bootUrlParams.delete('lang');
+    const strippedSearch = bootUrlParams.toString();
+    history.replaceState(null, '', location.pathname + (strippedSearch ? `?${strippedSearch}` : '') + location.hash);
+  }
   applyStaticTranslations();
   handleEmailVerificationLink();
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -6242,26 +6406,42 @@ function boot() {
     seedInitialUserIfNeeded(); // fire-and-forget -- idempotent, and login() also awaits it directly
     return;
   }
-  // A direct/bookmarked visit to this URL while already logged in -- see the
-  // same check in the login form's submit handler below for the logged-out
-  // case (landing.js normally sends an already-logged-in visitor straight to
-  // checkout.html itself, never through here).
-  const bootParams = new URLSearchParams(location.search);
-  if (bootParams.get('next') === 'checkout') {
-    location.href = `checkout.html?plan=${encodeURIComponent(bootParams.get('plan') || 'monthly')}`;
-    return;
-  }
   appMainEl.classList.remove('hidden');
-  getMe(token).then((user) => {
-    currentUserId = user.id;
-    currentUserNickname = user.nickname;
-    currentUserAvatar = user.avatar;
-    currentUserTimeFormat = user.timeFormat;
-    currentUserBackground = user.background;
-    currentUserLanguage = user.language || 'en';
-    currentUserSubscription = user.subscription;
-    startApp(user.language == null);
-  });
+  getMe(token)
+    .then((user) => {
+      // A direct/bookmarked visit to this URL while already logged in --
+      // see the same check in the login form's submit handler below for the
+      // logged-out case (landing.js normally sends an already-logged-in
+      // visitor straight to checkout.html itself, never through here).
+      // Deliberately checked only after getMe() resolves, not before -- an
+      // expired/deleted account (see getMe's own comment) should land back
+      // on the login screen, not get waved through to checkout.
+      const bootParams = new URLSearchParams(location.search);
+      if (bootParams.get('next') === 'checkout') {
+        location.href = `checkout.html?plan=${encodeURIComponent(bootParams.get('plan') || 'monthly')}`;
+        return;
+      }
+      currentUserId = user.id;
+      currentUserNickname = user.nickname;
+      currentUserAvatar = user.avatar;
+      currentUserTimeFormat = user.timeFormat;
+      currentUserBackground = user.background;
+      currentUserLanguage = user.language || 'en';
+      currentUserSubscription = user.subscription;
+      startApp(user.language == null);
+    })
+    .catch((err) => {
+      // getMe() itself already wiped storage for ACCOUNT_EXPIRED_INACTIVITY/
+      // ACCOUNT_DELETED_SCHEDULED (see wipeAccountData) -- this covers
+      // ACCOUNT_NOT_FOUND too, where a stale token pointing at an
+      // already-gone account otherwise never gets cleared.
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      appMainEl.classList.add('hidden');
+      loginScreenEl.classList.remove('hidden');
+      if (err.code === 'ACCOUNT_EXPIRED_INACTIVITY' || err.code === 'ACCOUNT_DELETED_SCHEDULED') {
+        showAuthMessage(loginMessageEl, 'error', describeAuthError(err));
+      }
+    });
 }
 
 document.getElementById('login-form').onsubmit = async (e) => {
@@ -6269,15 +6449,15 @@ document.getElementById('login-form').onsubmit = async (e) => {
   clearAuthMessage(loginMessageEl);
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  let token;
+  let token, user;
   try {
     ({ token } = await login(email, password));
+    // Always resolved right after login() -- see getMe's own comment on why
+    // the inactivity/existence check lives there instead of in login()
+    // itself, and why that's safe to rely on here.
+    user = await getMe(token);
   } catch (err) {
-    showAuthMessage(
-      loginMessageEl,
-      'error',
-      err.code === 'EMAIL_NOT_VERIFIED' ? t('login.notVerified') : t('login.invalidCredentials')
-    );
+    showAuthMessage(loginMessageEl, 'error', describeAuthError(err));
     return;
   }
   localStorage.setItem(AUTH_TOKEN_KEY, token);
@@ -6291,7 +6471,6 @@ document.getElementById('login-form').onsubmit = async (e) => {
     return;
   }
 
-  const user = await getMe(token);
   currentUserId = user.id;
   currentUserNickname = user.nickname;
   currentUserAvatar = user.avatar;
