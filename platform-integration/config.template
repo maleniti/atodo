@@ -1,6 +1,6 @@
-API_BASE_URL=http://localhost:50000
+API_BASE_URL="${API_BASE_URL}"
 
-UNSPLASH_ACCESS_KEY=${UNSPLASH_ACCESS_KEY}
+UNSPLASH_ACCESS_KEY="${UNSPLASH_ACCESS_KEY}"
 
-LANDING_VIDEO_URL_EN=https://www.youtube.com/watch?v=mfhBM_Yay6w
-LANDING_VIDEO_URL_HR=https://www.youtube.com/watch?v=oiJIO7ymqo8
+LANDING_VIDEO_URL_EN="https://www.youtube.com/watch?v=mfhBM_Yay6w"
+LANDING_VIDEO_URL_HR="https://www.youtube.com/watch?v=oiJIO7ymqo8"
