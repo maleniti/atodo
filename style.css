@@ -567,6 +567,19 @@ main {
   align-items: center;
   gap: 10px;
 }
+
+/* Visually sets "Delete account" apart from every other (reversible)
+   Settings field above it -- a top border standing in for a section divider,
+   plus the label itself tinted the same red as the button. */
+.settings-danger-zone {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(217, 48, 37, 0.3);
+}
+.settings-danger-zone label { color: #f28b82; }
+
+.delete-account-modal { width: 360px; }
+.delete-account-modal .menu-btn-small { margin-bottom: 4px; }
 .settings-avatar-preview {
   width: 56px;
   height: 56px;
@@ -1331,6 +1344,11 @@ main {
   transition: background 0.15s;
 }
 .menu-btn-small:hover { background: rgba(255, 255, 255, 0.12); }
+.menu-btn-danger {
+  color: #f28b82;
+  border-color: rgba(217, 48, 37, 0.4);
+}
+.menu-btn-danger:hover { background: rgba(217, 48, 37, 0.15); }
 
 /* The side panel's "Add note" button prefixes this same padlock (see
    LOCK_ICON/renderSidePanel) when the selected task is beyond a lapsed

@@ -304,9 +304,28 @@
           <input id="settings-import-data-file-input" type="file" accept="application/json" class="hidden">
         </div>
       </div>
+      <div class="modal-field settings-danger-zone">
+        <label data-i18n="settings.dangerZone">Danger zone</label>
+        <button id="settings-delete-account-btn" type="button" class="menu-btn-small menu-btn-danger" data-i18n="settings.deleteAccount">Delete account&hellip;</button>
+      </div>
       <div class="modal-actions">
         <button id="settings-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
         <button id="settings-save" class="modal-ok" data-i18n="common.save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="delete-account-overlay" class="modal-overlay hidden">
+    <div class="modal delete-account-modal">
+      <button id="delete-account-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-title" data-i18n="deleteAccount.title">Delete account</div>
+      <div class="modal-message error" data-i18n="deleteAccount.warning">This permanently deletes your account and every task, note, and setting tied to it -- immediately, with no way to undo it.</div>
+      <button id="delete-account-download-btn" type="button" class="menu-btn-small" data-i18n="settings.downloadData">Download my data&hellip;</button>
+      <div class="modal-actions">
+        <button id="delete-account-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
+        <button id="delete-account-confirm" class="modal-delete confirm" data-i18n="deleteAccount.confirm">Delete my account permanently</button>
       </div>
     </div>
   </div>

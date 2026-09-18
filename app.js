@@ -259,6 +259,13 @@ const I18N = {
     'settings.data': 'Data',
     'settings.downloadData': 'Download my data…',
     'settings.importData': 'Import data…',
+    'settings.dangerZone': 'Danger zone',
+    'settings.deleteAccount': 'Delete account…',
+
+    'deleteAccount.title': 'Delete account',
+    'deleteAccount.warning':
+      "This permanently deletes your account and every task, note, and setting tied to it – immediately, with no way to undo it. Download a copy first if you want to keep it.",
+    'deleteAccount.confirm': 'Delete my account permanently',
 
     'subscribe.title': 'Upgrade to A-To-Do Pro',
     'subscribe.cta': 'Start free trial…',
@@ -533,6 +540,13 @@ const I18N = {
     'settings.data': 'Podaci',
     'settings.downloadData': 'Preuzmi moje podatke…',
     'settings.importData': 'Uvezi podatke…',
+    'settings.dangerZone': 'Opasna zona',
+    'settings.deleteAccount': 'Izbriši račun…',
+
+    'deleteAccount.title': 'Izbriši račun',
+    'deleteAccount.warning':
+      'Ovime se trajno briše vaš račun te svaki zadatak, bilješka i postavka vezana uz njega – odmah, bez mogućnosti poništenja. Preuzmite kopiju prije brisanja ako je želite zadržati.',
+    'deleteAccount.confirm': 'Trajno izbriši moj račun',
 
     'subscribe.title': 'Nadogradite na A-To-Do Pro',
     'subscribe.cta': 'Isprobajte besplatno…',
@@ -5800,7 +5814,9 @@ function collectUserDataExport() {
   };
 }
 
-settingsDownloadDataBtn.onclick = () => {
+// Shared by the plain Settings button and the delete-account modal's own
+// "Download my data" offer (see below) -- same file either way.
+function downloadUserDataExport() {
   const blob = new Blob([JSON.stringify(collectUserDataExport(), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -5808,7 +5824,9 @@ settingsDownloadDataBtn.onclick = () => {
   link.download = `advanced-todo-backup-${Recurrence.dateToISO(new Date())}.json`;
   link.click();
   URL.revokeObjectURL(url);
-};
+}
+
+settingsDownloadDataBtn.onclick = downloadUserDataExport;
 
 settingsImportDataBtn.onclick = () => settingsImportDataFileInput.click();
 
@@ -5862,6 +5880,58 @@ settingsImportDataFileInput.onchange = async () => {
   renderSidePanel();
   refreshTodoManageModal();
 };
+
+// ---------------------------------------------------------------------------
+// Account deletion -- Settings' "Delete account" opens a dedicated
+// confirmation modal (warning + a chance to download data first) rather than
+// a plain confirm(), since there's more than a yes/no here. The modal itself
+// is the confirmation step, so unlike appendDeleteButton's list-row pattern
+// there's no separate arm/click-again dance on top of it.
+// ---------------------------------------------------------------------------
+
+const settingsDeleteAccountBtn = document.getElementById('settings-delete-account-btn');
+const deleteAccountOverlay = document.getElementById('delete-account-overlay');
+const deleteAccountDownloadBtn = document.getElementById('delete-account-download-btn');
+const deleteAccountConfirmBtn = document.getElementById('delete-account-confirm');
+
+function openDeleteAccountModal() {
+  deleteAccountOverlay.classList.remove('hidden');
+}
+function closeDeleteAccountModal() {
+  deleteAccountOverlay.classList.add('hidden');
+}
+
+settingsDeleteAccountBtn.onclick = openDeleteAccountModal;
+document.getElementById('delete-account-close').onclick = closeDeleteAccountModal;
+document.getElementById('delete-account-cancel').onclick = closeDeleteAccountModal;
+deleteAccountDownloadBtn.onclick = downloadUserDataExport;
+
+// Wipes every bit of storage this account's data lives in and reloads --
+// simplest way to guarantee every one of this file's many in-memory globals
+// (tasks, currentUser*, activeTaskId, todoViewMode, ...) resets cleanly,
+// same as a real fresh visit. boot() then finds no token and shows the login
+// screen. Deliberately doesn't touch loadUnsplashAccessKey's per-device key
+// (see collectUserDataExport's own comment) -- that's a device credential,
+// not this account's data, same distinction the data export already draws.
+//
+// SHORTCUT (see loadTasks/saveTasks above): tasks/profile/active-task/view-
+// mode are still one shared blob, not actually partitioned per account, so
+// deleting "this account's data" means clearing that whole shared blob --
+// correct for the single real account this app is used by today, but would
+// need to scope to just this account's own rows once a real per-account
+// backend exists.
+function deleteCurrentUserAccount() {
+  saveUsers(loadUsers().filter((u) => u.id !== currentUserId));
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(TASKS_STORAGE_KEY);
+  localStorage.removeItem(USER_PROFILE_STORAGE_KEY);
+  localStorage.removeItem(ACTIVE_TASK_STORAGE_KEY);
+  localStorage.removeItem(ACTIVE_OCCURRENCE_STORAGE_KEY);
+  localStorage.removeItem(TODO_VIEW_MODE_KEY);
+  location.reload();
+}
+
+deleteAccountConfirmBtn.onclick = deleteCurrentUserAccount;
 
 // ---------------------------------------------------------------------------
 // Background picker (Unsplash) -- opened via Settings' "Change background"
