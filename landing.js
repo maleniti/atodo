@@ -1,9 +1,10 @@
 // Landing page -- video embed + pricing buttons. Depends on auth.js (loaded
-// first, see landing.html) for getCurrentUserIdFromStoredToken, and
-// optionally on config.js's window.APP_CONFIG.landingVideoUrl (see
-// CLAUDE.md's Configuration section) -- left with no video shown at all if
-// that isn't set, same fallback spirit as the rest of this app's optional
-// config.
+// first, see landing.html) for getCurrentUserIdFromStoredToken, on
+// site-i18n.js for initSitePage, and optionally on config.js's
+// window.APP_CONFIG.landingVideoUrlEn/landingVideoUrlHr (see CLAUDE.md's
+// Configuration section) -- left with no video shown at all for a language
+// whose URL isn't set, same fallback spirit as the rest of this app's
+// optional config.
 
 // Accepts a plain watch URL (youtube.com/watch?v=ID), a short link
 // (youtu.be/ID), or an already-embeddable URL, and returns the
@@ -30,14 +31,27 @@ function toYouTubeEmbedUrl(url) {
   return `https://www.youtube.com/embed/${videoId}`;
 }
 
-(function setUpVideo() {
-  const videoUrl = window.APP_CONFIG && window.APP_CONFIG.landingVideoUrl;
+// Each language has its own separately-recorded walkthrough (not just
+// captions on one video), so this re-picks and re-embeds on every language
+// change -- called once with the initially-resolved language and again on
+// every EN/HR toggle click (see initSitePage below). Unlike a one-shot
+// setup, has to handle switching *back* to a placeholder too (a visitor
+// touring both languages could land on one with no video configured after
+// having just seen one that did).
+function setUpVideo(lang) {
+  const videoUrl = window.APP_CONFIG && window.APP_CONFIG[lang === 'hr' ? 'landingVideoUrlHr' : 'landingVideoUrlEn'];
   const embedUrl = toYouTubeEmbedUrl(videoUrl);
-  if (!embedUrl) return; // .video-placeholder (shown by default in landing.html) stays as-is
-  document.getElementById('video-iframe').src = embedUrl;
+  const iframe = document.getElementById('video-iframe');
+  if (!embedUrl) {
+    iframe.src = '';
+    document.getElementById('video-frame').classList.add('hidden');
+    document.getElementById('video-placeholder').classList.remove('hidden');
+    return;
+  }
+  iframe.src = embedUrl;
   document.getElementById('video-frame').classList.remove('hidden');
   document.getElementById('video-placeholder').classList.add('hidden');
-})();
+}
 
 // Already logged in (localStorage is shared across every page on this
 // origin) -> straight to checkout (same marketing-language storage carries
@@ -145,4 +159,4 @@ const LANDING_I18N = {
   },
 };
 
-initSitePage(LANDING_I18N);
+initSitePage(LANDING_I18N, setUpVideo);

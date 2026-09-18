@@ -2,8 +2,9 @@
 # Builds the advanced-todo image and (re)runs it, detached, on the given
 # port. Safe to re-run any time -- an existing container with the same name
 # is replaced regardless of whether the image actually changed, since a
-# no-op rebuild is cheap and there's no meaningful state to lose (all data
-# lives in the browser's localStorage, not the container).
+# no-op rebuild is cheap and there's no meaningful state to lose (this
+# container only ever serves the static client -- see CLAUDE.md -- so it
+# holds no data of its own).
 set -euo pipefail
 
 if [ $# -ne 1 ]; then
@@ -17,14 +18,15 @@ container="advanced-todo"
 
 cd "$(dirname "$0")"
 
-# .env holds secrets/settings (UNSPLASH_ACCESS_KEY, LANDING_VIDEO_URL,
-# API_BASE_URL -- see config.example.js/CLAUDE.md's Configuration section)
-# that get forwarded into the container below. Gitignored, never baked into
-# the image itself -- required rather than defaulting to empty so a missing
-# file fails loudly here instead of silently shipping a container with
-# backgrounds/the landing video disabled and no backend to talk to.
+# .env holds secrets/settings (UNSPLASH_ACCESS_KEY, LANDING_VIDEO_URL_EN,
+# LANDING_VIDEO_URL_HR, API_BASE_URL -- see config.example.js/CLAUDE.md's
+# Configuration section) that get forwarded into the container below.
+# Gitignored, never baked into the image itself -- required rather than
+# defaulting to empty so a missing file fails loudly here instead of
+# silently shipping a container with backgrounds/the landing video disabled
+# and no backend to talk to.
 if [ ! -f .env ]; then
-  echo ".env not found -- copy config.example.js's keys into a .env file (UNSPLASH_ACCESS_KEY=..., LANDING_VIDEO_URL=..., API_BASE_URL=...) first." >&2
+  echo ".env not found -- copy config.example.js's keys into a .env file (UNSPLASH_ACCESS_KEY=..., LANDING_VIDEO_URL_EN=..., LANDING_VIDEO_URL_HR=..., API_BASE_URL=...) first." >&2
   exit 1
 fi
 set -a
@@ -40,7 +42,8 @@ fi
 
 docker run -d --name "$container" -p "$port:80" \
   -e "UNSPLASH_ACCESS_KEY=${UNSPLASH_ACCESS_KEY:-}" \
-  -e "LANDING_VIDEO_URL=${LANDING_VIDEO_URL:-}" \
+  -e "LANDING_VIDEO_URL_EN=${LANDING_VIDEO_URL_EN:-}" \
+  -e "LANDING_VIDEO_URL_HR=${LANDING_VIDEO_URL_HR:-}" \
   -e "API_BASE_URL=${API_BASE_URL:-}" \
   "$image"
 
