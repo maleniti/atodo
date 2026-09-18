@@ -11,7 +11,14 @@
 // or an already-embeddable one all work -- see landing.js's
 // toYouTubeEmbedUrl) for the walkthrough video on landing.html. Left empty,
 // that page just shows a placeholder instead of a video.
+//
+// apiBaseUrl: the backend implementing api-spec.yaml, e.g.
+// 'https://api.example.com' -- auth.js prefixes every request with
+// `${apiBaseUrl}/atodo/v1`. Left empty, requests go to a same-origin
+// `/atodo/v1`, which only works if the backend happens to be reverse-proxied
+// onto this same origin.
 window.APP_CONFIG = {
   unsplashAccessKey: '',
   landingVideoUrl: '',
+  apiBaseUrl: '',
 };

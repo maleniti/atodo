@@ -1,8 +1,9 @@
-// uid()/AUTH_TOKEN_KEY/USERS_STORAGE_KEY/loadUsers/saveUsers/mintToken/
-// describeSubscription/TRIAL_DURATION_MS/startTrialSubscription all live in
-// auth.js now (loaded before this file -- see index.html) since
-// landing.html/checkout.html need them too and can't load this whole SPA
-// script just for them.
+// uid()/AUTH_TOKEN_KEY/codeError/apiFetch/decodeToken/describeSubscription/
+// startTrialSubscription/createCheckoutSession/getCheckoutSessionStatus/
+// cancelSubscription/scheduleAccountDeletion/cancelScheduledAccountDeletion
+// all live in auth.js now (loaded before this file -- see index.html)
+// since landing.html/checkout.html need them too and can't load this whole
+// SPA script just for them.
 
 // ---------------------------------------------------------------------------
 // i18n -- English + Croatian. Deliberately NOT covering everything in the
@@ -31,6 +32,7 @@ const I18N = {
     'login.noAccount': "Don't have an account?",
     'login.registerLink': 'Create one',
     'login.invalidCredentials': 'Incorrect email or password.',
+    'login.networkError': 'Could not reach the server. Check your connection and try again.',
     'login.notVerified': "That email hasn't been verified yet – check your inbox for the verification link.",
     'login.accountExpired': "This account was automatically deleted after 12 months of inactivity, along with all its data. You're welcome to create a new one.",
     'login.accountDeletedScheduled': "This account was deleted, as scheduled, once its subscription ended, along with all its data. You're welcome to create a new one.",
@@ -322,6 +324,7 @@ const I18N = {
     'login.noAccount': 'Nemate račun?',
     'login.registerLink': 'Napravite ga',
     'login.invalidCredentials': 'Netočan e-mail ili lozinka.',
+    'login.networkError': 'Nije moguće spojiti se na poslužitelj. Provjerite vezu i pokušajte ponovno.',
     'login.notVerified': 'Taj e-mail još nije potvrđen – provjerite poštanski sandučić za poveznicu za potvrdu.',
     'login.accountExpired': 'Ovaj račun je automatski izbrisan nakon 12 mjeseci neaktivnosti, zajedno sa svim podacima. Slobodno otvorite novi.',
     'login.accountDeletedScheduled': 'Ovaj račun je izbrisan, kako je zakazano, po isteku pretplate, zajedno sa svim podacima. Slobodno otvorite novi.',
@@ -1185,261 +1188,119 @@ function showFormModal(title, fields, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Auth -- login()/getMe()/register() have the same async, token-in/token-out
-// shape a real backend's equivalent endpoints will eventually have, so
-// swapping their bodies for real fetch() calls later shouldn't need to touch
-// any caller. The token itself is a base64'd JSON blob (not a real JWT --
-// there's no signature, nothing else to actually verify it), just enough
-// structure that a real backend swap only changes what's inside, not how
-// it's used.
-//
-// Credentials are real (see USERS_STORAGE_KEY/registerUser/login below),
-// but everything past login is still the fake-single-user shortcut this app
-// started as (see loadTasks/saveTasks, loadUserProfile/saveUserProfile
-// below) -- multiple real accounts can register, verify, and log in
-// independently now, but they all still see the same shared to-do list;
-// giving each account its own is a bigger change than this pass covers.
+// Auth -- registerUser()/login()/getMe() are thin wrappers around
+// api-spec.yaml's /auth endpoints (see auth.js's apiFetch/codeError).
+// Password hashing, verification email delivery, and the 12-month-
+// inactivity/scheduled-deletion checks all happen server-side now -- none
+// of that lives in this file anymore, unlike the localStorage-only mock
+// this app started as.
 // ---------------------------------------------------------------------------
-
-const FAKE_USER_ID = 'nikola';
-const FAKE_USER_NICKNAME = 'Nikola';
-
-// Registered accounts (email + salted/hashed password) -- separate from
-// task/profile data above, and, unlike those, actually keyed per account
-// (see login/registerUser); see auth.js for USERS_STORAGE_KEY/loadUsers/
-// saveUsers themselves. pendingRegistrations holds an account that's
-// registered but not yet verified (see registerUser/verifyEmailToken); once
-// verified it moves over to `users` and is removed from here.
-const PENDING_REGISTRATIONS_KEY = 'advanced-todo-pending-registrations';
-// How long a verification link stays valid after registerUser sends it.
-const VERIFICATION_WINDOW_MS = 6 * 60 * 60 * 1000;
-
-function loadPendingRegistrations() {
-  try {
-    return JSON.parse(localStorage.getItem(PENDING_REGISTRATIONS_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-function savePendingRegistrations(pending) {
-  localStorage.setItem(PENDING_REGISTRATIONS_KEY, JSON.stringify(pending));
-}
-
-function randomHex(byteLength) {
-  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// SHA-256 of `${salt}:${password}`, hex-encoded -- not a real password KDF
-// (no bcrypt/scrypt/argon2 available without a library or a backend), but
-// still salted and hashed rather than stored in plain text, via the Web
-// Crypto API every modern browser already has built in.
-async function hashPassword(password, salt) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${password}`));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// The account that was already using this app before real login existed
-// (see FAKE_USER_ID) needs real credentials to keep logging in at all --
-// seeded once, the first time `users` is empty, with the *same* id so it
-// keeps whatever task/profile data is already saved under it. A genuinely
-// fresh install seeds nothing here (there's no pre-existing user to carry
-// forward); its first real account comes from registerUser instead.
-const SEED_USER_EMAIL = 'nikola@clab.hr';
-const SEED_USER_PASSWORD = 'todolist-2026';
-async function seedInitialUserIfNeeded() {
-  if (loadUsers().length > 0) return;
-  const salt = randomHex(16);
-  const passwordHash = await hashPassword(SEED_USER_PASSWORD, salt);
-  saveUsers([{ id: FAKE_USER_ID, email: SEED_USER_EMAIL, salt, passwordHash }]);
-}
-
-function codeError(code) {
-  const err = new Error(code);
-  err.code = code;
-  return err;
-}
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-// No real backend/email service to send this from yet (see CLAUDE.md) --
-// dumped to the console instead, as what would actually get emailed, so the
-// verify-by-link flow can still be exercised end-to-end locally.
-function sendVerificationEmail(email, token) {
-  const url = new URL(location.href);
-  url.search = `?verify=${token}`;
-  url.hash = '';
-  console.log(
-    `[email] To: ${email}\nSubject: Verify your email address\n\n` +
-      `Click the link below to verify your email (expires in 6 hours):\n${url.toString()}`
-  );
-}
-
-// Registers a new (unverified) account -- throws a codeError('INVALID_EMAIL'
-// | 'EMAIL_TAKEN') for the form to translate and show. Registering again
-// with an email that's already pending (not yet verified) just resends a
-// fresh link rather than erroring -- the first one may have gone missing or
-// already expired, and there's no harm starting it over.
+// POST /auth/register -- throws codeError('INVALID_EMAIL' | 'EMAIL_TAKEN')
+// for the form to translate and show. isValidEmail is still checked
+// client-side first, purely to skip a pointless round trip for an
+// obviously malformed address -- the server re-validates regardless (see
+// api-spec.yaml) and is the real authority either way.
 async function registerUser(email, password) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!isValidEmail(normalizedEmail)) throw codeError('INVALID_EMAIL');
-  await seedInitialUserIfNeeded();
-  if (loadUsers().some((u) => u.email.toLowerCase() === normalizedEmail)) throw codeError('EMAIL_TAKEN');
-
-  const salt = randomHex(16);
-  const passwordHash = await hashPassword(password, salt);
-  const token = randomHex(24);
-  const pending = loadPendingRegistrations().filter((p) => p.email.toLowerCase() !== normalizedEmail);
-  pending.push({ id: uid(), email: normalizedEmail, salt, passwordHash, token, createdAt: Date.now() });
-  savePendingRegistrations(pending);
-  sendVerificationEmail(normalizedEmail, token);
+  await apiFetch('/auth/register', { method: 'POST', body: { email: normalizedEmail, password } });
 }
 
-// Resolves a verification link's token: moves the matching pending
-// registration over to `users` (and removes it from pending) if it's still
-// within its window, otherwise just removes it and reports why. A token is
-// single-use either way -- expired or not, it's consumed as soon as it's
-// looked up here, so revisiting the same link again always reports
-// INVALID_TOKEN on the second try rather than re-verifying or re-expiring.
-function verifyEmailToken(token) {
-  const pending = loadPendingRegistrations();
-  const index = pending.findIndex((p) => p.token === token);
-  if (index === -1) return { ok: false, code: 'INVALID_TOKEN' };
-  const [entry] = pending.splice(index, 1);
-  savePendingRegistrations(pending);
-  if (Date.now() - entry.createdAt > VERIFICATION_WINDOW_MS) return { ok: false, code: 'EXPIRED' };
-  const users = loadUsers();
-  users.push({ id: entry.id, email: entry.email, salt: entry.salt, passwordHash: entry.passwordHash });
-  saveUsers(users);
-  return { ok: true, email: entry.email };
+// POST /auth/verify-email -- resolves a verification link's token. Returns
+// { ok: true, email } or { ok: false, code } rather than throwing, since
+// handleEmailVerificationLink (below) shows a specific message for an
+// already-used/expired link rather than treating it as an unexpected error.
+async function verifyEmailToken(token) {
+  try {
+    const { email } = await apiFetch('/auth/verify-email', { method: 'POST', body: { token } });
+    return { ok: true, email };
+  } catch (err) {
+    return { ok: false, code: err.code };
+  }
 }
 
-// User profile (nickname + avatar + time format) -- the only per-user
-// settings that exist so far, editable via the Settings modal. Same
-// fake-single-user storage shortcut as loadTasks/saveTasks below: userId is
-// accepted (for whenever a real backend/multiple accounts exist) but
-// ignored, always reading/writing the one shared blob. Defaults are merged
-// under whatever's actually saved, both to seed the very first run and so an
-// older saved profile missing a field (e.g. timeFormat, added after nickname/
-// avatar already existed) doesn't end up with `undefined` for it.
-const USER_PROFILE_STORAGE_KEY = 'advanced-todo-user-profile';
-// background: null, or { regularUrl, thumbUrl, photographerName, photographerUrl, photoLink }
-// -- see the "Background" section near the Settings modal below. Deliberately
-// doesn't include the Unsplash Access Key used to fetch it (see
-// loadUnsplashAccessKey) -- that's a per-device API credential, not user
-// data, so it's kept in its own separate storage key and left out of the
-// data export/import too.
+// ---------------------------------------------------------------------------
+// User profile -- nickname/avatar/timeFormat/background/language, fetched
+// as part of GET /auth/me's User (see getMe below) and written back via
+// PATCH /users/me (see saveUserProfile). Held in memory only (currentUser*
+// below), not re-fetched on every use -- every write site builds its PATCH
+// body from currentUserProfileSnapshot so none of them can accidentally
+// drop a field a *different* write site owns.
+// ---------------------------------------------------------------------------
+
+// Only actually used to backfill a field an *imported* data export might
+// predate (see the Settings import handler below) -- a fresh GET /auth/me
+// response is trusted to always include every field, so nothing else needs
+// this as a fallback anymore.
 // language: null means "never chosen or auto-detected yet" -- see
 // detectLanguageAndTimeFormatFromLocation below, which only ever runs once
-// (while this is still null) and then saves a real 'en'/'hr' over it, so a
-// user's own choice in Settings (or a failed detection falling back to
+// (while this is still null) and then PATCHes a real 'en'/'hr' over it, so
+// a user's own choice in Settings (or a failed detection falling back to
 // 'en') always sticks instead of being silently re-detected on every load.
-const DEFAULT_USER_PROFILE = { nickname: FAKE_USER_NICKNAME, avatar: null, timeFormat: '24', background: null, language: null };
+const DEFAULT_USER_PROFILE = { nickname: '', avatar: null, timeFormat: '24', background: null, language: null };
 
-function loadUserProfile(userId = currentUserId) {
-  try {
-    const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
-    if (raw) return { ...DEFAULT_USER_PROFILE, ...JSON.parse(raw) };
-  } catch {
-    // fall through to default
-  }
-  return { ...DEFAULT_USER_PROFILE };
+// PATCH /users/me -- fire-and-forget from the caller's perspective, same as
+// saveTasks below: nothing here awaits the request finishing, and a failure
+// is just logged rather than surfaced. An acceptable gap for now (the next
+// save attempt will just try again with whatever's current by then), not a
+// data-loss risk the way losing a task edit would be.
+function saveUserProfile(profile) {
+  apiFetch('/users/me', { method: 'PATCH', body: profile }).catch((err) => {
+    console.error('Failed to save profile:', err);
+  });
 }
 
-function saveUserProfile(profile, userId = currentUserId) {
-  localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
-}
-
-// mintToken/describeSubscription/TRIAL_DURATION_MS/startTrialSubscription/
-// startPaidSubscription/cancelSubscription all live in auth.js now -- see
-// the comment near the top of this file.
-
-// Throws codeError('INVALID_CREDENTIALS' | 'EMAIL_NOT_VERIFIED') for the
-// form to translate and show -- the latter only once an account genuinely
-// exists but hasn't verified yet, so someone who mistypes an email they
-// never registered still just gets the generic "incorrect email or
-// password" instead of a hint about which emails are/aren't registered.
-// Doesn't check inactivity itself (see getMe below, the only place that
-// does) -- every caller here calls getMe() with the fresh token immediately
-// after, so checking there instead covers this path too without duplicating
-// the check in two places.
+// POST /auth/login -- throws codeError('INVALID_CREDENTIALS' |
+// 'EMAIL_NOT_VERIFIED' | 'ACCOUNT_EXPIRED_INACTIVITY' |
+// 'ACCOUNT_DELETED_SCHEDULED') for the form to translate and show (see
+// describeAuthError below) -- the last two are this app's data-retention
+// policy (see the Privacy Policy) actually taking effect, deleting the
+// account server-side as part of handling this request. The caller still
+// calls getMe(token) right after (see the login form's submit handler
+// below) rather than trusting this response's own `user` for anything but
+// the fresh token -- keeps this and boot()'s existing-token path resolving
+// "is this session still good" through the one shared codepath.
 async function login(email, password) {
-  await seedInitialUserIfNeeded();
-  const normalizedEmail = email.trim().toLowerCase();
-  const users = loadUsers();
-  const user = users.find((u) => u.email.toLowerCase() === normalizedEmail);
-  if (!user) {
-    const isPending = loadPendingRegistrations().some((p) => p.email.toLowerCase() === normalizedEmail);
-    throw codeError(isPending ? 'EMAIL_NOT_VERIFIED' : 'INVALID_CREDENTIALS');
-  }
-  const passwordHash = await hashPassword(password, user.salt);
-  if (passwordHash !== user.passwordHash) throw codeError('INVALID_CREDENTIALS');
-  user.lastLoginAt = Date.now();
-  saveUsers(users);
-  return { token: mintToken(user) };
+  return apiFetch('/auth/login', { method: 'POST', body: { email, password } });
 }
 
-// The one place a token actually gets resolved into a live session --
-// called both by boot()'s existing-token path and right after a fresh
-// login() (see both below), so it's also the one place that can tell a
-// still-valid account apart from one that's gone: a token alone can't
-// answer that (see mintToken/describeSubscription in auth.js -- it's an
-// unsigned snapshot from whenever it was minted, not live truth), so this
-// re-checks the current `users` record instead of trusting the token's
-// claims wholesale. Throws codeError('ACCOUNT_NOT_FOUND') if the account
-// behind the token is simply gone (deleted from Settings, or from another
-// tab), codeError('ACCOUNT_EXPIRED_INACTIVITY') -- our data-retention
-// policy (see the Privacy Policy) -- if it hasn't been used in 12 months,
-// or codeError('ACCOUNT_DELETED_SCHEDULED') if it was a paying subscriber
-// who chose "schedule deletion" over losing access immediately (see
-// scheduleAccountDeletion in auth.js and the Settings "Delete account"
-// flow below) and their subscription has since actually expired. All three
-// delete the account right here before returning anything (see
-// wipeAccountData). Every caller must treat any of them as "not logged
-// in", not silently proceed with whatever's left in profile/task storage.
+// GET /auth/me -- the one place a token actually gets resolved into a live
+// session, called both by boot()'s existing-token path and right after a
+// fresh login() (see both below). `token` is passed explicitly rather than
+// left for apiFetch to read from localStorage, since the login form's own
+// call happens with a token that hasn't been stored anywhere yet. Throws
+// the same codes login() can -- resuming a stored token is just as much
+// "using the account" as a fresh login, so the same policies apply here
+// too (see api-spec.yaml). Every caller must treat any of them as "not
+// logged in", not silently proceed with whatever's left in local state.
 async function getMe(token) {
-  const payload = decodeToken(token);
-  const user = loadUsers().find((u) => u.id === payload.sub);
-  if (!user) throw codeError('ACCOUNT_NOT_FOUND');
-  if (isUserInactive(user)) {
-    wipeAccountData(user.id);
-    throw codeError('ACCOUNT_EXPIRED_INACTIVITY');
-  }
-  if (user.subscription && user.subscription.scheduledDeletion && !describeSubscription(user.subscription).active) {
-    wipeAccountData(user.id);
-    throw codeError('ACCOUNT_DELETED_SCHEDULED');
-  }
-  recordUserActivity(user.id);
-  const profile = loadUserProfile(payload.sub);
-  return {
-    id: payload.sub,
-    nickname: profile.nickname,
-    avatar: profile.avatar,
-    timeFormat: profile.timeFormat,
-    background: profile.background,
-    language: profile.language,
-    subscription: payload.subscription || null,
-  };
+  return apiFetch('/auth/me', { token });
 }
 
 // Shared by boot()'s and the login form's own catch blocks below --
 // ACCOUNT_NOT_FOUND has no specific copy of its own (rare enough in
 // practice, see getMe's comment, that "wrong email or password"/a plain
-// return to the login screen is an acceptable generic fallback).
+// return to the login screen is an acceptable generic fallback). Also
+// covers NETWORK_ERROR (see apiFetch in auth.js) -- the one failure mode
+// that's new now that this actually talks to a server.
 function describeAuthError(err) {
   if (err.code === 'EMAIL_NOT_VERIFIED') return t('login.notVerified');
   if (err.code === 'ACCOUNT_EXPIRED_INACTIVITY') return t('login.accountExpired');
   if (err.code === 'ACCOUNT_DELETED_SCHEDULED') return t('login.accountDeletedScheduled');
+  if (err.code === 'NETWORK_ERROR') return t('login.networkError');
   return t('login.invalidCredentials');
 }
 
-// Set once boot()/the login form resolves a user -- every call site below
-// that needs "the current user" (loadTasks/saveTasks) defaults to it rather
-// than requiring every one of the app's many saveTasks() call sites to pass
-// it explicitly, while still accepting an explicit userId for whenever a
-// real backend (and maybe switching accounts) exists.
+// Set once boot()/the login form resolves a user (see applyUserSession).
+// Not passed explicitly to loadTasks/saveTasks/apiFetch -- every request
+// is scoped server-side by the bearer token in localStorage instead (see
+// auth.js's apiFetch), so this is read-only bookkeeping for the UI (e.g.
+// collectUserDataExport), not something request bodies need to carry.
 let currentUserId = null;
 // Kept in sync with the saved profile by the Settings modal's Save button,
 // not re-read from storage on every render -- see renderAppTitle/
@@ -1526,20 +1387,11 @@ function currentUserProfileSnapshot() {
 // To-do list.
 // ---------------------------------------------------------------------------
 
-const TASKS_STORAGE_KEY = 'advanced-todo-tasks';
-const ACTIVE_TASK_STORAGE_KEY = 'advanced-todo-active-task';
-const ACTIVE_OCCURRENCE_STORAGE_KEY = 'advanced-todo-active-occurrence';
-
-// SHORTCUT: userId is accepted but ignored -- there's only one real user
-// until a backend exists, so this always reads/writes the same single
-// shared blob regardless of which userId is passed. Upgrading to a real
-// per-user backend means replacing the body here (and in saveTasks) with a
-// fetch() keyed by userId; every caller already passes one.
 // Backward compatibility: tasks saved before seriesId/taskId existed each get
 // their own fresh one -- they were never part of a split, so there's no
 // correct value to backfill beyond "distinct from everything else". Shared
 // by loadTasks and importUserData, since an imported backup can be just as
-// old as whatever's already in localStorage.
+// old as whatever's already on the server.
 //
 // Tasks saved before createdAt existed (see the free-tier task/note limits
 // below) get their array index instead -- small integers that always sort
@@ -1556,27 +1408,26 @@ function normalizeLoadedTasks(loaded) {
   return loaded;
 }
 
-function loadTasks(userId = currentUserId) {
-  try {
-    const raw = localStorage.getItem(TASKS_STORAGE_KEY);
-    if (raw) return normalizeLoadedTasks(JSON.parse(raw));
-  } catch {
-    // fall through to empty
-  }
-  return [];
+// GET /tasks -- the current account's entire task list, scoped server-side
+// by the bearer token (see api-spec.yaml), not by anything passed here.
+// Awaited exactly once, inside startApp(), before the first render.
+async function loadTasks() {
+  return normalizeLoadedTasks(await apiFetch('/tasks'));
 }
 
 // Populated once startApp() runs (after boot()/login resolves a user), not
 // at script-load time -- there's nothing to load until then.
 let tasks = [];
-let activeTaskId = localStorage.getItem(ACTIVE_TASK_STORAGE_KEY) || null;
+let activeTaskId = null;
 // Which occurrence of activeTaskId is focused -- a recurring task can show
 // up to three rows at once (yesterday's still-overdue one, today's, and
 // tomorrow's preview -- see computeTodoDisplayItems/computeNextRecurrenceItems),
 // and only the one actually clicked (via its "Work on this now" button or
 // the context menu's Focus item) should end up highlighted/eligible, not
-// every row sharing the same task. null whenever activeTaskId is null.
-let activeOccurrenceDate = activeTaskId ? localStorage.getItem(ACTIVE_OCCURRENCE_STORAGE_KEY) || null : null;
+// every row sharing the same task. null whenever activeTaskId is null. Both
+// fields are populated from the getMe()/login response, alongside
+// activeTaskId, once startApp() runs -- see boot()/the login submit handler.
+let activeOccurrenceDate = null;
 
 // Wall-clock timestamp since the active task started being focused WITHOUT a
 // timer running -- the focus-only counterpart of a timer's own runningSince.
@@ -1586,16 +1437,23 @@ let activeOccurrenceDate = activeTaskId ? localStorage.getItem(ACTIVE_OCCURRENCE
 // active task has a timer instead (see flushFocusOnlyElapsed/setActiveTaskId).
 let activeFocusOnlySince = null;
 
-// SHORTCUT: see loadTasks above -- userId is accepted but ignored for now.
-function saveTasks(userId = currentUserId) {
-  localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+// PUT /tasks -- bulk-replaces the account's entire task list. Fire-and-
+// forget, same as saveUserProfile: every caller already computes the full
+// resulting `tasks` array locally before calling this, so there's nothing
+// useful to await here, just a background write.
+function saveTasks() {
+  apiFetch('/tasks', { method: 'PUT', body: tasks }).catch((err) => {
+    console.error('Failed to save tasks:', err);
+  });
 }
 
+// activeTaskId/activeOccurrenceDate are User fields, not their own resource
+// (see api-spec.yaml's PATCH /users/me) -- fire-and-forget, same as
+// saveTasks/saveUserProfile above.
 function saveActiveTaskId() {
-  if (activeTaskId) localStorage.setItem(ACTIVE_TASK_STORAGE_KEY, activeTaskId);
-  else localStorage.removeItem(ACTIVE_TASK_STORAGE_KEY);
-  if (activeOccurrenceDate) localStorage.setItem(ACTIVE_OCCURRENCE_STORAGE_KEY, activeOccurrenceDate);
-  else localStorage.removeItem(ACTIVE_OCCURRENCE_STORAGE_KEY);
+  apiFetch('/users/me', { method: 'PATCH', body: { activeTaskId, activeOccurrenceDate } }).catch((err) => {
+    console.error('Failed to save active task:', err);
+  });
 }
 
 // A task's timer only actually counts down while its task is the active one
@@ -2372,12 +2230,11 @@ function ensureSubscriptionPromptTask() {
 // Mints and stores a fresh trial subscription for the current account (see
 // startTrialSubscription), then refreshes every bit of state that snapshot
 // touches -- the stored bearer token, the in-memory subscription, the nag
-// task, and the render.
+// task, and the render. startTrialSubscription's response already carries
+// the updated user, so no separate getMe() round trip is needed.
 async function subscribeCurrentUserToTrial() {
-  const token = startTrialSubscription(currentUserId);
-  if (!token) return;
+  const { token, user } = await startTrialSubscription();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  const user = await getMe(token);
   currentUserSubscription = user.subscription;
   ensureSubscriptionPromptTask();
   saveTasks();
@@ -2392,10 +2249,8 @@ async function subscribeCurrentUserToTrial() {
 // or re-render the to-do list itself, just the bits of chrome that show
 // subscription status.
 async function cancelCurrentUserSubscription() {
-  const token = cancelSubscription(currentUserId);
-  if (!token) return;
+  const { token, user } = await cancelSubscription();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  const user = await getMe(token);
   currentUserSubscription = user.subscription;
   renderSettingsSubscriptionSection();
   renderSubscribeHeaderButton();
@@ -2405,10 +2260,8 @@ async function cancelCurrentUserSubscription() {
 // auth.js) -- deliberately doesn't touch cancelAtPeriodEnd itself, see
 // cancelScheduledAccountDeletion's own comment.
 async function cancelCurrentUserScheduledDeletion() {
-  const token = cancelScheduledAccountDeletion(currentUserId);
-  if (!token) return;
+  const { token, user } = await cancelScheduledAccountDeletion();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  const user = await getMe(token);
   currentUserSubscription = user.subscription;
   renderSettingsSubscriptionSection();
 }
@@ -3615,18 +3468,18 @@ function computeNextRecurrenceItems() {
 // computations above, which always use the "pending" computation regardless
 // of this toggle -- which tasks are actually overdue isn't a display
 // preference.
-const TODO_VIEW_MODE_KEY = 'advanced-todo-view-mode';
 const TODO_VIEW_MODES = ['pending', 'next-recurrence', 'all'];
 
-function loadTodoViewMode() {
-  const stored = localStorage.getItem(TODO_VIEW_MODE_KEY);
-  return TODO_VIEW_MODES.includes(stored) ? stored : 'pending';
-}
+// Populated from the getMe()/login response once startApp() runs, same as
+// activeTaskId/activeOccurrenceDate above -- see boot()/the login submit
+// handler.
+let todoViewMode = 'pending';
 
-let todoViewMode = loadTodoViewMode();
-
+// PATCH /users/me -- fire-and-forget, same as saveActiveTaskId above.
 function saveTodoViewMode() {
-  localStorage.setItem(TODO_VIEW_MODE_KEY, todoViewMode);
+  apiFetch('/users/me', { method: 'PATCH', body: { todoViewMode } }).catch((err) => {
+    console.error('Failed to save view mode:', err);
+  });
 }
 
 const todoSectionEl = document.getElementById('todo-section');
@@ -5910,7 +5763,7 @@ function collectUserDataExport() {
     version: USER_DATA_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     tasks,
-    userProfile: loadUserProfile(),
+    userProfile: currentUserProfileSnapshot(),
     activeTaskId,
     activeOccurrenceDate,
     todoViewMode,
@@ -6023,37 +5876,22 @@ document.getElementById('delete-account-close').onclick = closeDeleteAccountModa
 document.getElementById('delete-account-cancel').onclick = closeDeleteAccountModal;
 deleteAccountDownloadBtn.onclick = downloadUserDataExport;
 
-// Wipes every bit of storage `userId`'s data lives in -- removes the account
-// itself from `users`, plus everything else. Shared by the Settings "Delete
-// account" flow below (a deliberate, user-initiated deletion) and login()'s
-// own 12-month-inactivity check above (an automatic one) -- same end state
-// either way. Deliberately doesn't touch loadUnsplashAccessKey's per-device
-// key (see collectUserDataExport's own comment) -- that's a device
-// credential, not this account's data, same distinction the data export
-// already draws.
-//
-// SHORTCUT (see loadTasks/saveTasks above): tasks/profile/active-task/view-
-// mode are still one shared blob, not actually partitioned per account, so
-// deleting "this account's data" means clearing that whole shared blob --
-// correct for the single real account this app is used by today, but would
-// need to scope to just this account's own rows once a real per-account
-// backend exists.
-function wipeAccountData(userId) {
-  saveUsers(loadUsers().filter((u) => u.id !== userId));
+// DELETE /users/me -- the account and every task/note/preference tied to
+// it are gone server-side the instant this resolves (see api-spec.yaml).
+// Only the local token needs clearing here; there's no other local data to
+// clean up now that tasks/profile/etc. all live server-side, not in
+// localStorage. Deliberately doesn't touch loadUnsplashAccessKey's
+// per-device key (see collectUserDataExport's own comment) -- that's a
+// device credential, not this account's data, same distinction the data
+// export already draws. Reloads afterward -- simplest way to guarantee
+// every one of this file's many in-memory globals (tasks, currentUser*,
+// activeTaskId, todoViewMode, ...) resets cleanly, same as a real fresh
+// visit; boot() then finds no token and shows the login screen.
+async function deleteCurrentUserAccount() {
+  await apiFetch('/users/me', { method: 'DELETE' }).catch((err) => {
+    console.error('Failed to delete account:', err);
+  });
   localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(TASKS_STORAGE_KEY);
-  localStorage.removeItem(USER_PROFILE_STORAGE_KEY);
-  localStorage.removeItem(ACTIVE_TASK_STORAGE_KEY);
-  localStorage.removeItem(ACTIVE_OCCURRENCE_STORAGE_KEY);
-  localStorage.removeItem(TODO_VIEW_MODE_KEY);
-}
-
-// Reloads afterward -- simplest way to guarantee every one of this file's
-// many in-memory globals (tasks, currentUser*, activeTaskId, todoViewMode,
-// ...) resets cleanly, same as a real fresh visit. boot() then finds no
-// token and shows the login screen.
-function deleteCurrentUserAccount() {
-  wipeAccountData(currentUserId);
   location.reload();
 }
 
@@ -6066,10 +5904,8 @@ deleteAccountConfirmBtn.onclick = deleteCurrentUserAccount;
 // account isn't gone yet, so just refresh the bits of chrome that show
 // subscription/deletion status.
 async function scheduleCurrentUserAccountDeletion() {
-  const token = scheduleAccountDeletion(currentUserId);
-  if (!token) return;
+  const { token, user } = await scheduleAccountDeletion();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  const user = await getMe(token);
   currentUserSubscription = user.subscription;
   closeDeleteAccountModal();
   renderSettingsSubscriptionSection();
@@ -6309,6 +6145,23 @@ function clearAuthMessage(el) {
   el.className = 'modal-message hidden';
 }
 
+// Populates every currentUser*/session global from a User object (see
+// api-spec.yaml) -- shared by boot()'s stored-token path and the login
+// form's submit handler below, since both need to do exactly this before
+// calling startApp().
+function applyUserSession(user) {
+  currentUserId = user.id;
+  currentUserNickname = user.nickname;
+  currentUserAvatar = user.avatar;
+  currentUserTimeFormat = user.timeFormat;
+  currentUserBackground = user.background;
+  currentUserLanguage = user.language || 'en';
+  currentUserSubscription = user.subscription;
+  activeTaskId = user.activeTaskId;
+  activeOccurrenceDate = user.activeTaskId ? user.activeOccurrenceDate : null;
+  todoViewMode = TODO_VIEW_MODES.includes(user.todoViewMode) ? user.todoViewMode : 'pending';
+}
+
 // Falls back to the generic title if a user's nickname isn't known yet (e.g.
 // briefly, before getMe() resolves) -- see startApp().
 function renderAppTitle() {
@@ -6317,15 +6170,16 @@ function renderAppTitle() {
 
 // The one-time "we now know who's logged in" entry point, run either right
 // after boot() finds an existing token or right after the login form
-// resolves a fresh one -- loads that user's tasks and renders for the first
-// time. Everything from here on (every saveTasks()/loadTasks() call
-// elsewhere in the app) already defaults to currentUserId on its own.
+// resolves a fresh one -- loads that user's tasks (the one genuinely
+// awaited network read in this flow; every other User field the caller
+// needs, like activeTaskId/todoViewMode, already came along for free on the
+// getMe()/login response) and renders for the first time.
 // `needsLanguageDetection` is true only the very first time this profile is
 // ever loaded (see DEFAULT_USER_PROFILE.language) -- kicks off the one-time
 // IP-based language/time-format guess (detectLanguageAndTimeFormatFromLocation)
 // in the background, applying and saving it whenever it resolves.
-function startApp(needsLanguageDetection) {
-  tasks = loadTasks(currentUserId);
+async function startApp(needsLanguageDetection) {
+  tasks = await loadTasks();
   ensureSubscriptionPromptTask();
   applyStaticTranslations();
   renderAppTitle();
@@ -6342,15 +6196,19 @@ function startApp(needsLanguageDetection) {
   }
 }
 
-// Handles a `?verify=<token>` URL (see sendVerificationEmail) if one's
-// present -- shows the result on the login screen and strips the token back
-// out of the URL either way (via replaceState, no reload/history entry) so
+// Handles a `?verify=<token>` URL (the link the backend emails on
+// registration, see POST /auth/register in api-spec.yaml) if one's present
+// -- shows the result on the login screen and strips the token back out of
+// the URL either way (via replaceState, no reload/history entry) so
 // refreshing the page afterward doesn't try to re-consume the same
 // already-used token. Runs before any token check in boot() below: this can
 // land on a browser that's never logged in at all (a brand new account) or
 // one that's currently logged in elsewhere/already logged out -- either way
-// it's independent of whatever boot() does next.
-function handleEmailVerificationLink() {
+// it's independent of whatever boot() does next. Async now that
+// verifyEmailToken is a real API call -- boot() below deliberately doesn't
+// await this, since it only ever affects the login screen's own message,
+// nothing boot() itself goes on to do.
+async function handleEmailVerificationLink() {
   const params = new URLSearchParams(location.search);
   const token = params.get('verify');
   if (!token) return;
@@ -6358,7 +6216,7 @@ function handleEmailVerificationLink() {
   const newSearch = params.toString();
   history.replaceState(null, '', location.pathname + (newSearch ? `?${newSearch}` : '') + location.hash);
 
-  const result = verifyEmailToken(token);
+  const result = await verifyEmailToken(token);
   loginScreenEl.classList.remove('hidden');
   if (result.ok) {
     showAuthMessage(loginMessageEl, 'success', t('login.verifiedSuccess', { email: result.email }));
@@ -6373,12 +6231,12 @@ function handleEmailVerificationLink() {
 }
 
 function boot() {
-  // Applied even before a token exists so the login screen itself already
-  // respects a previously-saved language (e.g. after logging out) -- there's
-  // no user to detect-and-guess a language for yet on a genuinely first-ever
-  // visit, so it stays English until the first successful login runs
-  // detectLanguageAndTimeFormatFromLocation.
-  currentUserLanguage = loadUserProfile().language || 'en';
+  // No account to read a saved language preference from yet at this point
+  // (there's no token, or it hasn't been checked yet) -- English until
+  // either the `?lang=` handoff just below applies, or a successful login
+  // resolves the account's own saved language (or runs
+  // detectLanguageAndTimeFormatFromLocation, for a first-ever login).
+  currentUserLanguage = 'en';
   // A `?lang=en|hr` handoff from the marketing/legal flow (see
   // site-i18n.js/landing.html etc.) -- lets clicking through to "Log in"
   // from one of those pages show the login/register screen in the language
@@ -6403,12 +6261,11 @@ function boot() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) {
     loginScreenEl.classList.remove('hidden');
-    seedInitialUserIfNeeded(); // fire-and-forget -- idempotent, and login() also awaits it directly
     return;
   }
   appMainEl.classList.remove('hidden');
   getMe(token)
-    .then((user) => {
+    .then(async (user) => {
       // A direct/bookmarked visit to this URL while already logged in --
       // see the same check in the login form's submit handler below for the
       // logged-out case (landing.js normally sends an already-logged-in
@@ -6421,20 +6278,15 @@ function boot() {
         location.href = `checkout.html?plan=${encodeURIComponent(bootParams.get('plan') || 'monthly')}`;
         return;
       }
-      currentUserId = user.id;
-      currentUserNickname = user.nickname;
-      currentUserAvatar = user.avatar;
-      currentUserTimeFormat = user.timeFormat;
-      currentUserBackground = user.background;
-      currentUserLanguage = user.language || 'en';
-      currentUserSubscription = user.subscription;
-      startApp(user.language == null);
+      applyUserSession(user);
+      await startApp(user.language == null);
     })
     .catch((err) => {
-      // getMe() itself already wiped storage for ACCOUNT_EXPIRED_INACTIVITY/
-      // ACCOUNT_DELETED_SCHEDULED (see wipeAccountData) -- this covers
-      // ACCOUNT_NOT_FOUND too, where a stale token pointing at an
-      // already-gone account otherwise never gets cleared.
+      // The account itself (if it still existed) was already deleted
+      // server-side for ACCOUNT_EXPIRED_INACTIVITY/ACCOUNT_DELETED_SCHEDULED
+      // as part of handling this request (see GET /auth/me in api-spec.yaml)
+      // -- this local token just needs clearing either way, including for
+      // ACCOUNT_NOT_FOUND, where it was pointing at an already-gone account.
       localStorage.removeItem(AUTH_TOKEN_KEY);
       appMainEl.classList.add('hidden');
       loginScreenEl.classList.remove('hidden');
@@ -6471,16 +6323,10 @@ document.getElementById('login-form').onsubmit = async (e) => {
     return;
   }
 
-  currentUserId = user.id;
-  currentUserNickname = user.nickname;
-  currentUserAvatar = user.avatar;
-  currentUserTimeFormat = user.timeFormat;
-  currentUserBackground = user.background;
-  currentUserLanguage = user.language || 'en';
-  currentUserSubscription = user.subscription;
+  applyUserSession(user);
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
-  startApp(user.language == null);
+  await startApp(user.language == null);
 };
 
 document.getElementById('show-register-link').onclick = (e) => {

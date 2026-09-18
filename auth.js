@@ -1,210 +1,175 @@
 // ---------------------------------------------------------------------------
-// Shared account/subscription primitives -- the pieces of app.js's mock auth
-// that other static pages (landing.html, checkout.html) also need, since
-// they aren't part of the app.js SPA and can't load it (app.js assumes
-// index.html's own DOM exists and would throw trying to query it). Pure
-// storage/token functions only, no DOM beyond localStorage -- same UMD-lite
-// spirit as recurrence.js, just for account state instead of date math.
-//
-// Loaded before app.js (see index.html's <script> order) so app.js can use
-// these as plain globals without its own copies -- there's exactly one
-// definition of each, here.
+// API client -- talks to the real backend (see api-spec.yaml) at
+// window.APP_CONFIG.apiBaseUrl (see config.example.js/CLAUDE.md's
+// Configuration section). Shared by every page that needs account/
+// subscription/task data -- index.html (via app.js), landing.html
+// (landing.js), checkout.html (checkout.js) -- since none of those can load
+// the whole app.js SPA script (it assumes index.html's own DOM exists and
+// would throw trying to query it elsewhere). Loaded before app.js (see
+// index.html's <script> order) so app.js can use these as plain globals
+// without its own copies -- there's exactly one definition of each, here.
 // ---------------------------------------------------------------------------
 
+// Still generated client-side, unlike an account's id -- a task's id is
+// needed synchronously in the middle of a lot of local task-list logic
+// (recurring-series splits, manual occurrences, merging a series, ...) that
+// would otherwise have to await a round trip partway through building a
+// single save. See PUT /tasks in api-spec.yaml, which accepts
+// client-generated ids rather than inventing its own.
 function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
 const AUTH_TOKEN_KEY = 'advanced-todo-auth-token';
-const USERS_STORAGE_KEY = 'advanced-todo-users';
 
-function loadUsers() {
+// Matches every error response's shape in api-spec.yaml ({ code, message })
+// -- err.code is what every catch block in this app actually branches on
+// (to show its own translated copy), `message` is just a fallback. Used
+// both for a real error apiFetch() received from the server and locally,
+// wherever a client-side check throws before ever making a request (a
+// malformed email, a client-side validity check, ...).
+function codeError(code, message) {
+  const err = new Error(message || code);
+  err.code = code;
+  return err;
+}
+
+// window.APP_CONFIG.apiBaseUrl left empty (no config.js, or an empty value
+// in it) resolves to a same-origin `/atodo/v1` -- only ever right if the
+// backend happens to be reverse-proxied onto this same origin; there's no
+// other "disabled" fallback the way e.g. the Unsplash key has one, since
+// this app can't do anything at all without a real backend to talk to.
+const API_BASE = `${(window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || ''}/atodo/v1`;
+
+// Every endpoint in api-spec.yaml goes through here. Adds the bearer token
+// (from localStorage, unless `token` is passed explicitly -- see getMe in
+// app.js, called with a token that isn't stored yet: boot()'s stored-token
+// path passes it before deciding it's still valid, and the login submit
+// handler passes login()'s freshly-minted one before saving it) and turns
+// any non-2xx response into a codeError() carrying the server's own `code`,
+// so every existing `err.code === '...'` check throughout app.js keeps
+// working unchanged.
+async function apiFetch(path, { method = 'GET', body, token } = {}) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const authToken = token !== undefined ? token : localStorage.getItem(AUTH_TOKEN_KEY);
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+  let res;
   try {
-    return JSON.parse(localStorage.getItem(USERS_STORAGE_KEY)) || [];
+    res = await fetch(`${API_BASE}${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch {
-    return [];
+    // Offline, DNS failure, CORS rejection, the server's just not there --
+    // fetch() itself throws rather than resolving with a response for any
+    // of these, so this is the only place that can catch them.
+    throw codeError('NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.');
   }
-}
-function saveUsers(users) {
-  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+
+  if (res.status === 204) return null;
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    // No body, or not valid JSON -- data stays null; only a problem below
+    // if the response wasn't ok, where there's supposed to be an Error body.
+  }
+  if (!res.ok) throw codeError((data && data.code) || 'UNKNOWN_ERROR', data && data.message);
+  return data;
 }
 
-// The token is a base64'd JSON blob (not a real JWT -- there's no signature,
-// nothing else to actually verify it), just enough structure that a real
-// backend swap only changes what's inside, not how it's used. See app.js's
-// own Auth section comment for the fuller rationale.
+// Reads a token's claims client-side, without a network round trip -- for
+// quick, non-authoritative UI reads only (e.g. "should the Subscribe button
+// show right now"); GET /auth/me is the actual source of truth for whether
+// the account/subscription are still genuinely in that state (see api-spec.
+// yaml's Token schema -- nothing here re-verifies a signature, so this is
+// not itself a security boundary). Handles both a real three-part JWT
+// (header.payload.signature, base64url-encoded) and a bare base64 JSON
+// blob, so this doesn't need to know or care which kind of token a given
+// backend actually issues.
 function decodeToken(token) {
-  return JSON.parse(atob(token));
+  const payloadSegment = token.split('.')[1] || token;
+  const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(atob(base64));
 }
 
-// Subscription -- embedded in the bearer token itself, so every limit check
-// elsewhere reads it from the decoded token rather than from some
-// separately-mutable place the UI could poke directly, the same way a real
-// backend would embed a subscription claim in a signed JWT after checking
-// its own database. Same caveat as the rest of this mock auth: this token
-// has no signature, so embedding it here isn't actually tamper-proof yet --
-// it's structured to swap cleanly for a real signed claim later, not a real
-// security boundary today.
-//
-// null (never subscribed) | { id, plan: 'trial' | 'pro', billingInterval:
-// 'monthly' | 'annual' | null (null for a trial), startedAt, expiresAt,
-// cancelAtPeriodEnd, scheduledDeletion }. Only the current/most recent
-// subscription is kept, no history -- there's no backend yet to reconcile a
-// real billing history against. "Active" is never cached as its own flag:
-// it's always Date.now() < expiresAt, checked live wherever it matters (see
-// describeSubscription), so an expired trial/subscription is correctly
-// detected without needing a fresh token just because time passed.
-// cancelAtPeriodEnd doesn't change that -- it only changes what the
-// Settings section displays (see renderSettingsSubscriptionSection in
-// app.js); nothing in this mock actually auto-renews a subscription past
-// its expiresAt anyway, so "cancelling" one has no other effect here yet.
-// scheduledDeletion is the one exception: once expiresAt passes, getMe() in
-// app.js checks it and actually deletes the account (see
-// scheduleAccountDeletion/cancelScheduledAccountDeletion below).
-const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
-const MONTHLY_BILLING_MS = 30 * 24 * 60 * 60 * 1000;
-const ANNUAL_BILLING_MS = 365 * 24 * 60 * 60 * 1000;
-
-function mintToken(user) {
-  return btoa(JSON.stringify({ sub: user.id, issuedAt: Date.now(), subscription: user.subscription || null }));
-}
-
+// active is never cached as its own flag: it's always Date.now() <
+// expiresAt, checked live wherever it matters, so an expired trial/
+// subscription is correctly detected without needing a fresh token just
+// because time passed. cancelAtPeriodEnd doesn't change that -- it only
+// changes what the Settings section displays (see
+// renderSettingsSubscriptionSection in app.js); the backend is expected to
+// still honor access until expiresAt regardless of it.
 function describeSubscription(subscription) {
   if (!subscription) return { plan: 'free', active: false, subscription: null };
   return { plan: subscription.plan, active: Date.now() < subscription.expiresAt, subscription };
 }
 
-// Starts a 14-day trial for `userId` -- identical to a paid Pro subscription
-// while it lasts (see canCreateTaskOfKind/canCompleteOrNoteTask in app.js).
-// Returns a freshly minted token reflecting the new subscription, to replace
-// whatever's in localStorage -- re-minting a token outside of login() is
-// deliberate; nothing else changes a claim the token carries except this and
-// startPaidSubscription/cancelSubscription below.
-//
-// Deliberately doesn't check for a prior trial -- repeat trials are fine for
-// now (useful for testing); a real backend is expected to allow only one
-// trial per account, but that's not enforced here yet.
-function startTrialSubscription(userId) {
-  const users = loadUsers();
-  const user = users.find((u) => u.id === userId);
-  if (!user) return null;
-  user.subscription = {
-    id: uid(),
-    plan: 'trial',
-    billingInterval: null,
-    startedAt: Date.now(),
-    expiresAt: Date.now() + TRIAL_DURATION_MS,
-    cancelAtPeriodEnd: false,
-    scheduledDeletion: false,
-  };
-  saveUsers(users);
-  return mintToken(user);
+// POST /subscriptions/trial -- starts a 14-day Pro trial for the current
+// account. Returns both the fresh token the response carries (see
+// api-spec.yaml -- every subscription-mutating endpoint re-issues one,
+// since the subscription claim it embeds just changed) and the updated
+// user, so the caller doesn't need a separate getMe() round trip just to
+// see the new subscription (see subscribeCurrentUserToTrial in app.js).
+async function startTrialSubscription() {
+  return apiFetch('/subscriptions/trial', { method: 'POST' });
 }
 
-// Grants a paid Pro subscription -- the mock stand-in for a completed Stripe
-// checkout (see checkout.html, which is the only caller). billingInterval:
-// 'monthly' | 'annual'; expiresAt is set to one billing period from now,
-// same as a real subscription's first period would be.
-function startPaidSubscription(userId, billingInterval) {
-  const users = loadUsers();
-  const user = users.find((u) => u.id === userId);
-  if (!user) return null;
-  const durationMs = billingInterval === 'annual' ? ANNUAL_BILLING_MS : MONTHLY_BILLING_MS;
-  user.subscription = {
-    id: uid(),
-    plan: 'pro',
-    billingInterval: billingInterval === 'annual' ? 'annual' : 'monthly',
-    startedAt: Date.now(),
-    expiresAt: Date.now() + durationMs,
-    cancelAtPeriodEnd: false,
-    scheduledDeletion: false,
-  };
-  saveUsers(users);
-  return mintToken(user);
+// POST /subscriptions/checkout-sessions -- the mock-Stripe stand-in this
+// function used to be (minting a Pro subscription directly) is gone: a real
+// payment has to actually go through Stripe's own hosted checkout page, so
+// this only creates the session and returns where to redirect the browser.
+// checkout.js does the redirect, then polls pollCheckoutSessionStatus below
+// once Stripe redirects back.
+async function createCheckoutSession(billingInterval, successUrl, cancelUrl) {
+  return apiFetch('/subscriptions/checkout-sessions', {
+    method: 'POST',
+    body: { billingInterval, successUrl, cancelUrl },
+  });
 }
 
-// Marks the current subscription to not renew -- access/limits stay exactly
-// as they are until expiresAt (see describeSubscription/isSubscriptionActive
-// in app.js), same as a real "cancel at period end" would behave; there's
-// just no actual renewal job here yet for this to meaningfully interrupt.
-// No-ops (returns null) if there's nothing active to cancel.
-function cancelSubscription(userId) {
-  const users = loadUsers();
-  const user = users.find((u) => u.id === userId);
-  if (!user || !user.subscription || !describeSubscription(user.subscription).active) return null;
-  user.subscription.cancelAtPeriodEnd = true;
-  saveUsers(users);
-  return mintToken(user);
+// GET /subscriptions/checkout-sessions/{sessionId} -- see checkout.js's own
+// pollPaymentStatus, which calls this on an interval until status isn't
+// 'pending' anymore. Once 'paid', `token` reflects the now-active Pro
+// subscription.
+async function getCheckoutSessionStatus(sessionId) {
+  return apiFetch(`/subscriptions/checkout-sessions/${encodeURIComponent(sessionId)}`);
 }
 
-// The alternative to deleting a paying subscriber's account outright (see
-// the Settings "Delete account" flow in app.js) -- keeps full access until
-// the current period ends, same as cancelSubscription above (which this
-// also does -- a subscription slated for deletion has nothing left to
-// renew into), then getMe() in app.js deletes it for real once expiresAt
-// passes and nobody's undone it via cancelScheduledAccountDeletion below.
-// No-ops (returns null) if there's no active subscription to schedule
-// against.
-function scheduleAccountDeletion(userId) {
-  const users = loadUsers();
-  const user = users.find((u) => u.id === userId);
-  if (!user || !user.subscription || !describeSubscription(user.subscription).active) return null;
-  user.subscription.cancelAtPeriodEnd = true;
-  user.subscription.scheduledDeletion = true;
-  saveUsers(users);
-  return mintToken(user);
+// POST /subscriptions/cancel -- stops future renewal; access/limits are
+// untouched until expiresAt. Throws codeError('NO_ACTIVE_SUBSCRIPTION') if
+// there's nothing active to cancel (see cancelCurrentUserSubscription in
+// app.js, which already only offers this when there is). Returns
+// { token, user }, same as startTrialSubscription above.
+async function cancelSubscription() {
+  return apiFetch('/subscriptions/cancel', { method: 'POST' });
 }
 
-// Undoes scheduleAccountDeletion -- deliberately leaves cancelAtPeriodEnd
-// alone (see its own comment): "cancel the deletion" only promises to keep
-// the account around, not to silently resume billing the user never asked
-// to resume. No-ops (returns null) if there's no subscription at all.
-function cancelScheduledAccountDeletion(userId) {
-  const users = loadUsers();
-  const user = users.find((u) => u.id === userId);
-  if (!user || !user.subscription) return null;
-  user.subscription.scheduledDeletion = false;
-  saveUsers(users);
-  return mintToken(user);
+// POST /users/me/schedule-deletion -- the alternative to DELETE /users/me
+// for a paying subscriber who doesn't want to forfeit the rest of a period
+// they already paid for (see the Settings "Delete account" flow in app.js):
+// keeps full access until the subscription's expiresAt, but cancels it (see
+// cancelSubscription above) and flags the account itself for deletion once
+// that passes -- enforced server-side (see GET /auth/me in api-spec.yaml),
+// not by anything running here. Returns { token, user }, same as
+// startTrialSubscription above.
+async function scheduleAccountDeletion() {
+  return apiFetch('/users/me/schedule-deletion', { method: 'POST' });
 }
 
-// Data-retention policy (see the Privacy Policy): an account untouched for
-// 12 months is deleted -- see login()/getMe() in app.js, the only two
-// callers of isUserInactive/recordUserActivity below. A fixed 365 days,
-// same approximation-of-a-calendar-period style as TRIAL_DURATION_MS/
-// MONTHLY_BILLING_MS/ANNUAL_BILLING_MS above.
-const INACTIVITY_LIMIT_MS = 365 * 24 * 60 * 60 * 1000;
-
-// lastLoginAt (set only by a fresh email/password login) and lastActiveAt
-// (also touched by simply resuming an already-stored token, see getMe) are
-// deliberately separate fields -- lastActiveAt is the one that actually
-// gates deletion (see isUserInactive), so an account someone keeps using via
-// a long-lived token, without ever re-entering their password, still reads
-// as active. Both are meant to eventually live on a real backend's user
-// row, same as everything else in this file.
-function recordUserActivity(userId) {
-  const users = loadUsers();
-  const user = users.find((u) => u.id === userId);
-  if (!user) return;
-  user.lastActiveAt = Date.now();
-  saveUsers(users);
-}
-
-// Falls back to lastLoginAt, then to "now" (never treats an account that
-// simply predates these fields as already-expired -- same
-// don't-punish-pre-existing-data reasoning as normalizeLoadedTasks'
-// createdAt backfill in app.js) for an account that's never had either
-// field recorded.
-function isUserInactive(user) {
-  const lastActive = user.lastActiveAt || user.lastLoginAt || Date.now();
-  return Date.now() - lastActive > INACTIVITY_LIMIT_MS;
+// Undoes scheduleAccountDeletion -- deliberately leaves the subscription's
+// own cancellation alone server-side (see api-spec.yaml's own note on this
+// endpoint): "cancel the deletion" only promises to keep the account
+// around, not to silently resume billing nobody asked to resume. Returns
+// { token, user }, same as startTrialSubscription above.
+async function cancelScheduledAccountDeletion() {
+  return apiFetch('/users/me/schedule-deletion', { method: 'DELETE' });
 }
 
 // The visitor id behind whatever token is currently stored, or null if
 // there's none/it's unreadable -- landing.html/checkout.html use this to
 // decide whether a paid-plan click can go straight to checkout or needs a
-// login first (see landing.js), without needing the rest of app.js's
-// account/profile machinery.
+// login first (see landing.js), without needing a network round trip just
+// to answer that.
 function getCurrentUserIdFromStoredToken() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) return null;
