@@ -6061,6 +6061,33 @@ function unsplashAttributionUrl(url) {
   return `${url}?utm_source=advanced-todo&utm_medium=referral`;
 }
 
+// photo.urls.regular is a fixed 1080px-wide preset -- fine for a laptop
+// screen, but on a larger/high-DPI display body's background-size:cover (see
+// style.css) has to blow it up past its native resolution, which looks
+// stretched/blurry despite never distorting the aspect ratio. Unsplash's
+// images are served by imgix, which accepts w/h/fit params on any of its
+// photo URLs (https://unsplash.com/documentation#dynamically-resizable-images),
+// so request a size matching this screen instead: fit=crop cuts off any
+// excess rather than skewing the image to match, the same trade-off
+// background-size:cover already makes.
+function unsplashBackgroundUrl(photo) {
+  const dpr = window.devicePixelRatio || 1;
+  // Capped well above common displays but short of Unsplash's raw originals,
+  // so a 4K/5K screen doesn't pull down an unnecessarily huge file.
+  const width = Math.min(Math.round(window.screen.width * dpr), 2560);
+  const height = Math.min(Math.round(window.screen.height * dpr), 1600);
+  // urls.raw always carries its own query string (ixid/ixlib) in practice,
+  // but build with URL/URLSearchParams rather than string-concatenating a
+  // "&" onto it -- that would silently produce an invalid, non-loading URL
+  // for any raw URL that didn't already have one.
+  const url = new URL(photo.urls.raw);
+  url.searchParams.set('w', width);
+  url.searchParams.set('h', height);
+  url.searchParams.set('fit', 'crop');
+  url.searchParams.set('q', '80');
+  return url.toString();
+}
+
 function selectBackgroundPhoto(photo) {
   // Unsplash's API guidelines require pinging a photo's download_location
   // whenever it's actually put to use (as opposed to just shown as a search
@@ -6069,7 +6096,7 @@ function selectBackgroundPhoto(photo) {
   fetch(photo.links.download_location, { headers: { Authorization: `Client-ID ${loadUnsplashAccessKey()}` } }).catch(() => {});
 
   currentUserBackground = {
-    regularUrl: photo.urls.regular,
+    regularUrl: unsplashBackgroundUrl(photo),
     thumbUrl: photo.urls.thumb,
     photographerName: photo.user.name,
     photographerUrl: unsplashAttributionUrl(photo.user.links.html),
