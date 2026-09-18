@@ -993,6 +993,13 @@ main {
 .todo-day-column {
   min-width: 0;
 }
+/* Thin divider between a day's two columns -- only present when there's a
+   second column of tasks (see renderTodo), and removed again below once the
+   narrow-screen media query collapses back to a single stacked column. */
+.todo-day-columns-separated .todo-day-column:last-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding-left: 12px;
+}
 
 .todo-item {
   display: flex;
@@ -1845,4 +1852,8 @@ option {
      vertically instead of side by side keeps the day's overall top-to-bottom
      due-time order intact either way. */
   .todo-day-columns { grid-template-columns: 1fr; }
+  .todo-day-columns-separated .todo-day-column:last-child {
+    border-left: none;
+    padding-left: 0;
+  }
 }

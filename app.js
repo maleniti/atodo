@@ -3885,9 +3885,13 @@ function renderTodo() {
     // tasks, the second the later-due ones, with the first column taking the
     // extra task when the day's count is odd.
     const columns = document.createElement('div');
-    columns.className = 'todo-day-columns';
     const firstColumnCount = Math.ceil(dayItems.length / 2);
     const columnItemLists = [dayItems.slice(0, firstColumnCount), dayItems.slice(firstColumnCount)];
+    // Only draw the between-columns separator when there's actually a second
+    // column of tasks to separate from -- a single task fills the first
+    // column alone, leaving the second empty, so a border there would just
+    // be a stray line next to nothing.
+    columns.className = 'todo-day-columns' + (columnItemLists[1].length > 0 ? ' todo-day-columns-separated' : '');
     for (const columnItems of columnItemLists) {
       const column = document.createElement('div');
       column.className = 'todo-day-column';
