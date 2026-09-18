@@ -487,6 +487,25 @@ main {
   gap: 8px;
 }
 
+/* Free/trial-only (see renderSubscribeHeaderButton in app.js) -- links out
+   to landing.html's pricing section rather than opening anything in-app,
+   since choosing monthly/yearly billing now happens there. */
+.app-header-subscribe-btn {
+  height: 30px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  border-radius: 15px;
+  background: #8ab4f8;
+  color: #0b0f14;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.app-header-subscribe-btn:hover { background: #aecbfa; }
+
 /* Anchors .user-menu-dropdown (position: absolute) to the avatar button
    rather than the page. */
 .user-menu {

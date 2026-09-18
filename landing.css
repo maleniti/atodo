@@ -1,0 +1,217 @@
+/* Shared look for the marketing/subscription flow pages (landing.html,
+   checkout.html, success.html, cancel.html) -- deliberately NOT style.css:
+   that file assumes the app's own fixed-viewport, no-page-scroll SPA layout
+   (html/body height:100%; overflow:hidden), which would break these pages'
+   normal scrolling. Colors/fonts are kept in sync with style.css by eye,
+   not by sharing a file, since the two are otherwise unrelated layouts. */
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  color-scheme: dark;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color: #e8eaed;
+  background: #131314;
+}
+
+a { color: inherit; }
+
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+}
+.site-header .logo {
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+  color: #fff;
+}
+.site-header .login-link {
+  font-size: 13px;
+  color: #9aa0a6;
+  text-decoration: none;
+}
+.site-header .login-link:hover { color: #e8eaed; }
+
+.hero {
+  text-align: center;
+  padding: 48px 24px 32px;
+}
+.hero h1 {
+  font-size: 34px;
+  margin: 0 0 12px;
+  color: #fff;
+}
+.hero p {
+  font-size: 16px;
+  color: #9aa0a6;
+  max-width: 560px;
+  margin: 0 auto 28px;
+  line-height: 1.5;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn-primary { background: #8ab4f8; color: #0b0f14; }
+.btn-primary:hover { background: #aecbfa; }
+.btn-secondary { background: rgba(255, 255, 255, 0.06); color: #e8eaed; border-color: rgba(255, 255, 255, 0.16); }
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.12); }
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.video-section { padding: 8px 24px 56px; }
+.video-frame {
+  max-width: 800px;
+  margin: 0 auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+.video-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+/* Shown instead of .video-frame when no video URL is configured (see
+   landing.js) -- same fallback spirit as the rest of this app's optional
+   config (e.g. the Unsplash key), never a broken embed. */
+.video-placeholder {
+  max-width: 800px;
+  margin: 0 auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #80868b;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+.section { padding: 40px 24px; }
+.section h2 {
+  text-align: center;
+  font-size: 24px;
+  color: #fff;
+  margin: 0 0 32px;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+.feature-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 18px;
+}
+.feature-card h3 {
+  font-size: 15px;
+  color: #fff;
+  margin: 0 0 8px;
+}
+.feature-card p {
+  font-size: 13px;
+  color: #9aa0a6;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+.pricing-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pricing-card.highlight {
+  border-color: #8ab4f8;
+  box-shadow: 0 0 0 1px #8ab4f8;
+}
+.pricing-card h3 { margin: 0; font-size: 16px; color: #fff; }
+.pricing-card .price { font-size: 30px; font-weight: 700; color: #fff; }
+.pricing-card .price span { font-size: 13px; font-weight: 400; color: #9aa0a6; }
+.pricing-card .save { font-size: 12px; color: #81c995; margin: -8px 0 0; }
+.pricing-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #9aa0a6;
+  font-size: 13px;
+  line-height: 1.7;
+  flex: 1;
+}
+.pricing-card .btn { margin-top: 4px; }
+
+.site-footer {
+  text-align: center;
+  padding: 32px 24px 48px;
+  color: #80868b;
+  font-size: 12px;
+}
+
+/* success.html/cancel.html/checkout.html's simpler centered single-message
+   layout -- landing.html doesn't use this. */
+.flow-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.flow-card {
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 36px 28px;
+}
+.flow-card h1 { font-size: 22px; color: #fff; margin: 0 0 12px; }
+.flow-card p { font-size: 14px; color: #9aa0a6; line-height: 1.5; margin: 0 0 24px; }
+.flow-card .btn { width: 100%; }
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #8ab4f8;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

@@ -1,6 +1,7 @@
 FROM nginx:alpine
 
-COPY index.html style.css app.js recurrence.js sharedInputBehavior.js /usr/share/nginx/html/
+COPY index.html style.css app.js recurrence.js sharedInputBehavior.js auth.js /usr/share/nginx/html/
+COPY landing.html landing.css landing.js checkout.html checkout.js success.html cancel.html /usr/share/nginx/html/
 
 # Writes config.js (the Unsplash Access Key -- see config.example.js) from
 # the UNSPLASH_ACCESS_KEY env var at container start. Deliberately not COPYed

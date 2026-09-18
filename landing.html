@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A-To-Do</title>
+<link rel="stylesheet" href="landing.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="landing.html">A-To-Do</a>
+    <a class="login-link" href="index.html">Log in</a>
+  </header>
+
+  <section class="hero">
+    <h1>The to-do list that actually keeps up with you</h1>
+    <p>Recurring tasks, overdue &amp; failed-appointment tracking, work timers, and per-task notes -- all in one fast, no-nonsense list.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="index.html">Get started free</a>
+      <a class="btn btn-secondary" href="#pricing">See pricing</a>
+    </div>
+  </section>
+
+  <section class="video-section">
+    <div id="video-frame" class="video-frame hidden">
+      <iframe id="video-iframe" src="" title="A-To-Do walkthrough" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+    <div id="video-placeholder" class="video-placeholder">Video walkthrough coming soon.</div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>What you get</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>Flexible recurring tasks</h3>
+          <p>Daily, weekly, or monthly patterns -- specific weekdays, "the 2nd Tuesday", or a handful of exact days each month.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Overdue &amp; failed tracking</h3>
+          <p>A missed task carries over until you deal with it; an appointment past its due date is marked failed instead, so nothing quietly slips away.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Work timers &amp; focus mode</h3>
+          <p>Start a countdown or count-up timer on whatever you're working on right now, and pick it back up later exactly where you left off.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Notes &amp; activity history</h3>
+          <p>Keep context on every task -- notes you wrote, and a running log of everything that happened to it.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Today's agenda</h3>
+          <p>A side panel that always shows what's actually on your plate today, without digging through the full list.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Works everywhere</h3>
+          <p>A responsive layout that works as well on your phone as it does on your desktop.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="pricing">
+    <div class="wrap">
+      <h2>Pricing</h2>
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <h3>Free</h3>
+          <div class="price">&euro;0</div>
+          <ul>
+            <li>Up to 10 one-off tasks</li>
+            <li>Up to 5 recurring tasks</li>
+            <li>Up to 5 notes per task</li>
+          </ul>
+          <a class="btn btn-secondary" href="index.html">Get started free</a>
+        </div>
+        <div class="pricing-card">
+          <h3>Pro -- Monthly</h3>
+          <div class="price">&euro;2 <span>/ month</span></div>
+          <ul>
+            <li>Unlimited tasks, recurring or not</li>
+            <li>Unlimited notes on every task</li>
+            <li>No more subscription reminders cluttering your list</li>
+          </ul>
+          <button type="button" class="btn btn-primary" data-plan="monthly">Subscribe monthly</button>
+        </div>
+        <div class="pricing-card highlight">
+          <h3>Pro -- Yearly</h3>
+          <div class="price">&euro;20 <span>/ year</span></div>
+          <p class="save">Save ~17% vs. monthly</p>
+          <ul>
+            <li>Unlimited tasks, recurring or not</li>
+            <li>Unlimited notes on every task</li>
+            <li>No more subscription reminders cluttering your list</li>
+          </ul>
+          <button type="button" class="btn btn-primary" data-plan="annual">Subscribe yearly</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">A-To-Do &middot; <a href="index.html">Log in</a></footer>
+
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="landing.js"></script>
+</body>
+</html>

@@ -91,6 +91,7 @@
       <div class="app-header">
         <h1 id="app-title">To-Do List</h1>
         <div class="app-header-actions">
+          <a id="app-header-subscribe-btn" class="app-header-subscribe-btn hidden" href="landing.html#pricing" data-i18n="subscribe.headerCta">Subscribe</a>
           <div class="user-menu">
             <button id="user-avatar-btn" class="user-avatar-btn" title="Account menu" data-i18n-title="avatar.accountMenu">
               <img id="user-avatar-img" class="user-avatar-img hidden" alt="">
@@ -292,6 +293,7 @@
         <div class="settings-subscription-row">
           <span id="settings-subscription-status"></span>
           <button id="settings-subscribe-btn" type="button" class="menu-btn-small" data-i18n="subscribe.cta">Start free trial&hellip;</button>
+          <button id="settings-cancel-subscription-btn" type="button" class="menu-btn-small hidden" data-i18n="settings.cancelSubscription">Cancel subscription</button>
         </div>
       </div>
       <div class="modal-field">
@@ -372,6 +374,7 @@
   <script src="config.js"></script>
   <script src="sharedInputBehavior.js"></script>
   <script src="recurrence.js"></script>
+  <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

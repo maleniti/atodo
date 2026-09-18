@@ -1,6 +1,8 @@
-function uid() {
-  return Math.random().toString(36).slice(2, 9);
-}
+// uid()/AUTH_TOKEN_KEY/USERS_STORAGE_KEY/loadUsers/saveUsers/mintToken/
+// describeSubscription/TRIAL_DURATION_MS/startTrialSubscription all live in
+// auth.js now (loaded before this file -- see index.html) since
+// landing.html/checkout.html need them too and can't load this whole SPA
+// script just for them.
 
 // ---------------------------------------------------------------------------
 // i18n -- English + Croatian. Deliberately NOT covering everything in the
@@ -249,23 +251,24 @@ const I18N = {
     'settings.subscriptionTrial': 'Trial (ends at: {date})',
     'settings.subscriptionTrialExpired': 'Trial (ended at: {date})',
     'settings.subscriptionPro': 'Pro (billed {interval}, next billing at: {date})',
+    'settings.subscriptionProCancelling': 'Pro (billed {interval}, cancels at: {date})',
     'settings.subscriptionProExpired': 'Pro (expired at: {date})',
     'settings.billingMonthly': 'monthly',
     'settings.billingAnnual': 'annually',
+    'settings.cancelSubscription': 'Cancel subscription',
     'settings.data': 'Data',
     'settings.downloadData': 'Download my data…',
     'settings.importData': 'Import data…',
 
     'subscribe.title': 'Upgrade to A-To-Do Pro',
     'subscribe.cta': 'Start free trial…',
+    'subscribe.headerCta': 'Subscribe',
     'subscribe.maybeLater': 'Maybe later',
     'subscribe.benefitTasks': 'Unlimited tasks, recurring or not',
     'subscribe.benefitNotes': 'Unlimited notes on every task',
     'subscribe.benefitAds': 'No more subscription reminders cluttering your list',
     'subscribe.priceHint': "Just 2 EUR/month afterwards – start with a free 14-day trial, no payment required now.",
-    'subscribe.reasonRecurringLimit': "You've reached the free limit of {limit} recurring tasks.",
-    'subscribe.reasonOnceLimit': "You've reached the free limit of {limit} tasks.",
-    'subscribe.reasonNotesLimit': "You've reached the free limit of {limit} notes on this task.",
+    'subscribe.reasonCreateLimit': "You've hit a limit of what we can do for you for free. Subscribe today and keep adding to your To-Do list indefinitely!",
     'subscribe.reasonTaskLimit': "This task is beyond your free plan's limit, so it can't be completed or noted on.",
     'subscribe.taskName': 'Subscribe to A-To-Do',
     'subscribe.taskDescription': "It's only 2 EUR/month",
@@ -522,23 +525,24 @@ const I18N = {
     'settings.subscriptionTrial': 'Probno razdoblje (do: {date})',
     'settings.subscriptionTrialExpired': 'Probno razdoblje (isteklo: {date})',
     'settings.subscriptionPro': 'Pro (naplata {interval}, sljedeća naplata: {date})',
+    'settings.subscriptionProCancelling': 'Pro (naplata {interval}, otkazuje se: {date})',
     'settings.subscriptionProExpired': 'Pro (isteklo: {date})',
     'settings.billingMonthly': 'mjesečno',
     'settings.billingAnnual': 'godišnje',
+    'settings.cancelSubscription': 'Otkaži pretplatu',
     'settings.data': 'Podaci',
     'settings.downloadData': 'Preuzmi moje podatke…',
     'settings.importData': 'Uvezi podatke…',
 
     'subscribe.title': 'Nadogradite na A-To-Do Pro',
     'subscribe.cta': 'Isprobajte besplatno…',
+    'subscribe.headerCta': 'Pretplati se',
     'subscribe.maybeLater': 'Možda kasnije',
     'subscribe.benefitTasks': 'Neograničen broj zadataka, ponavljajućih ili ne',
     'subscribe.benefitNotes': 'Neograničen broj bilješki na svakom zadatku',
     'subscribe.benefitAds': 'Bez podsjetnika za pretplatu koji zatrpavaju popis',
     'subscribe.priceHint': 'Nakon toga samo 2 EUR/mjesečno – započnite s besplatnim probnim razdobljem od 14 dana, bez plaćanja sada.',
-    'subscribe.reasonRecurringLimit': 'Dosegli ste besplatno ograničenje od {limit} ponavljajućih zadataka.',
-    'subscribe.reasonOnceLimit': 'Dosegli ste besplatno ograničenje od {limit} zadataka.',
-    'subscribe.reasonNotesLimit': 'Dosegli ste besplatno ograničenje od {limit} bilješki na ovom zadatku.',
+    'subscribe.reasonCreateLimit': 'Dosegli ste granicu onoga što možemo ponuditi besplatno. Pretplatite se danas i nastavite neograničeno dodavati zadatke na svoj popis obveza!',
     'subscribe.reasonTaskLimit': 'Ovaj zadatak je izvan ograničenja besplatnog plana, pa se ne može završiti ni komentirati.',
     'subscribe.taskName': 'Pretplatite se na A-To-Do',
     'subscribe.taskDescription': 'Samo 2 EUR/mjesečno',
@@ -1147,30 +1151,19 @@ function showFormModal(title, fields, opts = {}) {
 // giving each account its own is a bigger change than this pass covers.
 // ---------------------------------------------------------------------------
 
-const AUTH_TOKEN_KEY = 'advanced-todo-auth-token';
 const FAKE_USER_ID = 'nikola';
 const FAKE_USER_NICKNAME = 'Nikola';
 
 // Registered accounts (email + salted/hashed password) -- separate from
 // task/profile data above, and, unlike those, actually keyed per account
-// (see login/registerUser). pendingRegistrations holds an account that's
+// (see login/registerUser); see auth.js for USERS_STORAGE_KEY/loadUsers/
+// saveUsers themselves. pendingRegistrations holds an account that's
 // registered but not yet verified (see registerUser/verifyEmailToken); once
 // verified it moves over to `users` and is removed from here.
-const USERS_STORAGE_KEY = 'advanced-todo-users';
 const PENDING_REGISTRATIONS_KEY = 'advanced-todo-pending-registrations';
 // How long a verification link stays valid after registerUser sends it.
 const VERIFICATION_WINDOW_MS = 6 * 60 * 60 * 1000;
 
-function loadUsers() {
-  try {
-    return JSON.parse(localStorage.getItem(USERS_STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-function saveUsers(users) {
-  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-}
 function loadPendingRegistrations() {
   try {
     return JSON.parse(localStorage.getItem(PENDING_REGISTRATIONS_KEY)) || [];
@@ -1309,61 +1302,9 @@ function saveUserProfile(profile, userId = currentUserId) {
   localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
-// Subscription -- embedded in the bearer token itself (see mintToken/login/
-// getMe below), so every limit check elsewhere in the app reads it from the
-// decoded token rather than from some separately-mutable place the UI could
-// poke directly -- the same way a real backend would embed a subscription
-// claim in a signed JWT after checking its own database. Same caveat as the
-// rest of this mock auth (see the file-top comment): this token has no
-// signature, so embedding it here isn't actually tamper-proof yet -- it's
-// structured to swap cleanly for a real signed claim later, not a real
-// security boundary today.
-//
-// null (never subscribed) | { id, plan: 'trial' | 'pro', billingInterval:
-// 'monthly' | 'annual' | null (null for a trial), startedAt, expiresAt }.
-// Only the current/most recent subscription is kept, no history -- there's
-// no backend yet to reconcile a real billing history against. "Active" is
-// never cached as its own flag: it's always Date.now() < expiresAt, checked
-// live wherever it matters (see describeSubscription), so an expired trial
-// is correctly detected without needing a fresh token just because time
-// passed.
-const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
-
-function mintToken(user) {
-  return btoa(JSON.stringify({ sub: user.id, issuedAt: Date.now(), subscription: user.subscription || null }));
-}
-
-function describeSubscription(subscription) {
-  if (!subscription) return { plan: 'free', active: false, subscription: null };
-  return { plan: subscription.plan, active: Date.now() < subscription.expiresAt, subscription };
-}
-
-// Starts a 14-day trial for `userId` -- identical to a paid Pro subscription
-// while it lasts (see canCreateTaskOfKind/canCompleteOrNoteTask below). The
-// only way to "subscribe" until a real payment backend exists; see the
-// paywall modal and the Settings subscription section, both of which call
-// this. Returns a freshly minted token reflecting the new subscription, to
-// replace whatever's in localStorage -- re-minting a token outside of
-// login() is new; nothing else in this file does that today, since nothing
-// else changes a claim the token carries.
-//
-// Deliberately doesn't check for a prior trial -- repeat trials are fine for
-// now (useful for testing); a real backend is expected to allow only one
-// trial per account, but that's not enforced here yet.
-function startTrialSubscription(userId) {
-  const users = loadUsers();
-  const user = users.find((u) => u.id === userId);
-  if (!user) return null;
-  user.subscription = {
-    id: uid(),
-    plan: 'trial',
-    billingInterval: null,
-    startedAt: Date.now(),
-    expiresAt: Date.now() + TRIAL_DURATION_MS,
-  };
-  saveUsers(users);
-  return mintToken(user);
-}
+// mintToken/describeSubscription/TRIAL_DURATION_MS/startTrialSubscription/
+// startPaidSubscription/cancelSubscription all live in auth.js now -- see
+// the comment near the top of this file.
 
 // Throws codeError('INVALID_CREDENTIALS' | 'EMAIL_NOT_VERIFIED') for the
 // form to translate and show -- the latter only once an account genuinely
@@ -1384,7 +1325,7 @@ async function login(email, password) {
 }
 
 async function getMe(token) {
-  const payload = JSON.parse(atob(token));
+  const payload = decodeToken(token);
   const profile = loadUserProfile(payload.sub);
   return {
     id: payload.sub,
@@ -2275,10 +2216,7 @@ function canAddNoteToTask(task) {
 // immediately instead of being discarded.
 async function ensureCanCreateTaskOfKind(isRecurring) {
   if (canCreateTaskOfKind(isRecurring)) return true;
-  const reason = isRecurring
-    ? t('subscribe.reasonRecurringLimit', { limit: FREE_TASK_LIMITS.recurring })
-    : t('subscribe.reasonOnceLimit', { limit: FREE_TASK_LIMITS.once });
-  return offerSubscriptionUpgrade(reason);
+  return offerSubscriptionUpgrade(t('subscribe.reasonCreateLimit'));
 }
 
 // Idempotent -- call freely. A free/lapsed account gets a permanent daily
@@ -2348,6 +2286,22 @@ async function subscribeCurrentUserToTrial() {
   saveTasks();
   renderTodo();
   renderSettingsSubscriptionSection();
+  renderSubscribeHeaderButton();
+}
+
+// Marks the current account's subscription to not renew (see
+// cancelSubscription) -- access/limits are untouched until it actually
+// expires (see isSubscriptionActive), so nothing here needs to touch tasks
+// or re-render the to-do list itself, just the bits of chrome that show
+// subscription status.
+async function cancelCurrentUserSubscription() {
+  const token = cancelSubscription(currentUserId);
+  if (!token) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const user = await getMe(token);
+  currentUserSubscription = user.subscription;
+  renderSettingsSubscriptionSection();
+  renderSubscribeHeaderButton();
 }
 
 // Every one of these option lists is a function, not a plain array -- called
@@ -4886,7 +4840,7 @@ sidePanelCommentAddBtn.onclick = async () => {
   const text = sidePanelCommentInput.value.trim();
   if (!text) return;
   if (!canAddNoteToTask(sidePanelTask)) {
-    const reason = canCompleteOrNoteTask(sidePanelTask) ? t('subscribe.reasonNotesLimit', { limit: NOTES_PER_TASK_LIMIT }) : t('subscribe.reasonTaskLimit');
+    const reason = canCompleteOrNoteTask(sidePanelTask) ? t('subscribe.reasonCreateLimit') : t('subscribe.reasonTaskLimit');
     const accepted = await offerSubscriptionUpgrade(reason);
     if (!accepted) return;
   }
@@ -5562,6 +5516,16 @@ const userAvatarBtn = document.getElementById('user-avatar-btn');
 const userAvatarImg = document.getElementById('user-avatar-img');
 const userAvatarInitials = document.getElementById('user-avatar-initials');
 const userMenuDropdown = document.getElementById('user-menu-dropdown');
+const appHeaderSubscribeBtn = document.getElementById('app-header-subscribe-btn');
+
+// Shown for a free (never subscribed) or trial (active or lapsed) account --
+// hidden once there's an actual Pro subscription, since there's nothing left
+// to upsell. Links straight to landing.html's pricing section rather than
+// opening the in-app trial paywall -- choosing monthly/yearly billing now
+// happens there (see checkout.html).
+function renderSubscribeHeaderButton() {
+  appHeaderSubscribeBtn.classList.toggle('hidden', describeSubscription(currentUserSubscription).plan === 'pro');
+}
 
 // Up to the first two words' initials (e.g. "Nikola Novak" -> "NN", "Nikola"
 // -> "N"), or the placeholder "JD" (as in "John Doe") when there's no
@@ -5637,6 +5601,7 @@ const settingsAvatarPreviewInitials = document.getElementById('settings-avatar-p
 const settingsAvatarFileInput = document.getElementById('settings-avatar-file-input');
 const settingsSubscriptionStatusEl = document.getElementById('settings-subscription-status');
 const settingsSubscribeBtn = document.getElementById('settings-subscribe-btn');
+const settingsCancelSubscriptionBtn = document.getElementById('settings-cancel-subscription-btn');
 
 const AVATAR_SIZE = 128; // px, square
 
@@ -5682,11 +5647,13 @@ function renderSettingsAvatarPreview() {
 }
 
 // Free/Trial (ends at: ...)/Pro (billed monthly|annually, next billing at:
-// ...) -- see describeSubscription. The button doubles as the only way to
-// subscribe outside the paywall modal: always "Start free trial", since
-// that's the only plan clicking it can actually start until a real payment
-// backend exists (see startTrialSubscription) -- hidden once a subscription
-// is already active, there being nothing more to start.
+// ... -- or "cancels at" once cancelAtPeriodEnd, see
+// cancelCurrentUserSubscription) -- see describeSubscription. The Subscribe
+// button doubles as the only way to start a trial outside the paywall modal
+// (see startTrialSubscription) -- hidden once a subscription is already
+// active, there being nothing more to start that way. Cancel is offered only
+// for an active, not-yet-cancelled Pro plan -- a trial has no recurring
+// billing to cancel, it just ends on its own at expiresAt.
 function renderSettingsSubscriptionSection() {
   const { plan, active, subscription } = describeSubscription(currentUserSubscription);
   if (plan === 'free') {
@@ -5697,11 +5664,14 @@ function renderSettingsSubscriptionSection() {
       : t('settings.subscriptionTrialExpired', { date: formatDateTime(subscription.expiresAt) });
   } else {
     const intervalLabel = subscription.billingInterval === 'annual' ? t('settings.billingAnnual') : t('settings.billingMonthly');
-    settingsSubscriptionStatusEl.textContent = active
-      ? t('settings.subscriptionPro', { interval: intervalLabel, date: formatDateTime(subscription.expiresAt) })
-      : t('settings.subscriptionProExpired', { date: formatDateTime(subscription.expiresAt) });
+    settingsSubscriptionStatusEl.textContent = !active
+      ? t('settings.subscriptionProExpired', { date: formatDateTime(subscription.expiresAt) })
+      : subscription.cancelAtPeriodEnd
+        ? t('settings.subscriptionProCancelling', { interval: intervalLabel, date: formatDateTime(subscription.expiresAt) })
+        : t('settings.subscriptionPro', { interval: intervalLabel, date: formatDateTime(subscription.expiresAt) });
   }
   settingsSubscribeBtn.classList.toggle('hidden', active);
+  settingsCancelSubscriptionBtn.classList.toggle('hidden', !(plan === 'pro' && active && !subscription.cancelAtPeriodEnd));
 }
 
 function openSettingsModal() {
@@ -5756,6 +5726,7 @@ document.getElementById('settings-save').onclick = () => {
 };
 
 settingsSubscribeBtn.onclick = () => subscribeCurrentUserToTrial();
+settingsCancelSubscriptionBtn.onclick = () => cancelCurrentUserSubscription();
 
 // ---------------------------------------------------------------------------
 // Subscription paywall modal -- shown when a free/lapsed account hits one of
@@ -6144,6 +6115,7 @@ function startApp(needsLanguageDetection) {
   applyStaticTranslations();
   renderAppTitle();
   renderUserAvatar();
+  renderSubscribeHeaderButton();
   applyBackground(currentUserBackground);
   renderTodo();
   if (needsLanguageDetection) {
@@ -6200,6 +6172,15 @@ function boot() {
     seedInitialUserIfNeeded(); // fire-and-forget -- idempotent, and login() also awaits it directly
     return;
   }
+  // A direct/bookmarked visit to this URL while already logged in -- see the
+  // same check in the login form's submit handler below for the logged-out
+  // case (landing.js normally sends an already-logged-in visitor straight to
+  // checkout.html itself, never through here).
+  const bootParams = new URLSearchParams(location.search);
+  if (bootParams.get('next') === 'checkout') {
+    location.href = `checkout.html?plan=${encodeURIComponent(bootParams.get('plan') || 'monthly')}`;
+    return;
+  }
   appMainEl.classList.remove('hidden');
   getMe(token).then((user) => {
     currentUserId = user.id;
@@ -6230,6 +6211,16 @@ document.getElementById('login-form').onsubmit = async (e) => {
     return;
   }
   localStorage.setItem(AUTH_TOKEN_KEY, token);
+
+  // Arrived here via landing.html's pricing buttons while logged out (see
+  // landing.js) -- now that login succeeded, continue straight on to the
+  // checkout it was interrupted for, instead of opening the app.
+  const params = new URLSearchParams(location.search);
+  if (params.get('next') === 'checkout') {
+    location.href = `checkout.html?plan=${encodeURIComponent(params.get('plan') || 'monthly')}`;
+    return;
+  }
+
   const user = await getMe(token);
   currentUserId = user.id;
   currentUserNickname = user.nickname;
