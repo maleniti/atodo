@@ -3799,10 +3799,12 @@ function buildTodoItemRow(item, isToday) {
   // description line and they're all the same height (see .todo-item-desc),
   // instead of a description-less task's row being shorter than one with a
   // description.
-  const desc = document.createElement('div');
-  desc.className = 'todo-item-desc';
-  desc.textContent = item.task.description;
-  text.appendChild(desc);
+  if (item.task.description) {
+    const desc = document.createElement('div');
+    desc.className = 'todo-item-desc';
+    desc.textContent = item.task.description;
+    text.appendChild(desc);
+  }
 
   const meta = document.createElement('div');
   meta.className =
@@ -3847,6 +3849,14 @@ function buildTodoItemRow(item, isToday) {
             : t('todo.due', { time: formatTimeOfDay(item.task.dueTime) });
   }
   text.appendChild(meta);
+
+  // Render description to reserve space and make all todo items same height.
+  if (!item.task.description) {
+    const desc = document.createElement('div');
+    desc.className = 'todo-item-desc';
+    desc.textContent = item.task.description;
+    text.appendChild(desc);
+  }
 
   row.appendChild(text);
 
