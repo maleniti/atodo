@@ -3747,10 +3747,19 @@ function renderTodoEmptyState() {
 // gets its plain weekday + date, since "3 days ago" style phrasing wasn't
 // asked for.
 function describeDayLabel(dateISO, todayISO) {
+  // Only once the year itself differs from the real current year -- true for
+  // the vast majority of rows (everything within the current year), so this
+  // keeps the common case as short as it already was. ISO strings' own
+  // leading 4 characters are the year, cheaper and tz-safe compared to
+  // parsing both into Dates just to call getFullYear(). Applies even to
+  // "Tomorrow"/"Yesterday" below -- on Dec 31/Jan 1 those genuinely do fall
+  // in a different year than today, same as any other date would.
+  const showYear = dateISO.slice(0, 4) !== todayISO.slice(0, 4);
   const dateStr = new Date(dateISO + 'T00:00:00').toLocaleDateString(currentLocaleTag(), {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    ...(showYear ? { year: 'numeric' } : {}),
   });
   if (dateISO === todayISO) return `${t('todo.today')}, ${dateStr}`;
   if (dateISO === Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), -1))) {
