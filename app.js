@@ -264,11 +264,24 @@ const I18N = {
     'settings.cancelSubscription': 'Cancel subscription',
     'settings.scheduledDeletionNotice': 'This account will be deleted upon subscription expiration.',
     'settings.cancelScheduledDeletion': 'Cancel scheduled deletion',
+    'settings.password': 'Password',
+    'settings.changePassword': 'Change password…',
     'settings.data': 'Data',
     'settings.downloadData': 'Download my data…',
     'settings.importData': 'Import data…',
     'settings.dangerZone': 'Danger zone',
     'settings.deleteAccount': 'Delete account…',
+
+    'changePassword.title': 'Change password',
+    'changePassword.current': 'Current password',
+    'changePassword.new': 'New password',
+    'changePassword.confirm': 'Confirm new password',
+    'changePassword.submit': 'Change password',
+    'changePassword.tooShort': 'New password must be at least 8 characters.',
+    'changePassword.mismatch': "New passwords don't match.",
+    'changePassword.wrongCurrent': 'Current password is incorrect.',
+    'changePassword.genericError': "Couldn't change your password. Try again in a bit.",
+    'changePassword.success': 'Your password has been changed.',
 
     'deleteAccount.title': 'Delete account',
     'deleteAccount.warning':
@@ -560,11 +573,24 @@ const I18N = {
     'settings.cancelSubscription': 'Otkaži pretplatu',
     'settings.scheduledDeletionNotice': 'Ovaj račun će biti izbrisan po isteku pretplate.',
     'settings.cancelScheduledDeletion': 'Otkaži zakazano brisanje',
+    'settings.password': 'Lozinka',
+    'settings.changePassword': 'Promijeni lozinku…',
     'settings.data': 'Podaci',
     'settings.downloadData': 'Preuzmi moje podatke…',
     'settings.importData': 'Uvezi podatke…',
     'settings.dangerZone': 'Opasna zona',
     'settings.deleteAccount': 'Izbriši račun…',
+
+    'changePassword.title': 'Promjena lozinke',
+    'changePassword.current': 'Trenutna lozinka',
+    'changePassword.new': 'Nova lozinka',
+    'changePassword.confirm': 'Potvrdi novu lozinku',
+    'changePassword.submit': 'Promijeni lozinku',
+    'changePassword.tooShort': 'Nova lozinka mora imati najmanje 8 znakova.',
+    'changePassword.mismatch': 'Nove lozinke se ne podudaraju.',
+    'changePassword.wrongCurrent': 'Trenutna lozinka nije točna.',
+    'changePassword.genericError': 'Nismo uspjeli promijeniti vašu lozinku. Pokušajte ponovno za koji trenutak.',
+    'changePassword.success': 'Vaša lozinka je promijenjena.',
 
     'deleteAccount.title': 'Izbriši račun',
     'deleteAccount.warning':
@@ -5977,6 +6003,68 @@ settingsImportDataFileInput.onchange = async () => {
   renderTodo();
   renderSidePanel();
   refreshTodoManageModal();
+};
+
+// ---------------------------------------------------------------------------
+// Change password -- Settings' "Change password..." opens its own small
+// modal (current/new/confirm, same shape as the register form) rather than
+// inline fields in Settings itself, since this needs its own validation/
+// error state and doesn't save as part of Settings' own "Save" -- see
+// api-spec.yaml's POST /users/me/change-password for why the current
+// password is required at all (a bearer token alone isn't proof enough).
+// ---------------------------------------------------------------------------
+
+const settingsChangePasswordBtn = document.getElementById('settings-change-password-btn');
+const changePasswordOverlay = document.getElementById('change-password-overlay');
+const changePasswordFormEl = document.getElementById('change-password-form');
+const changePasswordMessageEl = document.getElementById('change-password-message');
+const changePasswordCurrentInput = document.getElementById('change-password-current');
+const changePasswordNewInput = document.getElementById('change-password-new');
+const changePasswordConfirmInput = document.getElementById('change-password-confirm');
+
+function openChangePasswordModal() {
+  changePasswordFormEl.reset();
+  clearAuthMessage(changePasswordMessageEl);
+  changePasswordOverlay.classList.remove('hidden');
+}
+function closeChangePasswordModal() {
+  changePasswordOverlay.classList.add('hidden');
+}
+
+settingsChangePasswordBtn.onclick = openChangePasswordModal;
+document.getElementById('change-password-close').onclick = closeChangePasswordModal;
+document.getElementById('change-password-cancel').onclick = closeChangePasswordModal;
+
+changePasswordFormEl.onsubmit = async (e) => {
+  e.preventDefault();
+  clearAuthMessage(changePasswordMessageEl);
+  const currentPassword = changePasswordCurrentInput.value;
+  const newPassword = changePasswordNewInput.value;
+  const confirmPassword = changePasswordConfirmInput.value;
+  if (newPassword.length < 8) {
+    showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.tooShort'));
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.mismatch'));
+    return;
+  }
+  try {
+    // Only `token` comes back (see api-spec.yaml) -- none of the account's
+    // own User fields change, so there's nothing else here to re-apply the
+    // way subscribeCurrentUserToTrial etc. re-apply a returned `user`.
+    const { token } = await changePassword(currentPassword, newPassword);
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } catch (err) {
+    showAuthMessage(
+      changePasswordMessageEl,
+      'error',
+      err.code === 'INVALID_CREDENTIALS' ? t('changePassword.wrongCurrent') : t('changePassword.genericError')
+    );
+    return;
+  }
+  closeChangePasswordModal();
+  alert(t('changePassword.success'));
 };
 
 // ---------------------------------------------------------------------------

@@ -314,6 +314,12 @@
         </div>
       </div>
       <div class="modal-field">
+        <label data-i18n="settings.password">Password</label>
+        <div class="settings-avatar-row">
+          <button id="settings-change-password-btn" type="button" class="menu-btn-small" data-i18n="settings.changePassword">Change password&hellip;</button>
+        </div>
+      </div>
+      <div class="modal-field">
         <label data-i18n="settings.data">Data</label>
         <div class="settings-avatar-row">
           <button id="settings-download-data-btn" type="button" class="menu-btn-small" data-i18n="settings.downloadData">Download my data&hellip;</button>
@@ -329,6 +335,41 @@
         <button id="settings-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
         <button id="settings-save" class="modal-ok" data-i18n="common.save">Save</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Its own modal, on top of Settings, rather than inline fields there --
+       matching #background-overlay below: needs its own validation/error
+       state (wrong current password, mismatch, too short) independent of
+       whatever else is staged in the Settings form, and unlike every other
+       Settings field this doesn't save as part of Settings' own "Save"
+       (see settingsChangePasswordBtn/changePasswordFormEl in app.js). -->
+  <div id="change-password-overlay" class="modal-overlay hidden">
+    <div class="modal change-password-modal">
+      <button id="change-password-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-title" data-i18n="changePassword.title">Change password</div>
+      <div id="change-password-message" class="modal-message hidden"></div>
+      <form id="change-password-form">
+        <div class="modal-field">
+          <label for="change-password-current" data-i18n="changePassword.current">Current password</label>
+          <input id="change-password-current" class="modal-input" type="password" autocomplete="current-password">
+        </div>
+        <div class="modal-field">
+          <label for="change-password-new" data-i18n="changePassword.new">New password</label>
+          <input id="change-password-new" class="modal-input" type="password" autocomplete="new-password">
+        </div>
+        <div class="modal-field">
+          <label for="change-password-confirm" data-i18n="changePassword.confirm">Confirm new password</label>
+          <input id="change-password-confirm" class="modal-input" type="password" autocomplete="new-password">
+        </div>
+        <div class="field-hint" data-i18n="register.passwordHint">At least 8 characters.</div>
+        <div class="modal-actions">
+          <button type="button" id="change-password-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
+          <button type="submit" class="modal-ok" data-i18n="changePassword.submit">Change password</button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -165,6 +165,17 @@ async function cancelScheduledAccountDeletion() {
   return apiFetch('/users/me/schedule-deletion', { method: 'DELETE' });
 }
 
+// POST /users/me/change-password -- requires currentPassword (see
+// api-spec.yaml's own note on why a bearer token alone isn't enough here),
+// so this throws codeError('INVALID_CREDENTIALS') the same way login()
+// does for a wrong password, not just for an expired/invalid session.
+// Returns only { token } -- the account's own User fields don't change, so
+// there's no user to hand back the way the subscription-mutating endpoints
+// above do.
+async function changePassword(currentPassword, newPassword) {
+  return apiFetch('/users/me/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+}
+
 // The visitor id behind whatever token is currently stored, or null if
 // there's none/it's unreadable -- landing.html/checkout.html use this to
 // decide whether a paid-plan click can go straight to checkout or needs a
