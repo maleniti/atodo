@@ -402,6 +402,30 @@ function nextRecurUntilCompletedDueDate(task, completedDateISO) {
   return nextOccurrenceAfter({ ...task, dueDate: completedDateISO, recurUntilCompleted: false }, completedDateISO);
 }
 
+// Snaps a brand-new task.recurUntilCompleted task's raw, user-picked
+// dueDate forward to the first date `frequency` actually lands on (task
+// itself, unchanged, if dueDate already is one) -- e.g. "1st Monday of the
+// month" with a due date that isn't itself a Monday. A non-recurUntilCompleted
+// task never needs this: occursOn recomputes each month/week's own pattern
+// date fresh for every candidate (see monthlyRecurrenceAnchorMonth), so an
+// "off" dueDate self-corrects at display time regardless. A
+// recurUntilCompleted task can't rely on that -- once saved, occursOn just
+// checks chain membership against dueDate literally (see its own comment) --
+// so this has to run once, up front, instead. recurUntilCompleted: false on
+// the pseudo-task for the same reason as nextRecurUntilCompletedDueDate:
+// occursOn would otherwise just check membership against dueDate itself,
+// never falling through to the real frequency math this needs. Call this
+// whenever a task is newly becoming recurUntilCompleted (fresh creation, or
+// an edit that turns the flag on) -- not on every edit of an
+// already-recurUntilCompleted task, whose dueDate by then represents
+// wherever its own reschedule chain has actually gotten to, not the
+// original pattern anymore.
+function firstRecurUntilCompletedDueDate(task) {
+  if (task.frequency.type === 'once') return task.dueDate;
+  const dayBefore = dateToISO(addDays(new Date(task.dueDate + 'T00:00:00'), -1));
+  return nextOccurrenceAfter({ ...task, recurUntilCompleted: false }, dayBefore);
+}
+
 const api = {
   dateToISO,
   addDays,
@@ -416,6 +440,7 @@ const api = {
   hasOccurrenceEnded,
   advanceRecurUntilCompletedChain,
   nextRecurUntilCompletedDueDate,
+  firstRecurUntilCompletedDueDate,
 };
 
 if (typeof module !== 'undefined' && module.exports) {

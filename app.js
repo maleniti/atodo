@@ -2731,10 +2731,25 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       endDate,
     });
   } else if (existingTask) {
+    // Only when this edit is what actually turns recurUntilCompleted on
+    // (it was off before, or this is the first time it's ever been set) --
+    // see firstRecurUntilCompletedDueDate's own comment for why an
+    // already-recurUntilCompleted task must NOT get this: its dueDate by
+    // then represents wherever its own reschedule chain has gotten to, not
+    // the original pattern, so re-snapping it here would silently discard
+    // that progress.
+    const startingRecurUntilCompleted = recurUntilCompleted && !existingTask.recurUntilCompleted;
     existingTask.name = result.name;
     existingTask.description = result.description;
     existingTask.details = result.details;
-    existingTask.dueDate = result.dueDate;
+    // || result.dueDate: the pattern's first occurrence can, in principle,
+    // fall after endDate itself (e.g. "1st Monday of the month" with an
+    // endDate only a few days out) -- same null-guard as
+    // nextRecurUntilCompletedDueDate's own call site, rather than saving a
+    // broken dueDate: null task.
+    existingTask.dueDate = startingRecurUntilCompleted
+      ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: result.dueDate, frequency, endDate }) || result.dueDate
+      : result.dueDate;
     existingTask.dueTime = dueTime;
     existingTask.allDay = allDay;
     existingTask.appointment = appointment;
@@ -2750,6 +2765,21 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
   } else {
     const isRecurring = frequency.type !== 'once';
     if (!(await ensureCanCreateTaskOfKind(isRecurring))) return;
+    // A brand-new recurUntilCompleted task's raw, user-picked due date isn't
+    // necessarily a date `frequency` itself lands on (e.g. "1st Monday of
+    // the month" with some other weekday picked in the date field) -- snap
+    // it forward to the first date the pattern actually produces, same as
+    // firstRecurUntilCompletedDueDate's own comment explains. A plain
+    // (non-recurUntilCompleted) task doesn't need this: occursOn recomputes
+    // each candidate date's own pattern date fresh, so an "off" dueDate
+    // self-corrects at display time regardless -- only recurUntilCompleted's
+    // literal chain-membership check (see occursOn) actually needs dueDate
+    // itself to already be correct. || result.dueDate: same null-guard as
+    // nextRecurUntilCompletedDueDate's own call site, in case the pattern's
+    // first occurrence would actually fall after endDate itself.
+    const dueDate = recurUntilCompleted
+      ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: result.dueDate, frequency, endDate }) || result.dueDate
+      : result.dueDate;
     const newTask = {
       id: uid(),
       taskId: uid(),
@@ -2757,7 +2787,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       name: result.name,
       description: result.description,
       details: result.details,
-      dueDate: result.dueDate,
+      dueDate,
       dueTime,
       allDay,
       appointment,
@@ -2881,6 +2911,22 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       });
     }
   } else if (scope === 'following') {
+    // This fragment starts a brand-new occurrence chain from here on (same
+    // as a freshly-created task, not an incremental edit of one already in
+    // progress) -- if it's (becoming) recurUntilCompleted, its dueDate needs
+    // the same snap-to-the-pattern's-actual-first-occurrence treatment a new
+    // task gets (see the no-existingTask branch above and
+    // firstRecurUntilCompletedDueDate's own comment), since newOccurrenceDate
+    // is just whatever the form's due-date field held and isn't guaranteed
+    // to itself be a date `edited.frequency` lands on -- most obviously when
+    // this same edit also changes the frequency to something the split
+    // point doesn't match. Applied here (once) rather than at every call
+    // site so the completions/markedFailed carry-over below stays keyed to
+    // whatever date the fragment actually ends up due on.
+    const fragmentDueDate = edited.recurUntilCompleted
+      ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: newOccurrenceDate, frequency: edited.frequency, endDate: edited.endDate }) ||
+        newOccurrenceDate
+      : newOccurrenceDate;
     const editedFragment = {
       id: uid(),
       taskId: originalTaskId,
@@ -2889,7 +2935,7 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       name: edited.name,
       description: edited.description,
       details: edited.details,
-      dueDate: newOccurrenceDate,
+      dueDate: fragmentDueDate,
       dueTime: edited.dueTime,
       allDay: edited.allDay,
       appointment: edited.appointment,
@@ -2900,12 +2946,12 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
       endDate: edited.endDate,
       completions: {
         ...originalCompletions,
-        ...(wasOriginalOccurrenceDone ? { [newOccurrenceDate]: true } : {}),
+        ...(wasOriginalOccurrenceDone ? { [fragmentDueDate]: true } : {}),
       },
       dismissed: { ...originalDismissed },
       markedFailed: {
         ...originalMarkedFailed,
-        ...(wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {}),
+        ...(wasOriginalOccurrenceFailed ? { [fragmentDueDate]: true } : {}),
       },
       createdAt: originalTask.createdAt,
     };

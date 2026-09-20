@@ -457,4 +457,41 @@ assert.strictEqual(
   'still bounded by endDate -- no next occurrence once past it'
 );
 
+// -- recurUntilCompleted: firstRecurUntilCompletedDueDate -------------------
+assert.strictEqual(
+  R.firstRecurUntilCompletedDueDate({ dueDate: '2026-09-20', frequency: { type: 'once' } }),
+  '2026-09-20',
+  "a 'once' task has no pattern to snap to -- dueDate is the occurrence, whatever it is"
+);
+// 2026-09-20 is a Sunday, not itself a Monday -- and September's own 1st
+// Monday (2026-09-07) is already behind it, so the snap has to land in
+// October, not just the nearest Monday.
+assert.strictEqual(
+  R.firstRecurUntilCompletedDueDate({
+    dueDate: '2026-09-20',
+    frequency: { type: 'months', interval: 1, dayMode: 'weekday', weekday: 1, ordinal: 1 },
+  }),
+  '2026-10-05',
+  '1st-Monday-of-month: snaps past a due date entered after that month\'s own occurrence, not just to the nearest Monday'
+);
+// A due date that already IS a valid occurrence stays put.
+assert.strictEqual(
+  R.firstRecurUntilCompletedDueDate({
+    dueDate: '2026-10-05',
+    frequency: { type: 'months', interval: 1, dayMode: 'weekday', weekday: 1, ordinal: 1 },
+  }),
+  '2026-10-05',
+  'already a valid occurrence -- left unchanged, not bumped to the next one'
+);
+// Weekly Mon/Wed/Fri from a Sunday -- snaps to the very next selected
+// weekday, not the following week.
+assert.strictEqual(
+  R.firstRecurUntilCompletedDueDate({
+    dueDate: '2026-09-20',
+    frequency: { type: 'weeks', interval: 1, weekdays: [1, 3, 5] },
+  }),
+  '2026-09-21',
+  'weekly with specific weekdays: snaps to the next selected weekday, still within the same week'
+);
+
 console.log('recurrence.test.js: all assertions passed');
