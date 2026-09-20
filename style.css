@@ -1303,7 +1303,7 @@ main {
    the row's own already-composited look as one further step rather than
    needing its own copy of all 24 combinations. .todo-item's own
    transition: all 0.2s (untouched) covers this too. */
-.todo-item:hover { filter: brightness(1.08); }
+.todo-item:hover { filter: brightness(1.2); }
 
 /* A positioned (absolute) element without its own z-index still paints
    above ordinary in-flow content regardless of DOM order -- these are the
