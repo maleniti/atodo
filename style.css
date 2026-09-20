@@ -1008,49 +1008,104 @@ main {
 }
 .todo-day-header:first-child { padding-top: 2px; }
 
-/* Exactly one header is ever "pinned" at a time -- updatePinnedTodoHeader
-   (app.js) adds/removes this class on scroll based on each day's own
-   sentinel div, rather than making every header sticky (which is what CSS's
-   own stacking of multiple sticky siblings does automatically, but leaves
-   the previous day's header rendered right underneath the new one). Needs
-   an opaque background of its own for a reason that has nothing to do with
-   the page's own background: a sticky element's later siblings lay out from
-   its *natural* (unstuck) flow position, not its stuck one, so right as a
-   header starts sticking, its own day's first card still briefly renders
-   into the same box the header is now pinned over -- confirmed with
-   getBoundingClientRect. This isn't a one-frame glitch either: for as long
-   as this header stays pinned, its own day's remaining cards keep scrolling
-   underneath it, same as any sticky section header. A light tint (~0.9
-   alpha) with only a slight blur still left checkbox/text edges legible --
-   what actually hides them is a strong blur, not the alpha, so this can
-   stay almost fully see-through (unlike .todo-item/.side-panel's own glass,
-   which leans on a dark, near-opaque tint plus a much lighter blur since
-   they don't need to mask anything moving underneath them) as long as the
-   blur radius is large enough to destroy the scrolled-under content's fine
-   detail rather than just soften it. Deliberately plain blur()/saturate(),
-   no url(#glass-distort) SVG reference like .todo-item/.side-panel use --
-   Firefox doesn't support an SVG filter as a backdrop-filter value at all,
-   dropping the whole declaration (see index.html), and unlike those other
-   panels this header has no opaque fallback tint to fall back on, so it
-   needs the blur to actually render in every browser, not just Chrome.
-   Border/border-radius/inset shadow match the same beveled-glass treatment
-   as .todo-item/.side-panel, just scaled down (this is a thin bar, not a
-   card or panel). */
-.todo-day-header.pinned {
+/* The FIRST day header only (see its own 'pinned-anchor' class in app.js) is
+   permanently sticky and owns the only copy of the masking border/box-
+   shadow in this whole scheme -- unlike the older approach (every header
+   carrying its own copy, toggled on/off as it took its turn being "current"),
+   this one, once it starts showing at all, never appears or disappears again
+   while scrolled away from the very top, so there's nothing here left to
+   flicker on a day-to-day handoff regardless of scroll direction. The inset
+   shadow needs to actually mask what's underneath for a reason that has
+   nothing to do with the page's own background: a sticky element's later
+   siblings lay out from its *natural* (unstuck) flow position, not its stuck
+   one, so right as this element starts sticking, the first day's own first
+   card still briefly renders into the same box it's now pinned over --
+   confirmed with getBoundingClientRect. z-index:1, not 0 -- .todo-item is
+   itself `position: relative` (see its own comment) with no z-index of its
+   own (auto), and an EXPLICIT z-index:0 doesn't actually outrank z-index:
+   auto in the same stacking context, only DOM order does (confirmed
+   empirically) -- so z-index:0 here left this header's own day's items
+   painting on top of it once scrolled, not under it. z-index:1 is lower
+   than .pinned below (z-index:2) so whichever *other* header is currently
+   "the" pinned one (see updatePinnedTodoHeader in app.js) still paints its
+   own plain-text content on top of this one's chrome, not the other way
+   around, without depending on a DOM-order tiebreak to get that right.
+
+   Transparent border-top/box-shadow placeholders (matching .scrolled's own
+   shape) plus a transition, exactly like the day-to-day handoff case this
+   header is deliberately exempt from above -- safe to animate here since
+   there's only ever this one element involved (no second header's position
+   snapping out from under it to worry about), so scrolling away from the
+   very top fades this in, and scrolling back to exactly the top fades it
+   back out. text-shadow doesn't need a placeholder since .todo-day-header's
+   own base text-shadow (above) already gives it a real value to transition
+   from/to. */
+.todo-day-header.pinned-anchor {
   position: sticky;
   top: 0;
   z-index: 1;
   background: rgba(0, 0, 0, 0);
-  border-top: 1px solid black;
+  border-top: 1px solid transparent;
+  box-shadow: inset 0 15px 15px 3px transparent;
+  transition: border-top-color 0.5s ease, box-shadow 0.5s ease, text-shadow 0.5s ease;
+}
+/* Added once scrollTop leaves exactly 0 (see updatePinnedTodoHeader) --
+   note this is a DIFFERENT condition than .todo-day-header-anchor-content's
+   own 'faded', which only cares whether some other day has become current;
+   this one can be true even while day 0's own label is still showing. */
+.todo-day-header.pinned-anchor.scrolled {
+  border-top-color: black;
   box-shadow: inset 0 15px 15px 3px black;
   text-shadow: 1px -2px 3px black, 1px 2px 3px black;
 }
+/* The anchor's own label/add-button, wrapped separately (see app.js) so
+   THIS can fade independently of the header's own border/box-shadow above,
+   which must never change. Hidden (not just dimmed) once some other day
+   becomes current, since its text would otherwise sit right on top of
+   whichever other header's text is now occupying the same pinned slot;
+   pointer-events: none so its own "+" button can't be clicked through once
+   invisible. */
+.todo-day-header-anchor-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  transition: opacity 0.5s ease;
+}
+.todo-day-header-anchor-content.faded {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Every OTHER day header just toggles its own position between sticky and
+   static (see updatePinnedTodoHeader) -- no border/box-shadow/background of
+   its own at all (unlike .pinned-anchor above), so there's no masking chrome
+   to flicker when this swaps between headers or reverses direction; it just
+   ends up rendering its own plain text over .pinned-anchor's constant
+   backdrop, wherever that header's natural scroll position happens to
+   currently coincide with it. text-shadow still needs the same intensified
+   treatment as the anchor's own, purely so this text stays legible against
+   that same shared backdrop underneath it. z-index:2, one above the
+   anchor's own z-index:1, both comfortably above .todo-item's z-index:auto
+   -- see .todo-day-header.pinned-anchor's own comment for why an explicit
+   z-index:0/1 gap (not a tie relying on DOM order) is what actually
+   guarantees this header paints over the anchor rather than under it. */
+.todo-day-header.pinned {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-shadow: 1px -2px 3px black, 1px 2px 3px black;
+}
+
 /* Dims only the label text, not the header element itself -- opacity on the
    whole element would also fade its background, so a dimmed ("not today")
    header handing off to the next one mid-scroll would look like a lighter,
    less-opaque box than a same-day header's own hand-off, instead of every
-   hand-off looking identical regardless of which two days are involved. */
-.todo-day-header.not-today > span { opacity: 0.6; }
+   hand-off looking identical regardless of which two days are involved.
+   Descendant (not direct-child) selector since the first day header's own
+   label sits one level deeper, inside .todo-day-header-anchor-content. */
+.todo-day-header.not-today span { opacity: 0.6; }
 
 .todo-day-add-btn {
   flex: none;

@@ -3568,30 +3568,39 @@ function seriesRowLabelInfo(seriesId) {
   return info;
 }
 
-// Keeps exactly one day header "pinned" (position: sticky, see .todo-day-
-// header.pinned) at a time: the last one (in display order) whose day has
-// already started scrolling past the top of #todo-viewport. Every other
-// header is left in plain flow, so a day that's fully scrolled past just
-// scrolls away with the rest of its own content instead of lingering
-// underneath the next one -- there's only ever one sticky element, not a
-// stack of them, so there's nothing for that next header to visually cover.
+// Index 0's header is permanently sticky (see its own 'pinned-anchor' class,
+// applied once at creation) and owns the only copy of the masking border/
+// box-shadow; this only tracks which day is CURRENTLY "the" pinned one: -1/0
+// both mean day 0 itself (nothing else needs to render over the anchor's
+// backdrop, so it just shows its own content), and >=1 means some later day
+// has scrolled to the top and should have ITS OWN plain text rendered over
+// that same, otherwise-untouched backdrop instead (see .todo-day-header.
+// pinned in style.css -- no border/box-shadow of its own, so there's nothing
+// there to flicker no matter which direction pinnedIndex moves).
 function updatePinnedTodoHeader() {
   if (todoDayHeaderRefs.length === 0) return;
   const viewportTop = todoViewportEl.getBoundingClientRect().top;
-  // -1 (nothing pinned), not 0, until the very first sentinel actually
-  // crosses the top -- at rest, scrolled all the way to the top, the first
-  // header already sits exactly where it'd be if it were sticky, so there's
-  // nothing for .pinned's opaque background (see .todo-day-header.pinned in
-  // style.css) to usefully mask yet; forcing it pinned from the start just
-  // showed a solid bar over the very first date for no reason.
   let pinnedIndex = -1;
   for (let i = 0; i < todoDayHeaderRefs.length; i++) {
     // Strictly less than, not <= -- the very first sentinel sits exactly at
-    // the viewport's own top edge before any scrolling at all (0 == 0), so
-    // <= pinned it from the very first render with nothing to mask yet.
+    // the viewport's own top edge before any scrolling at all (0 == 0), and
+    // day 0 is already covered by the anchor itself in that case, not by a
+    // day being pinned here.
     if (todoDayHeaderRefs[i].sentinel.getBoundingClientRect().top < viewportTop) pinnedIndex = i;
   }
-  todoDayHeaderRefs.forEach(({ header }, i) => header.classList.toggle('pinned', i === pinnedIndex));
+  // Index 0 is handled separately below -- it's never toggled here.
+  for (let i = 1; i < todoDayHeaderRefs.length; i++) {
+    todoDayHeaderRefs[i].header.classList.toggle('pinned', i === pinnedIndex);
+  }
+  // Two independent conditions on index 0 itself (see .todo-day-header.
+  // pinned-anchor/.todo-day-header-anchor-content in style.css): its own
+  // border/box-shadow only show once scrolled away from the very top at all
+  // (pinnedIndex > -1), while its own label/button additionally hide once
+  // some OTHER day has become current (pinnedIndex > 0) -- so there's a
+  // range (pinnedIndex === 0) where the chrome is showing but day 0's own
+  // content still is too.
+  todoDayHeaderRefs[0].header.classList.toggle('scrolled', pinnedIndex > -1);
+  todoDayHeaderRefs[0].anchorContent.classList.toggle('faded', pinnedIndex > 0);
 }
 
 const PENDING_VIEW_ICON =
@@ -4221,21 +4230,38 @@ function renderTodo() {
     todoListEl.appendChild(sentinel);
 
     const header = document.createElement('div');
-    header.className = 'todo-day-header' + (isToday ? '' : ' not-today');
+    // 'pinned-anchor' only on the very first day header -- see its own
+    // comment in style.css for why it's the only one that's permanently
+    // sticky/styled, with every other header only ever toggling bare
+    // position via 'pinned' (see updatePinnedTodoHeader).
+    const isFirstDayHeader = todoDayHeaderRefs.length === 0;
+    header.className = 'todo-day-header' + (isToday ? '' : ' not-today') + (isFirstDayHeader ? ' pinned-anchor' : '');
+
+    // The anchor's label/add-button live in their own wrapper so its
+    // opacity can fade independently of the header's own (constant, never
+    // fading) border/box-shadow -- see .todo-day-header-anchor-content in
+    // style.css. Every other header has no such wrapper; its bare text
+    // fades nothing, it's just shown or not via 'pinned' above.
+    let headerContentEl = header;
+    if (isFirstDayHeader) {
+      headerContentEl = document.createElement('div');
+      headerContentEl.className = 'todo-day-header-anchor-content';
+      header.appendChild(headerContentEl);
+    }
 
     const headerLabel = document.createElement('span');
     headerLabel.textContent = describeDayLabel(dateISO, todayISO);
-    header.appendChild(headerLabel);
+    headerContentEl.appendChild(headerLabel);
 
     const addBtn = document.createElement('button');
     addBtn.className = 'todo-day-add-btn';
     addBtn.textContent = '+';
     addBtn.title = t('todo.addTaskDue', { date: dateISO });
     addBtn.onclick = () => openTaskForm(null, undefined, dateISO);
-    header.appendChild(addBtn);
+    headerContentEl.appendChild(addBtn);
 
     todoListEl.appendChild(header);
-    todoDayHeaderRefs.push({ sentinel, header });
+    todoDayHeaderRefs.push({ sentinel, header, anchorContent: isFirstDayHeader ? headerContentEl : null });
 
     // Within a day: all-day tasks first (they have no due time to sort by),
     // then earliest due time first, ties broken alphabetically by name
