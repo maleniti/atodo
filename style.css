@@ -72,18 +72,23 @@ main {
   flex-direction: column;
   padding: 10px 12px;
   border-radius: 12px;
-  /* Was fully transparent (no background at all) -- fine against the app's
-     old flat dark page background, but showed a photo background (see
-     applyBackground in app.js) straight through with no separation from the
-     to-do list beside it. Same dark tint as .todo-item, and just as opaque:
-     a lighter version left the mostly-gray secondary/meta text in here
-     (timestamps, empty states, placeholders) looking washed out and messy
-     over a busy photo. */
-  background: rgba(6, 7, 8, 0.82);
-  backdrop-filter: url(#glass-distort) blur(2px) saturate(140%);
-  -webkit-backdrop-filter: url(#glass-distort) blur(2px) saturate(140%);
+  /* Same transparent-background-plus-backdrop-filter technique .todo-item
+     settled on (see its own comment) after testing showed it read better
+     than an actual opaque background color across both plain and busy
+     photo backgrounds (see applyBackground in app.js) -- just tuned darker
+     (lower brightness%) since this panel doesn't need to read as a small
+     card among siblings the way each task row does, and blurred far more
+     (this panel is wide enough that a low blur radius left scrolled-under
+     text behind it still partly legible, unlike a single narrow row).
+     No url(#glass-distort) here either, for the same reason -- see its own
+     comment in index.html. */
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(20px) saturate(140%) brightness(55%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%) brightness(55%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  /* Same text-shadow as .todo-item-text -- see its own comment. */
+  text-shadow: 2px -2px 3px black;
 }
 
 /* Today's agenda -- shown instead of the plain "click a task" hint this used
@@ -131,6 +136,7 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: none;
 }
 
 .agenda-timeline-wrap {
@@ -218,7 +224,8 @@ main {
   border-radius: 6px;
   padding: 2px 6px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  /* Override .side-panel's text-shadow property. */
+  text-shadow: none;
 }
 .agenda-block-name {
   font-size: 11px;
@@ -995,6 +1002,14 @@ main {
    6px sliver anyway). */
 #todo-viewport:hover::-webkit-scrollbar { width: 10px; }
 
+/* Same small glass-card look as .todo-item (see its own comment for the
+   background/backdrop-filter/box-shadow reasoning) -- just shaped as a long,
+   narrow bar (100% wide, tall enough for one line of text) instead of a
+   whole row. No masking/fade tricks here: this panel is opaque-looking
+   enough on its own (same as every .todo-item already is) that whichever
+   one header ends up sticky (see .pinned below) simply covers whatever's
+   behind it just by being drawn there -- nothing here needs to appear/
+   disappear or transition in step with that. */
 .todo-day-header {
   display: flex;
   align-items: center;
@@ -1002,110 +1017,51 @@ main {
   font-size: 15px;
   font-weight: 700;
   color: #fff;
-  padding: 10px 6px 4px;
-  /* See .app-header h1's own text-shadow -- same reasoning. */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.5);
-}
-.todo-day-header:first-child { padding-top: 2px; }
-
-/* The FIRST day header only (see its own 'pinned-anchor' class in app.js) is
-   permanently sticky and owns the only copy of the masking border/box-
-   shadow in this whole scheme -- unlike the older approach (every header
-   carrying its own copy, toggled on/off as it took its turn being "current"),
-   this one, once it starts showing at all, never appears or disappears again
-   while scrolled away from the very top, so there's nothing here left to
-   flicker on a day-to-day handoff regardless of scroll direction. The inset
-   shadow needs to actually mask what's underneath for a reason that has
-   nothing to do with the page's own background: a sticky element's later
-   siblings lay out from its *natural* (unstuck) flow position, not its stuck
-   one, so right as this element starts sticking, the first day's own first
-   card still briefly renders into the same box it's now pinned over --
-   confirmed with getBoundingClientRect. z-index:1, not 0 -- .todo-item is
-   itself `position: relative` (see its own comment) with no z-index of its
-   own (auto), and an EXPLICIT z-index:0 doesn't actually outrank z-index:
-   auto in the same stacking context, only DOM order does (confirmed
-   empirically) -- so z-index:0 here left this header's own day's items
-   painting on top of it once scrolled, not under it. z-index:1 is lower
-   than .pinned below (z-index:2) so whichever *other* header is currently
-   "the" pinned one (see updatePinnedTodoHeader in app.js) still paints its
-   own plain-text content on top of this one's chrome, not the other way
-   around, without depending on a DOM-order tiebreak to get that right.
-
-   Transparent border-top/box-shadow placeholders (matching .scrolled's own
-   shape) plus a transition, exactly like the day-to-day handoff case this
-   header is deliberately exempt from above -- safe to animate here since
-   there's only ever this one element involved (no second header's position
-   snapping out from under it to worry about), so scrolling away from the
-   very top fades this in, and scrolling back to exactly the top fades it
-   back out. text-shadow doesn't need a placeholder since .todo-day-header's
-   own base text-shadow (above) already gives it a real value to transition
-   from/to. */
-.todo-day-header.pinned-anchor {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  overflow: hidden; /* clips the glass background to this bar's own rounded corners */
   background: rgba(0, 0, 0, 0);
-  border-top: 1px solid transparent;
-  box-shadow: inset 0 15px 15px 3px transparent;
-  transition: border-top-color 0.5s ease, box-shadow 0.5s ease, text-shadow 0.5s ease;
-}
-/* Added once scrollTop leaves exactly 0 (see updatePinnedTodoHeader) --
-   note this is a DIFFERENT condition than .todo-day-header-anchor-content's
-   own 'faded', which only cares whether some other day has become current;
-   this one can be true even while day 0's own label is still showing. */
-.todo-day-header.pinned-anchor.scrolled {
-  border-top-color: black;
-  box-shadow: inset 0 15px 15px 3px black;
-  text-shadow: 1px -2px 3px black, 1px 2px 3px black;
-}
-/* The anchor's own label/add-button, wrapped separately (see app.js) so
-   THIS can fade independently of the header's own border/box-shadow above,
-   which must never change. Hidden (not just dimmed) once some other day
-   becomes current, since its text would otherwise sit right on top of
-   whichever other header's text is now occupying the same pinned slot;
-   pointer-events: none so its own "+" button can't be clicked through once
-   invisible. */
-.todo-day-header-anchor-content {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-  transition: opacity 0.5s ease;
-}
-.todo-day-header-anchor-content.faded {
-  opacity: 0;
-  pointer-events: none;
+  backdrop-filter: blur(4px) saturate(150%) brightness(120%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(120%);
+  box-shadow:
+    inset 0 0px 0 rgba(255, 255, 255, 0.14),
+    inset 2px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+    inset -2px 0 0 rgba(0, 0, 0, 0.2);
+  /* Same text-shadow as .todo-item-text -- see its own comment. */
+  text-shadow: 2px -2px 3px black;
 }
 
-/* Every OTHER day header just toggles its own position between sticky and
-   static (see updatePinnedTodoHeader) -- no border/box-shadow/background of
-   its own at all (unlike .pinned-anchor above), so there's no masking chrome
-   to flicker when this swaps between headers or reverses direction; it just
-   ends up rendering its own plain text over .pinned-anchor's constant
-   backdrop, wherever that header's natural scroll position happens to
-   currently coincide with it. text-shadow still needs the same intensified
-   treatment as the anchor's own, purely so this text stays legible against
-   that same shared backdrop underneath it. z-index:2, one above the
-   anchor's own z-index:1, both comfortably above .todo-item's z-index:auto
-   -- see .todo-day-header.pinned-anchor's own comment for why an explicit
-   z-index:0/1 gap (not a tie relying on DOM order) is what actually
-   guarantees this header paints over the anchor rather than under it. */
+/* Whichever single day header is currently "current" (see
+   updatePinnedTodoHeader) toggles this -- including the very first one,
+   which needs no special-casing here: at rest (scrolled all the way to the
+   very top) it's simply not .pinned yet, but that's indistinguishable from
+   being stuck anyway, since its natural (unstuck) flow position is already
+   exactly where sticky would hold it. z-index:1 is enough on its own (not
+   z-index:0) to comfortably beat .todo-item's z-index:auto regardless of
+   DOM order -- see the notes on that in this file's git history if it comes
+   up again -- and no *second* header is ever simultaneously sticky here to
+   also need outranking, unlike the old permanently-sticky-anchor design
+   this replaced. */
 .todo-day-header.pinned {
   position: sticky;
   top: 0;
-  z-index: 2;
-  text-shadow: 1px -2px 3px black, 1px 2px 3px black;
+  z-index: 1;
 }
 
 /* Dims only the label text, not the header element itself -- opacity on the
    whole element would also fade its background, so a dimmed ("not today")
    header handing off to the next one mid-scroll would look like a lighter,
    less-opaque box than a same-day header's own hand-off, instead of every
-   hand-off looking identical regardless of which two days are involved.
-   Descendant (not direct-child) selector since the first day header's own
-   label sits one level deeper, inside .todo-day-header-anchor-content. */
-.todo-day-header.not-today span { opacity: 0.6; }
+   hand-off looking identical regardless of which two days are involved. */
+.todo-day-header.not-today > span { opacity: 0.6; }
+
+.todo-day-header.not-today {
+	background-color: transparent;
+	backdrop-filter: blur(4px) saturate(50%) brightness(75%);
+	-webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%);
+}
 
 .todo-day-add-btn {
   flex: none;
@@ -1145,6 +1101,13 @@ main {
   padding-left: 12px;
 }
 
+/* Todo Items can be plain, .not-today, .completed, .focused, .selected, and/or .dismissed.
+   Plain is a simple .todo-item.
+   .not-today has less saturation and is darker.
+   .completed item adds a bit of sepia effect.
+   .focused item has a bluish background.
+   .selected item is very bright.
+   .dismissed item uses hatching. Only .not-today tasks can be dismissed. */
 .todo-item {
   display: flex;
   align-items: flex-start;
@@ -1167,8 +1130,8 @@ main {
      border instead). This near-black tone is today's own -- see
      .todo-item.not-today below for every other day's lighter one. */
   background: rgba(0, 0, 0, 0);
-  backdrop-filter: blur(4px) saturate(150%) brightness(80%);
-  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(80%);
+  backdrop-filter: blur(4px) saturate(150%) brightness(120%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(120%);
   border: none;
   /* inset only -- #todo-viewport sets overflow-y: auto, which per the CSS
      overflow spec forces its computed overflow-x to auto too (never stays
@@ -1180,57 +1143,167 @@ main {
     inset 2px 0 0 rgba(255, 255, 255, 0.08),
     inset 0 -2px 0 rgba(0, 0, 0, 0.3),
     inset -2px 0 0 rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease-in-out;
 }
-/* A lighter gray than today's near-black tone (not just a lower-opacity
-   version of the same color, which used to just look like a faded/washed-out
-   version of the same row rather than a deliberately distinct "other day"
-   look) so today's own tasks still stand out from the rest of the list at a
-   glance, without going back to the low-opacity look that was hard to read
-   over a busy background photo (see applyBackground in app.js). */
-.todo-item.not-today {
- background: rgba(0, 0, 0, 0);
- backdrop-filter: blur(4px) saturate(50%) brightness(75%);
- -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%);
-}
-/* A today occurrence that's done needs its own tone too -- it used to just
-   fall back to .not-today's lighter gray (buildTodoItemRow, app.js), but
-   that gray is meant to tell other days' occurrences apart from today's, not
-   to tell done from pending, so a completed today task ended up looking like
-   it belonged to some other day. :not(.not-today) keeps this scoped to
-   today's own completed rows -- a completed occurrence from another day
-   still gets the plain .not-today tone above, unchanged. */
-.todo-item.completed:not(.not-today) { background: rgba(10, 11, 12, 0.92); }
-.todo-item.active { background: rgba(50, 80, 130, 0.75); }
-/* Hover-only -- a permanent border on every today task (as opposed to
-   .not-today's own background tone doing that job) made all of them look
-   selected/active all the time. */
-.todo-item:hover { border-color: #8ab4f8; }
+/* Each of the 24 rules below is one full state combination (see the comment
+   above .todo-item for what each class contributes) rather than composing
+   several separate class rules the way most of this file does, because
+   backdrop-filter/background-image aren't additive across rules -- a later
+   rule's backdrop-filter REPLACES an earlier one's wholesale (there's no way
+   to "add a bit of sepia" on top of whatever blur/saturate/brightness
+   another rule already set), and background-image is reset by any later
+   background-color declared via the `background` shorthand. Restating the
+   full combination in one place per state sidesteps both problems, and
+   keeps every state that shares a value (e.g. every .focused state's own
+   background-color) trivially greppable/consistent.
 
-/* The "pending/overdue" and "all tasks" views show a dismissed occurrence
-   alongside ones that aren't (see computeTodoDisplayItems/
-   computeAllTasksItems) -- this crosshatch is the only visual cue telling
-   them apart. background-image only (not the `background` shorthand), and
-   placed after .active/.not-today above, so it always layers on top of
-   whatever background-color those set instead of being reset by them. */
-.todo-item.dismissed {
+   Every rule below lists backdrop-filter as blur() saturate() brightness()
+   sepia(), in that order, even when a given function is a no-op (0%/100%)
+   for that state -- .todo-item's own transition: all 0.2s (untouched, see
+   its own rule) can only animate smoothly between two filter lists shaped
+   the same way; changing which functions are present, or their order, mid-
+   transition makes the browser snap instead of interpolate. background-
+   image (the .dismissed hatching) is the one exception that can't be
+   smoothed this way regardless -- browsers don't interpolate between two
+   different background-image values at all, only a hard cut, so toggling
+   .dismissed always snaps even though every filter/color change around it
+   still eases. blur drops as a state gets more "special" (selected lowest,
+   then completed, then plain) so the photo/backdrop shows through more
+   crisply the more a row calls attention to itself; saturate/brightness
+   both step up further under .selected for the "very bright" look the
+   comment above asks for; sepia is the only thing .completed changes, so it
+   reads as "a bit of sepia" layered on whatever else is already going on
+   rather than overriding it. */
+.todo-item:not(.not-today):not(.completed):not(.focused):not(.selected) {
+  backdrop-filter: blur(4px) saturate(150%) brightness(120%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(120%) sepia(0%);
+}
+.todo-item:not(.not-today):not(.completed):not(.focused).selected {
+  backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(0%);
+}
+.todo-item:not(.not-today):not(.completed).focused:not(.selected) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(4px) saturate(150%) brightness(120%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(120%) sepia(0%);
+}
+.todo-item:not(.not-today):not(.completed).focused.selected {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(0%);
+}
+.todo-item:not(.not-today).completed:not(.focused):not(.selected) {
+  backdrop-filter: blur(2px) saturate(150%) brightness(120%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(120%) sepia(45%);
+}
+.todo-item:not(.not-today).completed:not(.focused).selected {
+  backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(45%);
+}
+.todo-item:not(.not-today).completed.focused:not(.selected) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(2px) saturate(150%) brightness(120%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(120%) sepia(45%);
+}
+.todo-item:not(.not-today).completed.focused.selected {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(160%) sepia(45%);
+}
+.todo-item.not-today:not(.completed):not(.focused):not(.selected):not(.dismissed) {
+  backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
+}
+.todo-item.not-today:not(.completed):not(.focused).selected:not(.dismissed) {
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
+}
+.todo-item.not-today:not(.completed).focused:not(.selected):not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
+}
+.todo-item.not-today:not(.completed).focused.selected:not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
+}
+.todo-item.not-today.completed:not(.focused):not(.selected):not(.dismissed) {
+  backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+}
+.todo-item.not-today.completed:not(.focused).selected:not(.dismissed) {
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+}
+.todo-item.not-today.completed.focused:not(.selected):not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+}
+.todo-item.not-today.completed.focused.selected:not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+}
+.todo-item.not-today:not(.completed):not(.focused):not(.selected).dismissed {
   background-image:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 8px),
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 8px);
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
 }
-
-/* Whichever task's notes/history are currently showing in the side panel
-   (see selectTaskForSidePanel) gets a thin accent ring -- box-shadow (not
-   border/outline) so it still follows the row's own rounded corners, and
-   restates .todo-item's own box-shadow list alongside it since box-shadow
-   doesn't compose across separate rules the way background-image does. */
-.todo-item.previewed {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 1px 0 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
-    inset -1px 0 0 rgba(0, 0, 0, 0.3),
-    inset 0 0 0 2px #fdd663;
+.todo-item.not-today:not(.completed):not(.focused).selected.dismissed {
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
 }
+.todo-item.not-today:not(.completed).focused:not(.selected).dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
+}
+.todo-item.not-today:not(.completed).focused.selected.dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
+}
+.todo-item.not-today.completed:not(.focused):not(.selected).dismissed {
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+}
+.todo-item.not-today.completed:not(.focused).selected.dismissed {
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+}
+.todo-item.not-today.completed.focused:not(.selected).dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
+}
+.todo-item.not-today.completed.focused.selected.dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+}
+/* A slight, uniform brightness lift on top of whichever of the 24 states
+   above currently applies -- filter (not backdrop-filter), so it layers on
+   the row's own already-composited look as one further step rather than
+   needing its own copy of all 24 combinations. .todo-item's own
+   transition: all 0.2s (untouched) covers this too. */
+.todo-item:hover { filter: brightness(1.08); }
 
 /* A positioned (absolute) element without its own z-index still paints
    above ordinary in-flow content regardless of DOM order -- these are the
@@ -1247,7 +1320,7 @@ main {
 .todo-timer-bar {
   position: absolute;
   inset: 0;
-  background: rgba(57, 255, 20, 0.25);
+  background: rgba(57, 200, 20, 0.25);
 }
 
 .todo-item input[type="checkbox"] {
@@ -1508,10 +1581,16 @@ main {
    manager list (#todo-manage-overlay) -- always keep it topmost. */
 #modal-overlay { z-index: 31; }
 
+/* Same transparent-background-plus-backdrop-filter technique as .side-panel
+   (see its own comment) -- a modal sits directly over whatever the to-do
+   list/side panel were showing underneath, so it gets the same darker tint/
+   heavier blur treatment, not the lighter one .todo-item settled on for its
+   own much smaller rows. No url(#glass-distort) here either -- see its own
+   comment in index.html. */
 .modal {
-  background: rgba(32, 33, 36, 0.75);
-  backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
-  -webkit-backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(20px) saturate(160%) brightness(55%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(55%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 18px;
@@ -1522,7 +1601,9 @@ main {
      to reach the rest. */
   max-height: 100%;
   overflow-y: auto;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* Same text-shadow as .todo-item-text -- see its own comment. */
+  text-shadow: 2px -2px 3px black;
 }
 
 .modal-title {

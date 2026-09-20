@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Referenced by the .todo-item/.modal panels' backdrop-filter
+  <!-- Referenced by .todo-context-menu/.user-menu-dropdown's backdrop-filter
        (style.css), chained with a small blur() there -- pure distortion here
        (feTurbulence + feDisplacementMap warps the backdrop like uneven
        glass) rather than uniformly smearing it, with just a touch of blur
@@ -19,13 +19,15 @@
   </svg>
   <!-- Firefox doesn't support an SVG filter (url(...)) as a backdrop-filter
        value at all -- it drops the whole backdrop-filter declaration as
-       invalid, not just the url() part, which is also why #glass-distort
-       above silently does nothing in Firefox on .todo-item/.side-panel/
-       .modal today (unnoticed there since their base tint is opaque enough
-       on its own). .todo-day-header.pinned (style.css) can't rely on it at
-       all -- it's mostly transparent and needs the blur itself to hide
-       scrolled-under content -- so it uses plain blur()/saturate(), no
-       url(), which both engines support. -->
+       invalid, not just the url() part, which is why #glass-distort above
+       silently does nothing in Firefox on .todo-context-menu/
+       .user-menu-dropdown today (unnoticed there since their base tint is
+       opaque enough on its own). .todo-item/.side-panel/.modal (style.css)
+       can't rely on it at all -- each is fully transparent and needs the
+       blur itself to hide scrolled-under content, not just an SVG
+       distortion layered on an already-opaque tint -- so they use plain
+       blur()/saturate()/brightness(), no url(), which both engines
+       support. -->
 
   <div id="login-screen" class="modal-overlay hidden">
     <div class="modal login-modal">

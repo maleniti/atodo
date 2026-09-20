@@ -3568,39 +3568,27 @@ function seriesRowLabelInfo(seriesId) {
   return info;
 }
 
-// Index 0's header is permanently sticky (see its own 'pinned-anchor' class,
-// applied once at creation) and owns the only copy of the masking border/
-// box-shadow; this only tracks which day is CURRENTLY "the" pinned one: -1/0
-// both mean day 0 itself (nothing else needs to render over the anchor's
-// backdrop, so it just shows its own content), and >=1 means some later day
-// has scrolled to the top and should have ITS OWN plain text rendered over
-// that same, otherwise-untouched backdrop instead (see .todo-day-header.
-// pinned in style.css -- no border/box-shadow of its own, so there's nothing
-// there to flicker no matter which direction pinnedIndex moves).
+// Keeps exactly one day header "pinned" (position: sticky, see .todo-day-
+// header.pinned in style.css) at a time: the last one (in display order)
+// whose day has already started scrolling past the top of #todo-viewport --
+// including index 0 itself, no special-casing needed there, since at rest
+// (pinnedIndex still -1, nothing scrolled past yet) its natural, unstuck
+// flow position already sits exactly where sticky would hold it anyway.
+// Every day header already looks like its own opaque glass card (see
+// .todo-day-header in style.css), so whichever one is currently pinned
+// simply covers whatever's behind it just by being drawn there -- nothing
+// else here needs to track or react to the handoff.
 function updatePinnedTodoHeader() {
   if (todoDayHeaderRefs.length === 0) return;
   const viewportTop = todoViewportEl.getBoundingClientRect().top;
   let pinnedIndex = -1;
   for (let i = 0; i < todoDayHeaderRefs.length; i++) {
     // Strictly less than, not <= -- the very first sentinel sits exactly at
-    // the viewport's own top edge before any scrolling at all (0 == 0), and
-    // day 0 is already covered by the anchor itself in that case, not by a
-    // day being pinned here.
+    // the viewport's own top edge before any scrolling at all (0 == 0), so
+    // <= pinned it from the very first render for no visible reason.
     if (todoDayHeaderRefs[i].sentinel.getBoundingClientRect().top < viewportTop) pinnedIndex = i;
   }
-  // Index 0 is handled separately below -- it's never toggled here.
-  for (let i = 1; i < todoDayHeaderRefs.length; i++) {
-    todoDayHeaderRefs[i].header.classList.toggle('pinned', i === pinnedIndex);
-  }
-  // Two independent conditions on index 0 itself (see .todo-day-header.
-  // pinned-anchor/.todo-day-header-anchor-content in style.css): its own
-  // border/box-shadow only show once scrolled away from the very top at all
-  // (pinnedIndex > -1), while its own label/button additionally hide once
-  // some OTHER day has become current (pinnedIndex > 0) -- so there's a
-  // range (pinnedIndex === 0) where the chrome is showing but day 0's own
-  // content still is too.
-  todoDayHeaderRefs[0].header.classList.toggle('scrolled', pinnedIndex > -1);
-  todoDayHeaderRefs[0].anchorContent.classList.toggle('faded', pinnedIndex > 0);
+  todoDayHeaderRefs.forEach(({ header }, i) => header.classList.toggle('pinned', i === pinnedIndex));
 }
 
 const PENDING_VIEW_ICON =
@@ -3764,12 +3752,12 @@ function buildTodoItemRow(item, isToday) {
   // activeOccurrenceDate).
   const isActiveHere = item.task.id === activeTaskId && item.occurrenceDate === activeOccurrenceDate;
   const row = document.createElement('div');
-  row.__task = item.task; // back-reference for refreshPreviewedHighlight's cheap re-tag, see there
+  row.__task = item.task; // back-reference for refreshSelectedHighlight's cheap re-tag, see there
   row.className =
     'todo-item' +
     (item.completed ? ' completed' : '') +
     (item.failed ? ' failed' : '') +
-    (isActiveHere ? ' active' : '') +
+    (isActiveHere ? ' focused' : '') +
     (item.task.allDay ? ' all-day' : '') +
     // Only while it's neither failed nor done yet -- see pastDueStatus;
     // an appointment past its due date is tagged .failed instead (red,
@@ -3791,7 +3779,7 @@ function buildTodoItemRow(item, isToday) {
     // panel (see selectTaskForSidePanel) -- reference equality against the
     // exact record last interacted with, not just a matching id, since a
     // recurring task's own separate occurrences are still separate rows.
-    (item.task === sidePanelTask ? ' previewed' : '') +
+    (item.task === sidePanelTask ? ' selected' : '') +
     (isToday ? '' : ' not-today');
 
   // A reverse progress bar behind the row's own content -- full at the
@@ -4007,8 +3995,8 @@ function buildTodoItemRow(item, isToday) {
   // canWorkOnNow). Clicking the already-selected row again deselects it
   // instead (see deselectSidePanelTask), same as pressing Escape.
   // Deliberately doesn't renderTodo() itself (selectTaskForSidePanel/
-  // deselectSidePanelTask already handle the .previewed accent without a
-  // full rebuild, see refreshPreviewedHighlight) -- replacing this row's own
+  // deselectSidePanelTask already handle the .selected accent without a
+  // full rebuild, see refreshSelectedHighlight) -- replacing this row's own
   // DOM node mid-gesture broke the browser's double-click detection for
   // row.ondblclick below, since the second click then lands on a different
   // element than the first.
@@ -4230,38 +4218,21 @@ function renderTodo() {
     todoListEl.appendChild(sentinel);
 
     const header = document.createElement('div');
-    // 'pinned-anchor' only on the very first day header -- see its own
-    // comment in style.css for why it's the only one that's permanently
-    // sticky/styled, with every other header only ever toggling bare
-    // position via 'pinned' (see updatePinnedTodoHeader).
-    const isFirstDayHeader = todoDayHeaderRefs.length === 0;
-    header.className = 'todo-day-header' + (isToday ? '' : ' not-today') + (isFirstDayHeader ? ' pinned-anchor' : '');
-
-    // The anchor's label/add-button live in their own wrapper so its
-    // opacity can fade independently of the header's own (constant, never
-    // fading) border/box-shadow -- see .todo-day-header-anchor-content in
-    // style.css. Every other header has no such wrapper; its bare text
-    // fades nothing, it's just shown or not via 'pinned' above.
-    let headerContentEl = header;
-    if (isFirstDayHeader) {
-      headerContentEl = document.createElement('div');
-      headerContentEl.className = 'todo-day-header-anchor-content';
-      header.appendChild(headerContentEl);
-    }
+    header.className = 'todo-day-header' + (isToday ? '' : ' not-today');
 
     const headerLabel = document.createElement('span');
     headerLabel.textContent = describeDayLabel(dateISO, todayISO);
-    headerContentEl.appendChild(headerLabel);
+    header.appendChild(headerLabel);
 
     const addBtn = document.createElement('button');
     addBtn.className = 'todo-day-add-btn';
     addBtn.textContent = '+';
     addBtn.title = t('todo.addTaskDue', { date: dateISO });
     addBtn.onclick = () => openTaskForm(null, undefined, dateISO);
-    headerContentEl.appendChild(addBtn);
+    header.appendChild(addBtn);
 
     todoListEl.appendChild(header);
-    todoDayHeaderRefs.push({ sentinel, header, anchorContent: isFirstDayHeader ? headerContentEl : null });
+    todoDayHeaderRefs.push({ sentinel, header });
 
     // Within a day: all-day tasks first (they have no due time to sort by),
     // then earliest due time first, ties broken alphabetically by name
@@ -4396,7 +4367,7 @@ function selectTaskForSidePanel(task) {
   // to a drawer left open from before this selection.
   agendaDrawerOpenNarrow = false;
   renderSidePanel();
-  refreshPreviewedHighlight();
+  refreshSelectedHighlight();
 }
 
 // Clicking the already-selected row again, or pressing Escape, clears the
@@ -4406,7 +4377,7 @@ function deselectSidePanelTask() {
   sidePanelTask = null;
   sidePanelEditMode = false;
   renderSidePanel();
-  refreshPreviewedHighlight();
+  refreshSelectedHighlight();
 }
 
 function openAgendaDrawer() {
@@ -4427,16 +4398,16 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && sidePanelTask) deselectSidePanelTask();
 });
 
-// Retags which rendered .todo-item row(s) carry the .previewed accent
+// Retags which rendered .todo-item row(s) carry the .selected accent
 // without rebuilding the list (renderTodo() does that too, as a side effect
 // of recomputing each row's className from scratch, but a full rebuild on
 // every plain click broke double-click-to-edit -- see row.onclick in
 // buildTodoItemRow). Relies on each row's own __task back-reference.
-function refreshPreviewedHighlight() {
-  document.querySelectorAll('.todo-item.previewed').forEach((el) => el.classList.remove('previewed'));
+function refreshSelectedHighlight() {
+  document.querySelectorAll('.todo-item.selected').forEach((el) => el.classList.remove('selected'));
   if (!sidePanelTask) return;
   document.querySelectorAll('.todo-item').forEach((el) => {
-    if (el.__task === sidePanelTask) el.classList.add('previewed');
+    if (el.__task === sidePanelTask) el.classList.add('selected');
   });
 }
 
@@ -4625,7 +4596,7 @@ function buildAgendaBlock(block) {
   const widthPercent = 100 / block.totalColumns;
   el.style.left = `${widthPercent * block.column}%`;
   el.style.width = `calc(${widthPercent}% - 4px)`;
-  el.style.background = agendaHexToRgba(block.item.color, 0.85);
+  el.style.background = agendaHexToRgba(block.item.color, 0.5);
 
   const name = document.createElement('div');
   name.className = 'agenda-block-name';
