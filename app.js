@@ -1221,6 +1221,29 @@ function showFormModal(title, fields, opts = {}) {
   });
 }
 
+// window.alert()'s replacement, the same way showFormModal above replaces
+// window.prompt() -- a one-button, message-only modal for a notice the user
+// just needs to acknowledge (a validation failure, an import that dropped
+// some tasks, a password change succeeding, ...), not answer. Deliberately
+// NOT a Promise like showFormModal: every call site so far just shows the
+// notice and moves on (or already returned before calling this), none of
+// them need to know when/whether the user dismissed it. kind matches
+// showAuthMessage's own convention ('error'/'success' style .modal-message
+// tints, see style.css) -- defaults to 'error' since that's what most of
+// these notices are.
+const infoModalOverlay = document.getElementById('info-overlay');
+const infoModalMessageEl = document.getElementById('info-modal-message');
+
+function showInfoModal(message, kind = 'error') {
+  infoModalMessageEl.textContent = message;
+  infoModalMessageEl.className = `modal-message ${kind}`;
+  infoModalOverlay.classList.remove('hidden');
+}
+function closeInfoModal() {
+  infoModalOverlay.classList.add('hidden');
+}
+document.getElementById('info-modal-ok').onclick = closeInfoModal;
+
 // ---------------------------------------------------------------------------
 // Auth -- registerUser()/login()/getMe() are thin wrappers around
 // api-spec.yaml's /auth endpoints (see auth.js's apiFetch/codeError).
@@ -2713,7 +2736,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
 
   const endDate = result.endDate || null;
   if (endDate && endDate < result.dueDate) {
-    alert(t('taskForm.endDateBeforeDue'));
+    showInfoModal(t('taskForm.endDateBeforeDue'));
     return;
   }
 
@@ -3807,9 +3830,16 @@ function compareTodoDisplayOrder(a, b) {
   return a.task.name.localeCompare(b.task.name, undefined, { sensitivity: 'base' });
 }
 
+// A closed eye (not yet focused on) vs. an open one (currently focused) --
+// same eye outline as SHOW_ICON below (same "this is visible/active" idea,
+// and the closed state reuses just its top eyelid curve for visual
+// continuity), but with a white sclera fill plus a colored iris/black pupil
+// on the open state, so the icon itself reads clearly against any
+// background color rather than relying on a border/backdrop behind it.
 const WORK_ON_ICON =
-  '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
-const WORKING_ON_ICON = '<svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>';
+  '<svg viewBox="0 0 24 24" width="25" height="25"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7"/></svg>';
+const WORKING_ON_ICON =
+  '<svg viewBox="0 0 24 24" width="25" height="25"><path fill="white" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="black" stroke="none"/></svg>';
 const DISMISS_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>';
 const SHOW_ICON =
@@ -4020,7 +4050,7 @@ function buildTodoItemRow(item, isToday) {
   const canWorkOnNow = !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed && !isLockedByLimit;
   if (canWorkOnNow) {
     const workOnBtn = document.createElement('button');
-    workOnBtn.className = 'todo-focus-btn' + (isActiveHere ? ' active' : '');
+    workOnBtn.className = 'todo-work-on-btn' + (isActiveHere ? ' active' : '');
     workOnBtn.innerHTML = isActiveHere ? WORKING_ON_ICON : WORK_ON_ICON;
     workOnBtn.title = isActiveHere ? t('todo.stopWorking') : t('todo.workOnNow');
     workOnBtn.onclick = (e) => {
@@ -5191,7 +5221,7 @@ async function promptManualOccurrence(sourceTask) {
   // isn't rejected by it, so this is the real guard against resuming the
   // series before it actually stopped.
   if (hasEndDate && result.dueDate < sourceTask.endDate) {
-    alert(t('manualOccurrence.endDateTooEarly'));
+    showInfoModal(t('manualOccurrence.endDateTooEarly'));
     return;
   }
 
@@ -5950,11 +5980,11 @@ settingsImportDataFileInput.onchange = async () => {
   try {
     data = JSON.parse(await file.text());
   } catch {
-    alert(t('data.notJson'));
+    showInfoModal(t('data.notJson'));
     return;
   }
   if (!data || typeof data !== 'object' || !Array.isArray(data.tasks)) {
-    alert(t('data.notExport'));
+    showInfoModal(t('data.notExport'));
     return;
   }
   if (!confirm(t('data.importConfirm'))) return;
@@ -5963,7 +5993,7 @@ settingsImportDataFileInput.onchange = async () => {
   const commentsBefore = normalized.reduce((sum, task) => sum + (task.comments ? task.comments.length : 0), 0);
   tasks = applyFreeTierLimitsToImportedTasks(normalized);
   const commentsAfter = tasks.reduce((sum, task) => sum + (task.comments ? task.comments.length : 0), 0);
-  if (tasks.length < normalized.length || commentsAfter < commentsBefore) alert(t('data.importLimitedByFreePlan'));
+  if (tasks.length < normalized.length || commentsAfter < commentsBefore) showInfoModal(t('data.importLimitedByFreePlan'));
 
   ensureSubscriptionPromptTask(); // re-derive from the current account's subscription, not whatever the imported file happened to contain
 
@@ -5977,7 +6007,7 @@ settingsImportDataFileInput.onchange = async () => {
     await apiFetch('/tasks', { method: 'PUT', body: tasks });
   } catch (err) {
     console.error('Failed to save imported tasks:', err);
-    alert(t('data.importSaveFailed', { message: err.message }));
+    showInfoModal(t('data.importSaveFailed', { message: err.message }));
   }
 
   const profile = { ...DEFAULT_USER_PROFILE, ...(data.userProfile || {}) };
@@ -6064,7 +6094,7 @@ changePasswordFormEl.onsubmit = async (e) => {
     return;
   }
   closeChangePasswordModal();
-  alert(t('changePassword.success'));
+  showInfoModal(t('changePassword.success'), 'success');
 };
 
 // ---------------------------------------------------------------------------

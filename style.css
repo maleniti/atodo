@@ -1313,7 +1313,8 @@ main {
 .todo-item > input[type="checkbox"],
 .todo-item > .todo-item-text,
 .todo-item > .todo-item-lock,
-.todo-item > .todo-focus-btn {
+.todo-item > .todo-focus-btn,
+.todo-item > .todo-work-on-btn {
   position: relative;
 }
 
@@ -1462,8 +1463,28 @@ main {
   transition: background 0.15s, color 0.15s;
 }
 .todo-focus-btn:hover { background: rgba(255, 255, 255, 0.12); color: #e8eaed; }
-.todo-focus-btn.active { color: #8ab4f8; }
-.todo-focus-btn.active:hover { background: rgba(138, 180, 248, 0.15); }
+
+/* The "work on this now" toggle (see buildTodoItemRow, app.js) -- its own
+   class, not .todo-focus-btn above, since it needs a distinctly bigger
+   target than the plain dismiss/show button next to it. An eye (open once
+   focused, closed otherwise -- see WORK_ON_ICON/WORKING_ON_ICON) rather than
+   the plain dot this used to be; no border or background tint here since
+   the open icon's own white sclera/black pupil already read clearly against
+   any background color, including .todo-item.focused's own blue tint, where
+   a plain colored icon used to all but disappear. */
+.todo-work-on-btn {
+  flex: none;
+  align-self: center;
+  width: 40px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #4a84b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .menu-item {
   display: flex;

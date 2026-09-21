@@ -207,6 +207,20 @@
     </div>
   </div>
 
+  <!-- window.alert()'s replacement, the same way #modal-overlay above
+       already replaces window.prompt() -- a one-button, message-only modal
+       for a notice the user just needs to acknowledge, not answer (see
+       showInfoModal in app.js). No Cancel/close-X escape hatch beyond OK
+       itself, same as a real alert() -- there's nothing to cancel out of. -->
+  <div id="info-overlay" class="modal-overlay hidden">
+    <div class="modal info-modal">
+      <div id="info-modal-message" class="modal-message"></div>
+      <div class="modal-actions">
+        <button id="info-modal-ok" class="modal-ok" data-i18n="common.ok">OK</button>
+      </div>
+    </div>
+  </div>
+
   <div id="todo-manage-overlay" class="modal-overlay hidden">
     <div class="modal todo-manage-modal">
       <button id="todo-manage-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
