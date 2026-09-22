@@ -718,6 +718,33 @@ main {
   width: 260px;
 }
 
+/* EN/HR toggle on the login/register screens, styled to match this file's
+   dark theme (same idea and accent color as landing.css's own .lang-toggle
+   for the marketing flow, which can't share this stylesheet -- see
+   style.css's own file comment / CLAUDE.md on why landing.css is separate). */
+.login-modal .lang-toggle {
+  display: flex;
+  width: fit-content;
+  margin: 0 0 8px auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.login-modal .lang-toggle button {
+  border: 0;
+  background: transparent;
+  color: #9aa0a6;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.login-modal .lang-toggle button.active {
+  background: #8ab4f8;
+  color: #0b0f14;
+}
+.login-modal .lang-toggle button:not(.active):hover { color: #e8eaed; }
+
 .background-modal {
   width: 640px;
 }

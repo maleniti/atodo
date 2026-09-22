@@ -1425,6 +1425,28 @@ async function detectLanguageAndTimeFormatFromLocation() {
   };
 }
 
+// Language for the login/register screens themselves, i.e. before there's
+// any account to read a saved language from (see boot() below) -- separate
+// from AUTH_TOKEN_KEY (auth.js) and from a logged-in profile's own
+// `language` field. Same idea as site-i18n.js's SITE_LANG_STORAGE_KEY for
+// the marketing flow, kept as its own key since the two flows' languages
+// are otherwise entirely independent (see that file's own comment).
+const PRE_LOGIN_LANG_STORAGE_KEY = 'advanced-todo-pre-login-language';
+
+// Applies `lang` to the (not yet logged in) login/register screens and
+// remembers it for next time -- used both by boot()'s own detection below
+// and by the EN/HR toggle on those screens. Deliberately not applyLanguage()
+// (app.js's post-login equivalent): that one also re-renders the to-do list/
+// side panel/manage-tasks modal, none of which exist yet at this point.
+function applyPreLoginLanguage(lang) {
+  currentUserLanguage = lang;
+  applyStaticTranslations();
+  document.querySelectorAll('.lang-toggle [data-lang]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.lang === lang);
+  });
+  localStorage.setItem(PRE_LOGIN_LANG_STORAGE_KEY, lang);
+}
+
 // Builds the full profile object saveUserProfile expects (it always
 // overwrites the stored blob wholesale, no partial-patch merge) from
 // whatever's currently in memory -- every write site below (Settings' Save
@@ -6519,22 +6541,31 @@ async function handleEmailVerificationLink() {
 
 function boot() {
   // No account to read a saved language preference from yet at this point
-  // (there's no token, or it hasn't been checked yet) -- English until
-  // either the `?lang=` handoff just below applies, or a successful login
-  // resolves the account's own saved language (or runs
-  // detectLanguageAndTimeFormatFromLocation, for a first-ever login).
+  // (there's no token, or it hasn't been checked yet) -- resolved in
+  // priority order, same idea (and same reasoning) as site-i18n.js's own
+  // resolveInitialSiteLanguage for the separate marketing flow:
+  //   1. A `?lang=en|hr` handoff from that marketing/legal flow (see
+  //      site-i18n.js/landing.html etc.) -- lets clicking through to
+  //      "Log in" from one of those pages show the login/register screen in
+  //      the language the visitor was just reading, without touching any
+  //      saved profile.
+  //   2. Whatever was last explicitly chosen on this screen before (the
+  //      EN/HR toggle below, or a previous handoff) -- PRE_LOGIN_LANG_STORAGE_KEY.
+  //   3. IP-based geolocation (detectLanguageAndTimeFormatFromLocation),
+  //      same as a first-ever login's own one-time guess -- async, so it's
+  //      kicked off in the background below and only applied if the visitor
+  //      hasn't logged in or made an explicit choice by the time it resolves.
+  // Purely a pre-login display default either way: the moment a real login
+  // succeeds, the account's own saved language (if any, else a first-run
+  // detectLanguageAndTimeFormatFromLocation of its own) takes back over.
   currentUserLanguage = 'en';
-  // A `?lang=en|hr` handoff from the marketing/legal flow (see
-  // site-i18n.js/landing.html etc.) -- lets clicking through to "Log in"
-  // from one of those pages show the login/register screen in the language
-  // the visitor was just reading, without touching any saved profile.
-  // Purely a pre-login display default: the moment a real login succeeds,
-  // the account's own saved language (if any) takes back over below, same
-  // as always.
+  let preLoginLangExplicit = false;
   const bootUrlParams = new URLSearchParams(location.search);
   const langHandoff = bootUrlParams.get('lang');
   if (langHandoff === 'en' || langHandoff === 'hr') {
     currentUserLanguage = langHandoff;
+    preLoginLangExplicit = true;
+    localStorage.setItem(PRE_LOGIN_LANG_STORAGE_KEY, langHandoff);
     // Consumed once -- stripped so it doesn't linger in the address bar or
     // get treated as still-pending on a later reload, same idea as
     // handleEmailVerificationLink's own `verify` token below. `next`/`plan`
@@ -6542,12 +6573,34 @@ function boot() {
     bootUrlParams.delete('lang');
     const strippedSearch = bootUrlParams.toString();
     history.replaceState(null, '', location.pathname + (strippedSearch ? `?${strippedSearch}` : '') + location.hash);
+  } else {
+    const storedPreLoginLang = localStorage.getItem(PRE_LOGIN_LANG_STORAGE_KEY);
+    if (storedPreLoginLang === 'en' || storedPreLoginLang === 'hr') {
+      currentUserLanguage = storedPreLoginLang;
+      preLoginLangExplicit = true;
+    }
   }
   applyStaticTranslations();
+  document.querySelectorAll('.lang-toggle [data-lang]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.lang === currentUserLanguage);
+    btn.onclick = () => {
+      preLoginLangExplicit = true;
+      applyPreLoginLanguage(btn.dataset.lang);
+    };
+  });
   handleEmailVerificationLink();
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) {
     loginScreenEl.classList.remove('hidden');
+    if (!preLoginLangExplicit) {
+      detectLanguageAndTimeFormatFromLocation().then(({ language }) => {
+        // Don't clobber a real login (the account's own language now
+        // applies) or a manual toggle click that happened while this was
+        // still in flight.
+        if (preLoginLangExplicit || localStorage.getItem(AUTH_TOKEN_KEY)) return;
+        applyPreLoginLanguage(language);
+      });
+    }
     return;
   }
   appMainEl.classList.remove('hidden');
