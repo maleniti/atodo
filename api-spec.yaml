@@ -248,7 +248,7 @@ paths:
       description: >-
         Partial update -- send only the fields you're changing. Covers
         everything Settings can change (nickname, avatar, time format,
-        background, language) plus the small bits of session state the
+        background, language, theme) plus the small bits of session state the
         client persists across reloads (which task is currently
         active/focused, and the to-do list's current view mode). None of
         this affects the bearer token's own claims, so the token stays
@@ -273,6 +273,9 @@ paths:
                   type: string
                   enum: [en, hr]
                   nullable: true
+                theme:
+                  type: string
+                  enum: [dark, light]
                 activeTaskId:
                   type: string
                   nullable: true
@@ -738,6 +741,10 @@ components:
           enum: [en, hr]
           nullable: true
           description: null means never chosen or IP-detected yet -- the client detects and PATCHes a real value the first time this is null right after login.
+        theme:
+          type: string
+          enum: [dark, light]
+          description: Always a real value -- unlike language, there's no auto-detection step; defaults to dark for a brand new account.
         activeTaskId:
           type: string
           nullable: true

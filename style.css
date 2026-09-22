@@ -1,4 +1,67 @@
 * { box-sizing: border-box; }
+/* Theme system -- dark (default) and light, each with two further looks
+   depending on whether Settings' background photo (app.js's applyBackground,
+   toggling body.has-background) is set: see the .todo-item state-matrix
+   blocks near the end of this file for how that second axis is handled
+   (background-color vs backdrop-filter brightness). This :root block only
+   covers the foundational colors reused across many unrelated selectors
+   (text/borders/accent/glass-menu tones) -- the values were previously
+   scattered as identical literal hex/rgba() strings dozens of times each;
+   collecting them here means overriding one block is enough for every
+   consumer instead of duplicating the whole file. Box-shadow darkening
+   (elevation, not text/glass legibility) is deliberately left as literal
+   black rgba() everywhere -- a dark shadow under a card reads correctly on
+   either a dark or a light page, so it doesn't need a themed variable. */
+:root {
+  --page-bg: #131314;
+  --text-primary: #e8eaed;
+  --text-heading: #fff;
+  --text-label: #9aa0a6;
+  --text-muted: #80868b;
+  --accent: #8ab4f8;
+  --accent-hover: #aecbfa;
+  --accent-on: #0b0f14; /* text/icon color drawn on top of an --accent fill */
+  --danger: #f28b82;
+  --success: #81c995;
+  --passive: #bcaaa4;
+  --border-hairline: rgba(255, 255, 255, 0.08);
+  --hover-tint: rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+  --glass-menu-bg: rgba(32, 33, 36, 0.7); /* .user-menu-dropdown/.todo-context-menu's opaque-ish glass base */
+  --glass-pill-bg: rgba(24, 26, 28, 0.9); /* small opaque pill buttons (view toggle, month nav, ...) */
+  --solid-surface: #202124; /* a fully opaque surface color, for native UI (e.g. <option>) that can't use this app's translucent rgba() surfaces */
+  --input-bg: rgba(0, 0, 0, 0.35); /* a recessed field against the modal's own glass -- dark theme darkens further, light theme (below) lightens instead */
+  /* Keeps text legible over an arbitrary photo background regardless of
+     theme -- dark theme's near-white text gets a dark halo, light theme's
+     near-black text gets a light one instead. See .todo-item-text and every
+     other selector that reuses this same comment. */
+  --glass-text-shadow: 2px -2px 3px black;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --page-bg: #f1f3f4;
+  --text-primary: #202124;
+  --text-heading: #202124;
+  --text-label: #5f6368;
+  --text-muted: #70757a;
+  --accent: #1a73e8;
+  --accent-hover: #4285f4;
+  --accent-on: #fff;
+  --danger: #d93025;
+  --success: #188038;
+  --passive: #8d6e63; /* the dark theme's taupe (#bcaaa4) is too light to read against a light page */
+  --border-hairline: rgba(0, 0, 0, 0.12);
+  --hover-tint: rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+  --glass-menu-bg: rgba(255, 255, 255, 0.75);
+  --glass-pill-bg: rgba(255, 255, 255, 0.9);
+  --glass-text-shadow: 2px -2px 3px rgba(255, 255, 255, 0.9);
+  --solid-surface: #fff;
+  --input-bg: rgba(255, 255, 255, 0.6);
+  color-scheme: light;
+}
 /* !important is deliberate here: this is a plain "unconditionally hide"
    utility applied alongside plenty of other classes that set their own
    `display` (.modal-overlay, .side-panel-content, ...) -- without it,
@@ -8,21 +71,22 @@
 html, body {
   margin: 0;
   /* Tells Chromium/Firefox to render native controls we don't fully style
-     ourselves (a <select>'s dropdown popup, date/time picker widgets) in
-     dark mode, instead of the OS's default light theme clashing against
-     this app's dark UI -- the closed <select> box itself is already styled
-     via .modal-input, but the open dropdown list is native UI outside CSS's
-     reach otherwise. */
-  color-scheme: dark;
-  /* Exactly the viewport height (not min-height) so the page itself never
+     ourselves (a <select>'s dropdown popup, date/time picker widgets) to
+     match the current theme instead of always defaulting to the OS's own
+     light theme -- the closed <select> box itself is already styled via
+     .modal-input, but the open dropdown list is native UI outside CSS's
+     reach otherwise. Already set on :root/:root[data-theme="light"] above
+     (html *is* :root) and inherited by body, so nothing further is needed
+     here.
+     Exactly the viewport height (not min-height) so the page itself never
      scrolls -- the to-do list is sized to fit within it, and any overflow
      scrolls internally via its own up/down buttons instead of growing the
      page. */
   height: 100%;
   overflow: hidden;
   font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  color: #e8eaed;
-  background: #131314;
+  color: var(--text-primary);
+  background: var(--page-bg);
 }
 body {
   display: flex;
@@ -85,10 +149,20 @@ main {
   background: rgba(0, 0, 0, 0);
   backdrop-filter: blur(20px) saturate(140%) brightness(55%);
   -webkit-backdrop-filter: blur(20px) saturate(140%) brightness(55%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hairline);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   /* Same text-shadow as .todo-item-text -- see its own comment. */
-  text-shadow: 2px -2px 3px black;
+  text-shadow: var(--glass-text-shadow);
+}
+/* Light theme flips the brightness direction on every glass panel below
+   (this one, .todo-day-header, .modal) the same way the .todo-item matrix
+   does: dark theme darkens whatever's behind the blur into a dark slab
+   (brightness < 100%), light theme lightens it into a light slab instead
+   (brightness > 100%) so the panel still reads as a legible surface either
+   way. blur()/saturate() carry over unchanged -- only brightness flips. */
+:root[data-theme="light"] .side-panel {
+  backdrop-filter: blur(20px) saturate(140%) brightness(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%) brightness(145%);
 }
 
 /* Today's agenda -- shown instead of the plain "click a task" hint this used
@@ -144,15 +218,15 @@ main {
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .agenda-timeline-wrap::-webkit-scrollbar { width: 6px; } /* Chromium */
 .agenda-timeline-wrap::-webkit-scrollbar-track { background: transparent; }
 .agenda-timeline-wrap::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
-.agenda-timeline-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+.agenda-timeline-wrap::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* Height set per hour (see AGENDA_HOUR_HEIGHT, app.js) -- 24 hours' worth,
    so every block/band/hour-line inside can position itself with a plain
@@ -167,7 +241,7 @@ main {
   position: absolute;
   left: 0;
   right: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-hairline);
 }
 /* Fixed-width gutter at the line's own left edge, reserved for the hour
    label -- .agenda-tracks below starts right after it, so a band/block can
@@ -181,7 +255,7 @@ main {
   text-align: right;
   padding-right: 4px;
   font-size: 9px;
-  color: #80868b;
+  color: var(--text-muted);
 }
 
 /* Everything actually representing a task (bands/blocks) lives in here, not
@@ -271,8 +345,8 @@ main {
 }
 
 #side-panel-edit-toggle-btn.active {
-  background: #8ab4f8;
-  color: #202124;
+  background: var(--accent);
+  color: var(--accent-on);
 }
 
 /* Same sliding-thumb pill as .todo-view-toggle, but its three options
@@ -286,8 +360,8 @@ main {
   flex: none;
   padding: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--hover-tint);
+  border: 1px solid var(--border-hairline);
 }
 .side-panel-scope-toggle-thumb {
   position: absolute;
@@ -309,19 +383,19 @@ main {
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: #9aa0a6;
+  color: var(--text-label);
   font-size: 11px;
   white-space: nowrap;
   cursor: pointer;
   transition: color 0.15s;
 }
-.side-panel-scope-opt:hover { color: #e8eaed; }
-.side-panel-scope-opt.active { color: #e8eaed; }
+.side-panel-scope-opt:hover { color: var(--text-primary); }
+.side-panel-scope-opt.active { color: var(--text-primary); }
 
 .side-panel-title {
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-heading);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,30 +411,30 @@ main {
   overflow-y: auto;
   margin-bottom: 10px;
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .side-panel-task-summaries::-webkit-scrollbar { width: 6px; } /* Chromium */
 .side-panel-task-summaries::-webkit-scrollbar-track { background: transparent; }
 .side-panel-task-summaries::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
-.side-panel-task-summaries::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+.side-panel-task-summaries::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 .side-panel-task-summary {
   padding: 4px 0;
 }
 .side-panel-task-summary + .side-panel-task-summary {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--hover-tint);
 }
 .side-panel-task-summary-name {
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-heading);
 }
 .side-panel-task-summary-desc,
 .side-panel-task-summary-details {
   font-size: 12px;
-  color: #9aa0a6;
+  color: var(--text-label);
   white-space: pre-wrap;
   margin-top: 2px;
 }
@@ -380,7 +454,7 @@ main {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: #9aa0a6;
+  color: var(--text-label);
   margin: 14px 0 6px;
 }
 .side-panel-section-heading:first-of-type {
@@ -393,21 +467,21 @@ main {
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .side-panel-comments::-webkit-scrollbar, .side-panel-log::-webkit-scrollbar { width: 6px; } /* Chromium */
 .side-panel-comments::-webkit-scrollbar-track, .side-panel-log::-webkit-scrollbar-track { background: transparent; }
 .side-panel-comments::-webkit-scrollbar-thumb, .side-panel-log::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 .side-panel-comments::-webkit-scrollbar-thumb:hover, .side-panel-log::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--scrollbar-thumb-hover);
 }
 
 .side-panel-comment-item {
   padding: 6px 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--hover-tint);
 }
 .side-panel-comment-top-row {
   display: flex;
@@ -417,7 +491,7 @@ main {
 }
 .side-panel-comment-time {
   font-size: 10px;
-  color: #80868b;
+  color: var(--text-muted);
   margin-bottom: 2px;
 }
 
@@ -433,13 +507,13 @@ main {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #80868b;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.side-panel-comment-actions button:hover { background: rgba(255, 255, 255, 0.1); color: #e8eaed; }
+.side-panel-comment-actions button:hover { background: rgba(255, 255, 255, 0.1); color: var(--text-primary); }
 .side-panel-comment-actions button.confirm,
 .side-panel-comment-actions button.confirm:hover {
   background: #d93025;
@@ -447,14 +521,14 @@ main {
 }
 .side-panel-comment-text {
   font-size: 12px;
-  color: #e8eaed;
+  color: var(--text-primary);
   white-space: pre-wrap;
 }
 
 .side-panel-log-item {
   padding: 3px 2px;
   font-size: 11px;
-  color: #9aa0a6;
+  color: var(--text-label);
 }
 /* The message + timestamp row -- its own flex row so the description below
    (series scope only, see buildSidePanelLogRow) can sit close underneath
@@ -467,7 +541,7 @@ main {
 }
 .side-panel-log-time {
   flex: none;
-  color: #80868b;
+  color: var(--text-muted);
 }
 
 .app-header {
@@ -482,7 +556,7 @@ main {
   font-size: 20px;
   font-weight: 700;
   margin: 0;
-  color: #fff;
+  color: var(--text-heading);
   /* Keeps the title legible over a light patch of a background photo (see
      applyBackground in app.js) the same way #background-credit does. */
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.5);
@@ -503,15 +577,15 @@ main {
   display: flex;
   align-items: center;
   border-radius: 15px;
-  background: #8ab4f8;
-  color: #0b0f14;
+  background: var(--accent);
+  color: var(--accent-on);
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
   transition: background 0.15s;
 }
-.app-header-subscribe-btn:hover { background: #aecbfa; }
+.app-header-subscribe-btn:hover { background: var(--accent-hover); }
 
 /* Anchors .user-menu-dropdown (position: absolute) to the avatar button
    rather than the page. */
@@ -531,8 +605,8 @@ main {
   border-radius: 50%;
   padding: 0;
   overflow: hidden;
-  background: #8ab4f8;
-  color: #202124;
+  background: var(--accent);
+  color: var(--accent-on);
   font-size: 13px;
   font-weight: 600;
   display: flex;
@@ -556,10 +630,10 @@ main {
   top: calc(100% + 8px);
   right: 0;
   z-index: 20;
-  background: rgba(32, 33, 36, 0.7);
+  background: var(--glass-menu-bg);
   backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
   -webkit-backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hairline);
   border-radius: 10px;
   padding: 4px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
@@ -583,7 +657,7 @@ main {
   padding-top: 16px;
   border-top: 1px solid rgba(217, 48, 37, 0.3);
 }
-.settings-danger-zone label { color: #f28b82; }
+.settings-danger-zone label { color: var(--danger); }
 
 .delete-account-modal { width: 360px; }
 .delete-account-modal .menu-btn-small { margin-bottom: 4px; }
@@ -599,8 +673,8 @@ main {
   height: 40px;
   flex: none;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-hairline);
+  background-color: var(--hover-tint);
   background-size: cover;
   background-position: center;
 }
@@ -623,11 +697,11 @@ main {
   flex-wrap: wrap;
   margin-top: 8px;
   font-size: 12px;
-  color: #f28b82;
+  color: var(--danger);
 }
 #settings-subscription-status {
   font-size: 13px;
-  color: #e8eaed;
+  color: var(--text-primary);
 }
 
 .subscribe-modal {
@@ -637,16 +711,16 @@ main {
    .modal-message -- a neutral tint for "here's why you're seeing this",
    not a warning or a confirmation. */
 .subscribe-reason {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #e8eaed;
+  background: var(--hover-tint);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-primary);
 }
 .subscribe-benefits {
   margin: 0 0 4px;
   padding-left: 18px;
   font-size: 13px;
   line-height: 1.6;
-  color: #e8eaed;
+  color: var(--text-primary);
 }
 
 /* Small muted note under a field, e.g. the background picker's "where do
@@ -654,11 +728,11 @@ main {
    text color used throughout (side-panel-empty, empty-state, ...). */
 .field-hint {
   font-size: 11px;
-  color: #80868b;
+  color: var(--text-muted);
   line-height: 1.4;
   margin-top: 6px;
 }
-.field-hint a { color: #8ab4f8; }
+.field-hint a { color: var(--accent); }
 
 /* Login/register feedback -- one shared look, tinted red or green via a
    modifier class (see showLoginMessage/showRegisterMessage, app.js) rather
@@ -673,12 +747,12 @@ main {
 .modal-message.error {
   background: rgba(217, 48, 37, 0.15);
   border: 1px solid rgba(217, 48, 37, 0.4);
-  color: #f28b82;
+  color: var(--danger);
 }
 .modal-message.success {
   background: rgba(129, 201, 149, 0.15);
   border: 1px solid rgba(129, 201, 149, 0.4);
-  color: #81c995;
+  color: var(--success);
 }
 
 /* The "Don't have an account? / Already have one?" switch between the
@@ -687,11 +761,11 @@ main {
 .modal-link-row {
   margin-top: 12px;
   font-size: 12px;
-  color: #9aa0a6;
+  color: var(--text-label);
   text-align: center;
 }
 .modal-link {
-  color: #8ab4f8;
+  color: var(--accent);
   text-decoration: none;
   margin-left: 4px;
 }
@@ -703,16 +777,16 @@ main {
 .auth-legal-links {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-hairline);
   text-align: center;
   font-size: 11px;
 }
 .auth-legal-links a {
-  color: #80868b;
+  color: var(--text-muted);
   text-decoration: none;
   margin: 0 6px;
 }
-.auth-legal-links a:hover { color: #e8eaed; text-decoration: underline; }
+.auth-legal-links a:hover { color: var(--text-primary); text-decoration: underline; }
 
 .login-modal {
   width: 260px;
@@ -733,17 +807,17 @@ main {
 .login-modal .lang-toggle button {
   border: 0;
   background: transparent;
-  color: #9aa0a6;
+  color: var(--text-label);
   font-size: 11px;
   font-weight: 500;
   padding: 3px 7px;
   cursor: pointer;
 }
 .login-modal .lang-toggle button.active {
-  background: #8ab4f8;
-  color: #0b0f14;
+  background: var(--accent);
+  color: var(--accent-on);
 }
-.login-modal .lang-toggle button:not(.active):hover { color: #e8eaed; }
+.login-modal .lang-toggle button:not(.active):hover { color: var(--text-primary); }
 
 .background-modal {
   width: 640px;
@@ -763,15 +837,15 @@ main {
   max-height: 420px;
   overflow-y: auto;
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .background-picker-grid::-webkit-scrollbar { width: 6px; } /* Chromium */
 .background-picker-grid::-webkit-scrollbar-track { background: transparent; }
 .background-picker-grid::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
-.background-picker-grid::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+.background-picker-grid::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 .background-picker-thumb {
   position: relative;
@@ -781,7 +855,7 @@ main {
   padding: 0;
   overflow: hidden;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-tint);
 }
 .background-picker-thumb img {
   width: 100%;
@@ -868,17 +942,17 @@ main {
   width: 22px;
   height: 22px;
   flex: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hairline);
   border-radius: 50%;
-  background: rgba(24, 26, 28, 0.9);
-  color: #9aa0a6;
+  background: var(--glass-pill-bg);
+  color: var(--text-label);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.todo-month-nav-btn:hover { background: rgba(255, 255, 255, 0.14); color: #e8eaed; }
+.todo-month-nav-btn:hover { background: rgba(255, 255, 255, 0.14); color: var(--text-primary); }
 
 /* Same round icon-button look/tone as .todo-month-nav-btn -- display itself
    is set elsewhere (none by default, flex on narrow screens only, see the
@@ -887,16 +961,16 @@ main {
   width: 22px;
   height: 22px;
   flex: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hairline);
   border-radius: 50%;
-  background: rgba(24, 26, 28, 0.9);
-  color: #9aa0a6;
+  background: var(--glass-pill-bg);
+  color: var(--text-label);
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.agenda-toggle-btn:hover { background: rgba(255, 255, 255, 0.14); color: #e8eaed; }
+.agenda-toggle-btn:hover { background: rgba(255, 255, 255, 0.14); color: var(--text-primary); }
 
 /* Same round icon-button look as .agenda-toggle-btn, sitting inline among
    .side-panel-header-actions' other controls (not position: absolute like
@@ -908,29 +982,29 @@ main {
   width: 22px;
   height: 22px;
   flex: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hairline);
   border-radius: 50%;
-  background: rgba(24, 26, 28, 0.9);
-  color: #9aa0a6;
+  background: var(--glass-pill-bg);
+  color: var(--text-label);
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.side-panel-close-btn:hover { background: rgba(255, 255, 255, 0.14); color: #e8eaed; }
+.side-panel-close-btn:hover { background: rgba(255, 255, 255, 0.14); color: var(--text-primary); }
 
 .todo-month-label {
   min-width: 108px;
   font-size: 13px;
   font-weight: 600;
-  color: #e8eaed;
+  color: var(--text-primary);
   text-align: center;
   cursor: pointer;
   user-select: none;
   /* See .app-header h1's own text-shadow -- same reasoning. */
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.5);
 }
-.todo-month-label:hover { color: #fff; }
+.todo-month-label:hover { color: var(--text-heading); }
 
 .todo-view-toggle {
   /* Positioning context for .todo-view-toggle-thumb's absolute placement --
@@ -945,8 +1019,8 @@ main {
      a photo background (see applyBackground in app.js). Dark instead of
      white and, after a first (still too faint) attempt at a lower alpha,
      just as opaque as .todo-item now. */
-  background: rgba(24, 26, 28, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--glass-pill-bg);
+  border: 1px solid var(--border-hairline);
 }
 
 /* Slides between the three options via transform only (see
@@ -978,15 +1052,15 @@ main {
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: #9aa0a6;
+  color: var(--text-label);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: color 0.15s;
 }
-.todo-view-toggle-opt:hover { color: #e8eaed; }
-.todo-view-toggle-opt.active { color: #e8eaed; }
+.todo-view-toggle-opt:hover { color: var(--text-primary); }
+.todo-view-toggle-opt.active { color: var(--text-primary); }
 .modal-close-btn {
   position: absolute;
   top: 8px;
@@ -996,8 +1070,8 @@ main {
   height: 26px;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  color: #9aa0a6;
+  background: var(--hover-tint);
+  color: var(--text-label);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1006,7 +1080,7 @@ main {
 }
 .modal-close-btn:hover {
   background: rgba(255, 255, 255, 0.14);
-  color: #e8eaed;
+  color: var(--text-primary);
 }
 
 #todo-viewport {
@@ -1014,15 +1088,15 @@ main {
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin; /* Firefox -- no hover-triggered width change available here */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 #todo-viewport::-webkit-scrollbar { width: 6px; } /* Chromium */
 #todo-viewport::-webkit-scrollbar-track { background: transparent; }
 #todo-viewport::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
-#todo-viewport::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+#todo-viewport::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 /* Widens on hover over the whole viewport, not just the thumb itself --
    Chromium has no ::-webkit-scrollbar:hover, so this is the usual
    workaround (and it's a more forgiving hover target than the thumb's own
@@ -1043,7 +1117,7 @@ main {
   gap: 4px;
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-heading);
   padding: 6px 8px;
   margin-bottom: 4px;
   border-radius: 8px;
@@ -1053,11 +1127,17 @@ main {
   -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(120%);
   box-shadow:
     inset 0 0px 0 rgba(255, 255, 255, 0.14),
-    inset 2px 0 0 rgba(255, 255, 255, 0.08),
+    inset 2px 0 0 var(--border-hairline),
     inset 0 -2px 0 rgba(0, 0, 0, 0.3),
     inset -2px 0 0 rgba(0, 0, 0, 0.2);
   /* Same text-shadow as .todo-item-text -- see its own comment. */
-  text-shadow: 2px -2px 3px black;
+  text-shadow: var(--glass-text-shadow);
+}
+/* Same brightness-direction flip as .side-panel/.modal -- see .side-panel's
+   own comment. */
+:root[data-theme="light"] .todo-day-header {
+  backdrop-filter: blur(4px) saturate(150%) brightness(88%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(88%);
 }
 
 /* Whichever single day header is currently "current" (see
@@ -1085,9 +1165,16 @@ main {
 .todo-day-header.not-today > span { opacity: 0.6; }
 
 .todo-day-header.not-today {
-	background-color: transparent;
-	backdrop-filter: blur(4px) saturate(50%) brightness(75%);
-	-webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%);
+  background-color: transparent;
+  backdrop-filter: blur(4px) saturate(50%) brightness(75%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%);
+}
+/* Inverted direction, like .todo-day-header's own light override above: a
+   dimmed/muted header should wash out toward the light page instead of
+   darkening further. */
+:root[data-theme="light"] .todo-day-header.not-today {
+  backdrop-filter: blur(4px) saturate(50%) brightness(108%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(108%);
 }
 
 .todo-day-add-btn {
@@ -1097,7 +1184,7 @@ main {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #80868b;
+  color: var(--text-muted);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -1106,7 +1193,7 @@ main {
   justify-content: center;
   transition: background 0.15s, color 0.15s;
 }
-.todo-day-add-btn:hover { background: rgba(255, 255, 255, 0.12); color: #e8eaed; }
+.todo-day-add-btn:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
 
 /* Each day's tasks split into two columns (see renderTodo) -- ordered into
    them, not across them in rows: the first column is every earlier-due task
@@ -1124,7 +1211,7 @@ main {
    second column of tasks (see renderTodo), and removed again below once the
    narrow-screen media query collapses back to a single stacked column. */
 .todo-day-columns-separated .todo-day-column:last-child {
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid var(--border-hairline);
   padding-left: 12px;
 }
 
@@ -1167,7 +1254,7 @@ main {
      looking like a smudge around each row rather than a soft drop shadow. */
   box-shadow:
     inset 0 0px 0 rgba(255, 255, 255, 0.14),
-    inset 2px 0 0 rgba(255, 255, 255, 0.08),
+    inset 2px 0 0 var(--border-hairline),
     inset 0 -2px 0 rgba(0, 0, 0, 0.3),
     inset -2px 0 0 rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease-in-out;
@@ -1275,55 +1362,188 @@ main {
 }
 .todo-item.not-today:not(.completed):not(.focused):not(.selected).dismissed {
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
   -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
 }
 .todo-item.not-today:not(.completed):not(.focused).selected.dismissed {
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
   -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
 }
 .todo-item.not-today:not(.completed).focused:not(.selected).dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
   -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%) sepia(0%);
 }
 .todo-item.not-today:not(.completed).focused.selected.dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
   -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(0%);
 }
 .todo-item.not-today.completed:not(.focused):not(.selected).dismissed {
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
   -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
 }
 .todo-item.not-today.completed:not(.focused).selected.dismissed {
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
   -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
 }
 .todo-item.not-today.completed.focused:not(.selected).dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
   -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(75%) sepia(45%);
 }
 .todo-item.not-today.completed.focused.selected.dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
-    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
   backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
   -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(110%) sepia(45%);
+}
+/* LIGHT THEME + BACKGROUND -- same mechanism as the dark+background matrix
+   above (backdrop-filter blur/saturate/brightness/sepia, fully restated per
+   combination for the same transition-interpolation reason), but every
+   brightness value is reflected around 100% (compressed ~0.7x) so more
+   prominent states read as DARKER instead of brighter, matching normal
+   light-UI convention: dark's brightness(120%) -> light's brightness(86%),
+   160%->58%, 75%->118%, 110%->93%. blur/saturate/sepia/background-color/
+   background-image are unchanged from the dark+background table -- only
+   the brightness axis flips direction. */
+html[data-theme="light"] .todo-item:not(.not-today):not(.completed):not(.focused):not(.selected) {
+  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+}
+html[data-theme="light"] .todo-item:not(.not-today):not(.completed):not(.focused).selected {
+  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
+}
+html[data-theme="light"] .todo-item:not(.not-today):not(.completed).focused:not(.selected) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+}
+html[data-theme="light"] .todo-item:not(.not-today):not(.completed).focused.selected {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
+}
+html[data-theme="light"] .todo-item:not(.not-today).completed:not(.focused):not(.selected) {
+  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+}
+html[data-theme="light"] .todo-item:not(.not-today).completed:not(.focused).selected {
+  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
+}
+html[data-theme="light"] .todo-item:not(.not-today).completed.focused:not(.selected) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+}
+html[data-theme="light"] .todo-item:not(.not-today).completed.focused.selected {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused):not(.selected):not(.dismissed) {
+  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused).selected:not(.dismissed) {
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed).focused:not(.selected):not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed).focused.selected:not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today.completed:not(.focused):not(.selected):not(.dismissed) {
+  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today.completed:not(.focused).selected:not(.dismissed) {
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today.completed.focused:not(.selected):not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today.completed.focused.selected:not(.dismissed) {
+  background-color: rgba(50, 80, 255, 0.25);
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused):not(.selected).dismissed {
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused).selected.dismissed {
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed).focused:not(.selected).dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today:not(.completed).focused.selected.dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+}
+html[data-theme="light"] .todo-item.not-today.completed:not(.focused):not(.selected).dismissed {
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today.completed:not(.focused).selected.dismissed {
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today.completed.focused:not(.selected).dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+}
+html[data-theme="light"] .todo-item.not-today.completed.focused.selected.dismissed {
+  background-color: rgba(50, 80, 255, 0.25);
+  background-image:
+    repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
+  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
 }
 /* A slight, uniform brightness lift on top of whichever of the 24 states
    above currently applies -- filter (not backdrop-filter), so it layers on
@@ -1331,6 +1551,64 @@ main {
    needing its own copy of all 24 combinations. .todo-item's own
    transition: all 0.2s (untouched) covers this too. */
 .todo-item:hover { filter: brightness(1.2); }
+/* Inverted, like the rest of the light+background matrix above. */
+html[data-theme="light"] .todo-item:hover { filter: brightness(0.85); }
+
+/* ---------------------------------------------------------------------
+   NO BACKGROUND -- Settings has no photo set (body.has-background absent,
+   see applyBackground in app.js), so there's nothing behind these rows for
+   backdrop-filter to meaningfully blur/brighten -- blurring a flat page
+   color doesn't read as "brighter/darker" the way it does over a photo, so
+   brightness feedback here comes from a plain background-color instead.
+   Same relative prominence ordering as the with-background matrix above
+   (not-today < plain < not-today.selected < selected), just expressed as
+   alpha instead of brightness%, and simplified to 3 dimensions instead of
+   4: .completed doesn't get its own tint here (no backdrop to add a sepia
+   cast to) -- it stays visually distinct via .todo-item-name's own
+   color/strikethrough (unaffected by any of this). .focused/.dismissed
+   reuse their existing background-color/-image untouched, since both
+   already work with or without a backdrop to blur.
+   Dark theme uses a white-based overlay (more alpha = brighter = more
+   prominent, like the brightness matrix above); light theme (further
+   below) uses the same alpha scale with a black-based overlay instead
+   (more alpha = darker = more prominent), same inversion principle as
+   with-background. */
+body:not(.has-background) .todo-item {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background-color: rgba(255, 255, 255, 0.07);
+}
+body:not(.has-background) .todo-item.selected { background-color: rgba(255, 255, 255, 0.14); }
+body:not(.has-background) .todo-item.not-today { background-color: rgba(255, 255, 255, 0.03); }
+body:not(.has-background) .todo-item.not-today.selected { background-color: rgba(255, 255, 255, 0.06); }
+body:not(.has-background) .todo-item.focused { background-color: rgba(50, 80, 255, 0.25); }
+body:not(.has-background) .todo-item:hover { background-color: rgba(255, 255, 255, 0.11); }
+body:not(.has-background) .todo-item.selected:hover { background-color: rgba(255, 255, 255, 0.18); }
+body:not(.has-background) .todo-item.not-today:hover { background-color: rgba(255, 255, 255, 0.05); }
+body:not(.has-background) .todo-item.not-today.selected:hover { background-color: rgba(255, 255, 255, 0.09); }
+body:not(.has-background) .todo-item.focused:hover { background-color: rgba(50, 80, 255, 0.32); }
+
+/* Light + no background: same alpha scale as above (prominence is encoded
+   in the alpha, not the hue), but black-based instead of white-based so
+   more prominent = darker, same inversion as light+background. The extra
+   `body:not(.has-background)` ancestor here makes every one of these more
+   specific than its light+background equivalent above, so it wins whenever
+   there's genuinely no photo -- no source-order dependency either way. */
+html[data-theme="light"] body:not(.has-background) .todo-item {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+html[data-theme="light"] body:not(.has-background) .todo-item.selected { background-color: rgba(0, 0, 0, 0.12); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today { background-color: rgba(0, 0, 0, 0.02); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today.selected { background-color: rgba(0, 0, 0, 0.045); }
+html[data-theme="light"] body:not(.has-background) .todo-item.focused { background-color: rgba(50, 80, 255, 0.18); }
+html[data-theme="light"] body:not(.has-background) .todo-item:hover { background-color: rgba(0, 0, 0, 0.08); }
+html[data-theme="light"] body:not(.has-background) .todo-item.selected:hover { background-color: rgba(0, 0, 0, 0.16); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today:hover { background-color: rgba(0, 0, 0, 0.035); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today.selected:hover { background-color: rgba(0, 0, 0, 0.065); }
+html[data-theme="light"] body:not(.has-background) .todo-item.focused:hover { background-color: rgba(50, 80, 255, 0.24); }
+/* --------------------------------------------------------------------- */
 
 /* A positioned (absolute) element without its own z-index still paints
    above ordinary in-flow content regardless of DOM order -- these are the
@@ -1356,7 +1634,7 @@ main {
   width: 15px;
   height: 15px;
   flex: none;
-  accent-color: #8ab4f8;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -1372,7 +1650,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #80868b;
+  color: var(--text-muted);
   cursor: pointer;
 }
 .todo-item-lock svg { width: 13px; height: 13px; }
@@ -1385,7 +1663,7 @@ main {
 .todo-item input[type="checkbox"].todo-checkbox-failed {
   appearance: none;
   -webkit-appearance: none;
-  background: #f28b82;
+  background: var(--danger);
   border-radius: 3px;
   position: relative;
 }
@@ -1404,16 +1682,22 @@ main {
 .todo-item-text {
  flex: 1;
  min-width: 0;
- text-shadow: 2px -2px 3px black;
+ text-shadow: var(--glass-text-shadow);
 }
 
 .not-today > .todo-item-text {
-	filter: brightness(0.7) grayscale(0.5);
+  filter: brightness(0.7) grayscale(0.5);
+}
+/* Dark theme dims this text toward black (brightness(0.7)); light theme's
+   dark-on-light text needs to wash out toward the page instead, so it
+   lightens rather than darkens -- grayscale(0.5) carries over unchanged. */
+html[data-theme="light"] .not-today > .todo-item-text {
+  filter: brightness(1.5) grayscale(0.5);
 }
 
 .todo-item-name {
   font-size: 13px;
-  color: #e8eaed;
+  color: var(--text-primary);
   /* Single line, truncated with an ellipsis rather than wrapping -- keeps
      every row's height consistent regardless of name length (paired with
      .todo-item-desc always being rendered, even empty, in app.js). */
@@ -1422,7 +1706,7 @@ main {
   text-overflow: ellipsis;
 }
 .todo-item.completed .todo-item-name {
-  color: #fff;
+  color: var(--text-heading);
   text-decoration: line-through;
 }
 /* An appointment task past its due date and still not done, per
@@ -1431,14 +1715,14 @@ main {
    in practice (see the row's className), so no ordering tie-break needed
    against it. */
 .todo-item.failed .todo-item-name {
-  color: #f28b82;
+  color: var(--danger);
   text-decoration: line-through;
 }
 
 .todo-item-desc {
   font-size: 11px;
   line-height: 14px;
-  color: #9aa0a6;
+  color: var(--text-label);
   margin-top: 2px;
   /* Same truncation as .todo-item-name, and always rendered (see
      buildTodoItemRow in app.js) even when there's no description, so every
@@ -1452,27 +1736,27 @@ main {
   text-overflow: ellipsis;
 }
 .todo-item.completed .todo-item-desc {
-  color: #80868b;
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 .todo-item.failed .todo-item-desc {
-  color: #f28b82;
+  color: var(--danger);
   text-decoration: line-through;
 }
 
 .todo-item-meta {
   font-size: 10px;
-  color: #80868b;
+  color: var(--text-muted);
   margin-top: 2px;
 }
-.todo-item-meta.overdue { color: #f28b82; }
-.todo-item-meta.failed { color: #f28b82; }
+.todo-item-meta.overdue { color: var(--danger); }
+.todo-item-meta.failed { color: var(--danger); }
 
-.todo-item.all-day .todo-item-name { color: #8ab4f8; }
+.todo-item.all-day .todo-item-name { color: var(--accent); }
 /* After .all-day so a task that's both all-day and an appointment (not yet
    due) shows the appointment color. */
-.todo-item.appointment .todo-item-name { color: #81c995; }
-.todo-item.passive .todo-item-name { color: #bcaaa4; }
+.todo-item.appointment .todo-item-name { color: var(--success); }
+.todo-item.passive .todo-item-name { color: var(--passive); }
 
 .todo-focus-btn {
   flex: none;
@@ -1482,14 +1766,14 @@ main {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #80868b;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.15s, color 0.15s;
 }
-.todo-focus-btn:hover { background: rgba(255, 255, 255, 0.12); color: #e8eaed; }
+.todo-focus-btn:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
 
 /* The "work on this now" toggle (see buildTodoItemRow, app.js) -- its own
    class, not .todo-focus-btn above, since it needs a distinctly bigger
@@ -1521,14 +1805,14 @@ main {
   padding: 8px 10px;
   border-radius: 6px;
   font-size: 13px;
-  color: #e8eaed;
+  color: var(--text-primary);
   cursor: pointer;
   /* Only matters for the Privacy Policy/Terms of Service items (see
      index.html), the only ones that are real <a> links rather than a plain
      div with an onclick -- harmless on the rest. */
   text-decoration: none;
 }
-.menu-item:hover { background: rgba(255, 255, 255, 0.08); }
+.menu-item:hover { background: var(--border-hairline); }
 
 .menu-separator {
   height: 1px;
@@ -1541,10 +1825,10 @@ main {
 .todo-context-menu {
   position: fixed;
   z-index: 20;
-  background: rgba(32, 33, 36, 0.7);
+  background: var(--glass-menu-bg);
   backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
   -webkit-backdrop-filter: url(#glass-distort) blur(2px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hairline);
   border-radius: 10px;
   padding: 4px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
@@ -1557,14 +1841,14 @@ main {
   border-radius: 5px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
-  color: #e8eaed;
+  color: var(--text-primary);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.15s;
 }
 .menu-btn-small:hover { background: rgba(255, 255, 255, 0.12); }
 .menu-btn-danger {
-  color: #f28b82;
+  color: var(--danger);
   border-color: rgba(217, 48, 37, 0.4);
 }
 .menu-btn-danger:hover { background: rgba(217, 48, 37, 0.15); }
@@ -1591,7 +1875,7 @@ main {
   flex: none;
   border: 1px solid transparent;
   background: transparent;
-  color: #8ab4f8;
+  color: var(--accent);
   font-size: 14px;
   cursor: pointer;
   padding: 8px 12px;
@@ -1605,7 +1889,7 @@ main {
 }
 
 .empty-state {
-  color: #80868b;
+  color: var(--text-muted);
   font-size: 13px;
   margin-bottom: 24px;
 }
@@ -1639,7 +1923,7 @@ main {
   background: rgba(0, 0, 0, 0);
   backdrop-filter: blur(20px) saturate(160%) brightness(55%);
   -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(55%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hairline);
   border-radius: 12px;
   padding: 18px;
   width: 420px;
@@ -1651,13 +1935,18 @@ main {
   overflow-y: auto;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   /* Same text-shadow as .todo-item-text -- see its own comment. */
-  text-shadow: 2px -2px 3px black;
+  text-shadow: var(--glass-text-shadow);
+}
+/* Same brightness-direction flip as .side-panel -- see its own comment. */
+:root[data-theme="light"] .modal {
+  backdrop-filter: blur(20px) saturate(160%) brightness(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(145%);
 }
 
 .modal-title {
   font-size: 13px;
   font-weight: 500;
-  color: #e8eaed;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -1703,15 +1992,15 @@ main,
   max-height: 360px;
   overflow-y: auto;
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 #todo-manage-months::-webkit-scrollbar { width: 6px; } /* Chromium */
 #todo-manage-months::-webkit-scrollbar-track { background: transparent; }
 #todo-manage-months::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
-#todo-manage-months::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+#todo-manage-months::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 .series-month-group {
   margin-bottom: 8px;
@@ -1722,7 +2011,7 @@ main,
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: #9aa0a6;
+  color: var(--text-label);
   padding: 4px 6px 2px;
 }
 
@@ -1730,13 +2019,13 @@ main,
   padding: 6px 8px;
   border-radius: 6px;
   font-size: 13px;
-  color: #e8eaed;
+  color: var(--text-primary);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.series-row:hover { background: rgba(255, 255, 255, 0.06); }
+.series-row:hover { background: var(--hover-tint); }
 .series-row.selected { background: rgba(138, 180, 248, 0.16); }
 /* A series with a single task record (one-off, or an unbroken recurring
    task) stays plain white/default. One with multiple records but all the
@@ -1744,14 +2033,14 @@ main,
    anything else -- reads as blue. One with multiple records spanning
    multiple taskIds -- a merge of separately-created tasks -- reads as
    green. Distinguishable at a glance without opening any of them. */
-.series-row-multi { color: #8ab4f8; }
-.series-row-mixed { color: #81c995; }
+.series-row-multi { color: var(--accent); }
+.series-row-mixed { color: var(--success); }
 .series-row[draggable="true"] { cursor: grab; }
 
 .todo-manage-right {
   flex: 1;
   min-width: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid var(--border-hairline);
   padding-left: 14px;
   border-radius: 0 4px 4px 0;
   transition: background 0.15s;
@@ -1768,14 +2057,14 @@ main,
 
 .edit-scope-desc {
   font-size: 12px;
-  color: #9aa0a6;
+  color: var(--text-label);
   margin: 0 0 12px;
   line-height: 1.5;
 }
 
 .todo-manage-empty {
   font-size: 12px;
-  color: #80868b;
+  color: var(--text-muted);
   padding: 4px 0 12px;
 }
 
@@ -1792,7 +2081,7 @@ main,
 
 .todo-manage-item-name {
   font-size: 13px;
-  color: #e8eaed;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1801,13 +2090,13 @@ main,
   display: inline-flex;
   vertical-align: -2px;
   margin-left: 5px;
-  color: #80868b;
+  color: var(--text-muted);
 }
 .todo-manage-item-lock svg { width: 12px; height: 12px; }
 
 .todo-manage-item-meta {
   font-size: 11px;
-  color: #80868b;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1820,13 +2109,13 @@ main,
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #80868b;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.todo-manage-item button:hover { background: rgba(255, 255, 255, 0.1); color: #e8eaed; }
+.todo-manage-item button:hover { background: rgba(255, 255, 255, 0.1); color: var(--text-primary); }
 .todo-manage-item button:disabled {
   cursor: default;
   opacity: 0.35;
@@ -1852,7 +2141,7 @@ main,
   flex: 1;
 }
 .series-edit-save-confirm {
-  color: #81c995;
+  color: var(--success);
   font-size: 12px;
   align-self: center;
   opacity: 0;
@@ -1869,15 +2158,15 @@ main,
   overflow-y: auto;
   margin-bottom: 10px;
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 #series-edit-list::-webkit-scrollbar { width: 6px; } /* Chromium */
 #series-edit-list::-webkit-scrollbar-track { background: transparent; }
 #series-edit-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
-#series-edit-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+#series-edit-list::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 .task-stats-section {
   margin-bottom: 14px;
@@ -1891,7 +2180,7 @@ main,
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: #9aa0a6;
+  color: var(--text-label);
   margin-bottom: 6px;
 }
 
@@ -1903,27 +2192,27 @@ main,
   font-size: 12px;
   padding: 3px 0;
 }
-.task-stats-label { color: #9aa0a6; }
-.task-stats-value { color: #e8eaed; }
+.task-stats-label { color: var(--text-label); }
+.task-stats-value { color: var(--text-primary); }
 
 .task-stats-empty {
   font-size: 12px;
-  color: #80868b;
+  color: var(--text-muted);
 }
 
 .task-stats-occurrence-list {
   max-height: 160px;
   overflow-y: auto;
   scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .task-stats-occurrence-list::-webkit-scrollbar { width: 6px; } /* Chromium */
 .task-stats-occurrence-list::-webkit-scrollbar-track { background: transparent; }
 .task-stats-occurrence-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
-.task-stats-occurrence-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
+.task-stats-occurrence-list::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 .task-stats-occurrence-item {
   display: flex;
@@ -1933,8 +2222,8 @@ main,
   font-size: 12px;
   padding: 3px 0;
 }
-.task-stats-occurrence-date { color: #9aa0a6; flex: none; }
-.task-stats-occurrence-time { color: #e8eaed; text-align: right; }
+.task-stats-occurrence-date { color: var(--text-label); flex: none; }
+.task-stats-occurrence-time { color: var(--text-primary); text-align: right; }
 
 .modal-field {
   margin-bottom: 10px;
@@ -1989,14 +2278,14 @@ main,
    value) -- see showFormModal's field.type === 'static'. */
 .modal-static-text {
   font-size: 12px;
-  color: #e8eaed;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
 .modal-field label {
   display: block;
   font-size: 11px;
-  color: #80868b;
+  color: var(--text-muted);
   margin-bottom: 3px;
 }
 
@@ -2004,27 +2293,32 @@ main,
   width: 100%;
   height: 28px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.35);
-  color: #e8eaed;
+  border: 1px solid var(--border-hairline);
+  background: var(--input-bg);
+  color: var(--text-primary);
   padding: 0 8px;
   font-size: 12px;
   outline: none;
   transition: border-color 0.2s;
 }
-/* color-scheme: dark (set on html/body) gets a <select>'s dropdown popup
-   most of the way to matching the app, but Chromium still renders
-   unselected <option> rows with its own mid-gray, not this app's actual
-   dark surface color -- <option> can't use the rest of the app's rgba()
-   transparency (the popup isn't drawn over our page background), so this
-   is the closest solid-color match to it (same family as .modal's
-   rgba(32, 33, 36, ...)). */
+/* color-scheme (set on :root above) gets a <select>'s dropdown popup most of
+   the way to matching the app, but Chromium still renders unselected
+   <option> rows with its own mid-gray/light-gray, not this app's actual
+   surface color -- <option> can't use the rest of the app's rgba()
+   transparency (the popup isn't drawn over our page background), so
+   --solid-surface is the closest solid-color match to it (same family as
+   .modal's translucent glass base). */
 option {
-  background-color: #202124;
-  color: #e8eaed;
+  background-color: var(--solid-surface);
+  color: var(--text-primary);
 }
-.modal-input:focus { border-color: #8ab4f8; }
+.modal-input:focus { border-color: var(--accent); }
+/* Chromium's native date/time-picker glyph renders dark-on-transparent by
+   default -- inverting it to white reads correctly against this app's dark
+   surfaces, but would go the wrong way in light theme, so it's un-inverted
+   there instead (see the light-theme override further down). */
 .modal-input::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.6; }
+:root[data-theme="light"] .modal-input::-webkit-calendar-picker-indicator { filter: none; }
 
 .modal-textarea {
   height: 56px;
@@ -2048,7 +2342,7 @@ option {
   padding: 0 4px;
 }
 .modal-time-sep {
-  color: #80868b;
+  color: var(--text-muted);
 }
 .modal-time-ampm {
   width: 62px;
@@ -2080,10 +2374,10 @@ option {
   gap: 6px;
   padding: 3px 0;
   font-size: 12px;
-  color: #e8eaed;
+  color: var(--text-primary);
   cursor: pointer;
 }
-.modal-checkbox-row input { accent-color: #8ab4f8; }
+.modal-checkbox-row input { accent-color: var(--accent); }
 
 .modal-actions {
   display: flex;
@@ -2104,28 +2398,28 @@ option {
 
 .modal-cancel {
   background: rgba(255, 255, 255, 0.04);
-  color: #e8eaed;
+  color: var(--text-primary);
 }
 .modal-cancel:hover { background: rgba(255, 255, 255, 0.12); }
 
 .modal-secondary {
   background: rgba(255, 255, 255, 0.04);
-  color: #e8eaed;
+  color: var(--text-primary);
 }
 .modal-secondary:hover { background: rgba(255, 255, 255, 0.12); }
 
 .modal-ok {
-  background: #8ab4f8;
-  color: #131314;
+  background: var(--accent);
+  color: var(--accent-on);
 }
-.modal-ok:hover { background: #aecbfa; transform: translateY(-1px); }
+.modal-ok:hover { background: var(--accent-hover); transform: translateY(-1px); }
 
 /* margin-right: auto pushes Cancel/OK to the far right, keeping this
    separated from them so it can't be clicked by accident. */
 .modal-delete {
   margin-right: auto;
   background: rgba(255, 255, 255, 0.04);
-  color: #f28b82;
+  color: var(--danger);
 }
 .modal-delete:hover { background: rgba(217, 48, 37, 0.15); }
 .modal-delete.confirm {

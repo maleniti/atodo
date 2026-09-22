@@ -248,6 +248,9 @@ const I18N = {
     'settings.language': 'Language',
     'settings.languageEnglish': 'English',
     'settings.languageCroatian': 'Hrvatski (Croatian)',
+    'settings.theme': 'Theme',
+    'settings.themeDark': 'Dark',
+    'settings.themeLight': 'Light',
     'settings.avatar': 'Avatar',
     'settings.uploadImage': 'Upload image…',
     'settings.background': 'Background',
@@ -557,6 +560,9 @@ const I18N = {
     'settings.language': 'Jezik',
     'settings.languageEnglish': 'English (engleski)',
     'settings.languageCroatian': 'Hrvatski',
+    'settings.theme': 'Tema',
+    'settings.themeDark': 'Tamna',
+    'settings.themeLight': 'Svijetla',
     'settings.avatar': 'Avatar',
     'settings.uploadImage': 'Učitaj sliku…',
     'settings.background': 'Pozadina',
@@ -1282,12 +1288,12 @@ async function verifyEmailToken(token) {
 }
 
 // ---------------------------------------------------------------------------
-// User profile -- nickname/avatar/timeFormat/background/language, fetched
-// as part of GET /auth/me's User (see getMe below) and written back via
-// PATCH /users/me (see saveUserProfile). Held in memory only (currentUser*
-// below), not re-fetched on every use -- every write site builds its PATCH
-// body from currentUserProfileSnapshot so none of them can accidentally
-// drop a field a *different* write site owns.
+// User profile -- nickname/avatar/timeFormat/background/language/theme,
+// fetched as part of GET /auth/me's User (see getMe below) and written back
+// via PATCH /users/me (see saveUserProfile). Held in memory only
+// (currentUser* below), not re-fetched on every use -- every write site
+// builds its PATCH body from currentUserProfileSnapshot so none of them can
+// accidentally drop a field a *different* write site owns.
 // ---------------------------------------------------------------------------
 
 // Only actually used to backfill a field an *imported* data export might
@@ -1299,7 +1305,9 @@ async function verifyEmailToken(token) {
 // (while this is still null) and then PATCHes a real 'en'/'hr' over it, so
 // a user's own choice in Settings (or a failed detection falling back to
 // 'en') always sticks instead of being silently re-detected on every load.
-const DEFAULT_USER_PROFILE = { nickname: '', avatar: null, timeFormat: '24', background: null, language: null };
+// theme has no such detection step -- 'dark' is just a real, always-valid
+// default (see applyTheme/currentUserTheme below).
+const DEFAULT_USER_PROFILE = { nickname: '', avatar: null, timeFormat: '24', background: null, language: null, theme: 'dark' };
 
 // PATCH /users/me -- fire-and-forget from the caller's perspective, same as
 // saveTasks below: nothing here awaits the request finishing, and a failure
@@ -1368,6 +1376,7 @@ let currentUserAvatar = null; // data URL, or null for the initials fallback
 let currentUserTimeFormat = '24'; // '12' | '24' -- see formatTimeOfDay/formatDateTime
 let currentUserBackground = null; // same shape as the profile's background field, or null -- see applyBackground
 let currentUserLanguage = 'en'; // 'en' | 'hr' -- see the i18n section up top (t()/currentLocaleTag())
+let currentUserTheme = 'dark'; // 'dark' | 'light' -- see applyTheme below
 // Same shape as getMe()'s subscription field (null | { id, plan, ... }) --
 // see describeSubscription/isSubscriptionActive. Refreshed after boot()/
 // login resolve a token and again after subscribeCurrentUserToTrial() mints
@@ -1387,6 +1396,20 @@ function applyLanguage(language) {
   renderTodo();
   renderSidePanel();
   refreshTodoManageModal();
+}
+
+// Applies a (possibly new) theme -- called on startup (startApp) and
+// whenever Settings' Save button changes it. Purely a CSS hook (see
+// style.css's `html[data-theme="light"]` rules): setting/clearing the
+// `data-theme` attribute is all that's needed, no re-render, since nothing
+// in the DOM's structure or text depends on theme, only its paint.
+function applyTheme(theme) {
+  currentUserTheme = theme;
+  if (theme === 'light') {
+    document.documentElement.dataset.theme = 'light';
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
 }
 
 // Free, keyless IP geolocation (no account/API key to configure, unlike
@@ -1459,6 +1482,7 @@ function currentUserProfileSnapshot() {
     timeFormat: currentUserTimeFormat,
     background: currentUserBackground,
     language: currentUserLanguage,
+    theme: currentUserTheme,
   };
 }
 
@@ -5756,6 +5780,7 @@ const settingsOverlay = document.getElementById('settings-overlay');
 const settingsNicknameInput = document.getElementById('settings-nickname-input');
 const settingsTimeFormatSelect = document.getElementById('settings-time-format-select');
 const settingsLanguageSelect = document.getElementById('settings-language-select');
+const settingsThemeSelect = document.getElementById('settings-theme-select');
 const settingsAvatarPreviewImg = document.getElementById('settings-avatar-preview-img');
 const settingsAvatarPreviewInitials = document.getElementById('settings-avatar-preview-initials');
 const settingsAvatarFileInput = document.getElementById('settings-avatar-file-input');
@@ -5845,6 +5870,7 @@ function openSettingsModal() {
   settingsNicknameInput.value = currentUserNickname || '';
   settingsTimeFormatSelect.value = currentUserTimeFormat;
   settingsLanguageSelect.value = currentUserLanguage;
+  settingsThemeSelect.value = currentUserTheme;
   settingsPendingAvatar = undefined;
   renderSettingsAvatarPreview();
   renderSettingsBackgroundPreview();
@@ -5878,10 +5904,11 @@ document.getElementById('settings-save').onclick = () => {
   const avatar = settingsPendingAvatar === undefined ? currentUserAvatar : settingsPendingAvatar;
   const timeFormat = settingsTimeFormatSelect.value;
   const language = settingsLanguageSelect.value;
+  const theme = settingsThemeSelect.value;
   currentUserNickname = nickname;
   currentUserAvatar = avatar;
   currentUserTimeFormat = timeFormat;
-  saveUserProfile({ ...currentUserProfileSnapshot(), language });
+  saveUserProfile({ ...currentUserProfileSnapshot(), language, theme });
   renderUserAvatar();
   // applyLanguage saves currentUserLanguage and re-renders everything
   // renderAppTitle/renderTodo/renderSidePanel below would have anyway (every
@@ -5889,6 +5916,7 @@ document.getElementById('settings-save').onclick = () => {
   // old timeFormat/language baked into its text), so it's called instead of
   // them, not alongside them.
   applyLanguage(language);
+  applyTheme(theme);
   closeSettingsModal();
 };
 
@@ -6039,6 +6067,7 @@ settingsImportDataFileInput.onchange = async () => {
   currentUserTimeFormat = profile.timeFormat;
   currentUserBackground = profile.background;
   currentUserLanguage = profile.language || 'en';
+  currentUserTheme = profile.theme || 'dark';
 
   activeTaskId = data.activeTaskId || null;
   activeOccurrenceDate = activeTaskId ? data.activeOccurrenceDate || null : null;
@@ -6048,10 +6077,11 @@ settingsImportDataFileInput.onchange = async () => {
   saveTodoViewMode();
 
   applyStaticTranslations();
-  openSettingsModal(); // re-seed the form fields (nickname/time format/avatar/background/language preview) from the just-imported profile
+  openSettingsModal(); // re-seed the form fields (nickname/time format/avatar/background/language/theme preview) from the just-imported profile
   renderAppTitle();
   renderUserAvatar();
   applyBackground(currentUserBackground);
+  applyTheme(currentUserTheme);
   renderTodo();
   renderSidePanel();
   refreshTodoManageModal();
@@ -6255,9 +6285,13 @@ const backgroundCreditPhotographerEl = document.getElementById('background-credi
 // viewport (body, behind every panel's own translucent glass background) with
 // no tiling, per style.css's background-size/position/repeat rules on body.
 // Also the one place that shows/hides the required Unsplash attribution, so
-// the two can never end up out of sync.
+// the two can never end up out of sync. The `has-background` class is the
+// one CSS-visible hook for "a photo is present" -- style.css's `.todo-item`
+// rules key off it to switch between backdrop-filter brightness (an image
+// to actually blur) and a plain background-color (nothing to blur).
 function applyBackground(background) {
   document.body.style.backgroundImage = background ? `url("${background.regularUrl}")` : '';
+  document.body.classList.toggle('has-background', !!background);
   backgroundCreditEl.classList.toggle('hidden', !background);
   if (background) {
     backgroundCreditPhotographerEl.href = background.photographerUrl;
@@ -6465,6 +6499,7 @@ function applyUserSession(user) {
   currentUserTimeFormat = user.timeFormat;
   currentUserBackground = user.background;
   currentUserLanguage = user.language || 'en';
+  currentUserTheme = user.theme || 'dark';
   currentUserSubscription = user.subscription;
   activeTaskId = user.activeTaskId;
   activeOccurrenceDate = user.activeTaskId ? user.activeOccurrenceDate : null;
@@ -6495,6 +6530,7 @@ async function startApp(needsLanguageDetection) {
   renderUserAvatar();
   renderSubscribeHeaderButton();
   applyBackground(currentUserBackground);
+  applyTheme(currentUserTheme);
   renderTodo();
   if (needsLanguageDetection) {
     detectLanguageAndTimeFormatFromLocation().then(({ language, timeFormat }) => {
