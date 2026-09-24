@@ -3536,14 +3536,41 @@ function occursOnDate(task, dateISO) {
   return Recurrence.occursOn(task, dateISO) && !Occurrence.isDateExcluded(occurrences, task.taskId, dateISO);
 }
 
+// previousOccurrenceBefore/nextOccurrenceAfter, skipping any date
+// Occurrence.isDateExcluded has vacated (see rescheduleOccurrencePrompt) --
+// otherwise a preview view (computeNextRecurrenceItems's "what's next") could
+// still surface a date whose own occurrence has since moved elsewhere, as if
+// it were still a live, unclaimed one. recurUntilCompleted has no such
+// exclusion history to check (occurrenceScanShape's own chain-membership
+// scan already only ever reflects the live pending occurrence's real dates).
 function previousOccurrenceBeforeDate(task, dateISO) {
-  const shape = occurrenceScanShape(task);
-  return shape ? Recurrence.previousOccurrenceBefore(shape, dateISO) : null;
+  if (task.recurUntilCompleted) {
+    const shape = occurrenceScanShape(task);
+    return shape ? Recurrence.previousOccurrenceBefore(shape, dateISO) : null;
+  }
+  let cursor = dateISO;
+  for (let i = 0; i < 3660; i++) {
+    const prev = Recurrence.previousOccurrenceBefore(task, cursor);
+    if (!prev) return null;
+    if (!Occurrence.isDateExcluded(occurrences, task.taskId, prev)) return prev;
+    cursor = prev;
+  }
+  return null;
 }
 
 function nextOccurrenceAfterDate(task, afterISO) {
-  const shape = occurrenceScanShape(task);
-  return shape ? Recurrence.nextOccurrenceAfter(shape, afterISO) : null;
+  if (task.recurUntilCompleted) {
+    const shape = occurrenceScanShape(task);
+    return shape ? Recurrence.nextOccurrenceAfter(shape, afterISO) : null;
+  }
+  let cursor = afterISO;
+  for (let i = 0; i < 3660; i++) {
+    const next = Recurrence.nextOccurrenceAfter(task, cursor);
+    if (!next) return null;
+    if (!Occurrence.isDateExcluded(occurrences, task.taskId, next)) return next;
+    cursor = next;
+  }
+  return null;
 }
 
 // Every date recurUntilCompleted's own forEachOccurrenceBefore/InRange
@@ -5164,12 +5191,35 @@ async function rescheduleOccurrencePrompt(task, occurrence) {
   logOccurrenceEvent(task, occurrence.occurrenceDate, `Rescheduled to ${result.newDate}`);
   if (sidePanelOccurrenceDate === occurrence.occurrenceDate) sidePanelOccurrenceDate = result.newDate;
   // Recorded BEFORE moving occurrenceDate, so occursOnDate/Occurrence.isDateExcluded
-  // can tell the vacated date apart from one that's simply never been
-  // touched -- otherwise a still-matching pattern date (e.g. tomorrow, on a
-  // daily task) would regenerate a phantom fresh occurrence right there the
-  // moment this one moves off it.
+  // can tell a vacated date apart from one that's simply never been touched
+  // -- otherwise a still-matching pattern date (e.g. tomorrow, on a daily
+  // task) would regenerate a phantom fresh occurrence right there the moment
+  // this one moves off it.
+  //
+  // Moving forward past one or more of the task's own future occurrences
+  // means skipping that whole in-between sequence, not just this single
+  // occurrence's original date -- every pattern date the task would
+  // otherwise still produce between the old date and the new one is excluded
+  // too, so e.g. moving a daily task's today out to next week skips every
+  // day in between instead of leaving them to resurface as fresh, unclaimed
+  // occurrences right alongside the moved one. Recurrence continues from the
+  // new date on regardless, since nothing about the underlying pattern
+  // itself changes here -- only which of its dates are excluded (see
+  // nextOccurrenceAfterDate/previousOccurrenceBeforeDate, which already skip
+  // excluded dates the same way occursOnDate does). Moving BACKWARD doesn't
+  // skip anything by the same logic -- there's no "future sequence" between
+  // the new (earlier) date and the old one to speak of, just this one
+  // occurrence relocating.
   if (!occurrence.pendingReschedules) occurrence.pendingReschedules = [];
-  occurrence.pendingReschedules.push(occurrence.occurrenceDate);
+  if (result.newDate > occurrence.occurrenceDate) {
+    let cursor = occurrence.occurrenceDate;
+    for (let i = 0; i < 3660 && cursor && cursor < result.newDate; i++) {
+      occurrence.pendingReschedules.push(cursor);
+      cursor = Recurrence.nextOccurrenceAfter(task, cursor);
+    }
+  } else {
+    occurrence.pendingReschedules.push(occurrence.occurrenceDate);
+  }
   occurrence.occurrenceDate = result.newDate;
   saveTasks();
   renderTodo();
