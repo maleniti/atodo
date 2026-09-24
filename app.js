@@ -712,8 +712,9 @@ function updateOutboundLegalLinks() {
 }
 
 // task.log ({ message, timestamp, occurrenceDate }[]) is the side panel's
-// short activity history -- lazily created like task.focusLog, not present
-// on every task from the start. Recorded per task record (not per
+// short activity history for whole-task/pattern-level events -- lazily
+// created, not present on every task from the start. Recorded per task
+// record (not per
 // taskId/seriesId); the side panel merges every record's log together when
 // it displays "this task" or "this series" (see aggregateSidePanelRecords).
 // occurrenceDate is which occurrence the action was actually about (omit it
@@ -728,11 +729,28 @@ function logTaskEvent(task, message, occurrenceDate) {
   task.log.push({ message, timestamp: Date.now(), occurrenceDate: occurrenceDate || null });
 }
 
-// task.comments ({ text, timestamp }[]) -- the side panel's user-entered
-// notes, same lazy/per-record storage as task.log above.
+// The occurrence-scoped counterpart to logTaskEvent above -- for an event
+// that's genuinely ABOUT one specific occurrence (marked done/failed, timer
+// set/cancelled/elapsed, focused/unfocused), not just tagged with one for
+// context on an otherwise task/pattern-level event (a whole-task edit, a
+// series split). Lives on Occurrence.log instead of Task.log; no
+// occurrenceDate field of its own needed there -- which occurrence it's
+// about is already implied by the row it's attached to.
+function logOccurrenceEvent(task, occurrenceDate, message) {
+  ensureOccurrence(task, occurrenceDate).log.push({ message, timestamp: Date.now() });
+}
+
+// task.comments ({ text, timestamp }[]) -- general notes about the task as a
+// whole (side panel scoped to 'task'/'series'), same lazy/per-record storage
+// as task.log above. See addOccurrenceComment for the per-occurrence
+// counterpart ('occurrence' scope).
 function addTaskComment(task, text) {
   if (!task.comments) task.comments = [];
   task.comments.push({ text, timestamp: Date.now() });
+}
+
+function addOccurrenceComment(task, occurrenceDate, text) {
+  ensureOccurrence(task, occurrenceDate).comments.push({ text, timestamp: Date.now() });
 }
 
 // window.prompt() has no native implementation on Linux (Chromium doesn't
@@ -1502,25 +1520,71 @@ function currentUserProfileSnapshot() {
 // the very earliest ones ever created (and so never unexpectedly frozen out
 // by a limit that postdates them) while still sorting stably relative to
 // each other.
-function normalizeLoadedTasks(loaded) {
-  loaded.forEach((task, index) => {
+function normalizeLoadedTasks(loadedTasks) {
+  loadedTasks.forEach((task, index) => {
     if (!task.seriesId) task.seriesId = uid();
     if (!task.taskId) task.taskId = uid();
     if (!task.createdAt) task.createdAt = index;
   });
-  return loaded;
+  return loadedTasks;
 }
 
-// GET /tasks -- the current account's entire task list, scoped server-side
-// by the bearer token (see api-spec.yaml), not by anything passed here.
-// Awaited exactly once, inside startApp(), before the first render.
+// GET /tasks -- the current account's entire task list and occurrence
+// history, scoped server-side by the bearer token (see api-spec.yaml), not
+// by anything passed here. Awaited exactly once, inside startApp(), before
+// the first render.
 async function loadTasks() {
-  return normalizeLoadedTasks(await apiFetch('/tasks'));
+  const data = await apiFetch('/tasks');
+  return { tasks: normalizeLoadedTasks(data.tasks), occurrences: data.occurrences || [] };
 }
 
 // Populated once startApp() runs (after boot()/login resolves a user), not
 // at script-load time -- there's nothing to load until then.
 let tasks = [];
+// One row per *interacted-with* occurrence -- see occurrence.js's own
+// top-of-file comment for the data model this and `tasks` together make up.
+// findOccurrence/ensureOccurrence below are the one chokepoint every
+// mutation goes through, so an occurrence's state can never bleed into a
+// different one's the way it could when it lived in a shared per-task map.
+let occurrences = [];
+
+// Resolves which Occurrence row a click on (task, occurrenceDate) actually
+// refers to. For an ordinary task this is an exact (taskId, occurrenceDate)
+// match, the same key the row was created under.
+//
+// For a recurUntilCompleted task an exact match is tried FIRST too -- this
+// is what lets code re-derive "the same occurrence" by its own date even
+// after changing its status (e.g. logging an event right after marking it
+// done, or flushing its timer): looking it up by status alone would
+// otherwise stop finding it the instant it stops being 'pending', minting a
+// second stray row at the same date and violating the (taskId,
+// occurrenceDate) uniqueness this whole model depends on. Only once no
+// exact row exists does this fall back to chain membership -- the clicked
+// date might be one of the current pending occurrence's own
+// pendingReschedules entries rather than its own occurrenceDate (see
+// occurrence.js's own comment on the field) -- checked only against the
+// still-'pending' occurrence, since a resolved one's chain is frozen
+// history, not something a new date could still belong to.
+// occurrenceDate == null means "just the current pending one, whichever
+// date it's at" (see occurrenceScanShape and friends) -- skips the exact
+// match entirely, since there's no date to match.
+function findOccurrence(task, occurrenceDate) {
+  if (!task.recurUntilCompleted) return Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
+  if (occurrenceDate == null) return Occurrence.pendingOccurrenceFor(occurrences, task.taskId);
+  const exact = Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
+  if (exact) return exact;
+  const pending = Occurrence.pendingOccurrenceFor(occurrences, task.taskId);
+  return pending && (pending.pendingReschedules || []).includes(occurrenceDate) ? pending : null;
+}
+
+function ensureOccurrence(task, occurrenceDate) {
+  const existing = findOccurrence(task, occurrenceDate);
+  if (existing) return existing;
+  const occurrence = Occurrence.createOccurrence({ id: uid(), taskId: task.taskId, occurrenceDate });
+  occurrences.push(occurrence);
+  return occurrence;
+}
+
 let activeTaskId = null;
 // Which occurrence of activeTaskId is focused -- a recurring task can show
 // up to three rows at once (yesterday's still-overdue one, today's, and
@@ -1540,12 +1604,12 @@ let activeOccurrenceDate = null;
 // active task has a timer instead (see flushFocusOnlyElapsed/setActiveTaskId).
 let activeFocusOnlySince = null;
 
-// PUT /tasks -- bulk-replaces the account's entire task list. Fire-and-
-// forget, same as saveUserProfile: every caller already computes the full
-// resulting `tasks` array locally before calling this, so there's nothing
-// useful to await here, just a background write.
+// PUT /tasks -- bulk-replaces the account's entire task/occurrence state.
+// Fire-and-forget, same as saveUserProfile: every caller already computes
+// the full resulting `tasks`/`occurrences` arrays locally before calling
+// this, so there's nothing useful to await here, just a background write.
 function saveTasks() {
-  apiFetch('/tasks', { method: 'PUT', body: tasks }).catch((err) => {
+  apiFetch('/tasks', { method: 'PUT', body: { tasks, occurrences } }).catch((err) => {
     console.error('Failed to save tasks:', err);
   });
 }
@@ -1579,51 +1643,48 @@ function setActiveTaskId(newId, occurrenceDate) {
   if (newId === activeTaskId && occurrenceDate === activeOccurrenceDate) return;
   const prevTask = tasks.find((t) => t.id === activeTaskId);
   if (prevTask) {
-    if (prevTask.timer) {
-      flushTimerElapsed(prevTask); // log this run's elapsed time before freezeTimer erases runningSince
-      freezeTimer(prevTask.timer);
+    const prevOccurrence = findOccurrence(prevTask, activeOccurrenceDate);
+    if (prevOccurrence && prevOccurrence.timer) {
+      flushTimerElapsed(prevTask, activeOccurrenceDate); // log this run's elapsed time before freezeTimer erases runningSince
+      freezeTimer(prevOccurrence.timer);
     } else {
-      flushFocusOnlyElapsed(prevTask);
+      flushFocusOnlyElapsed(prevTask, activeOccurrenceDate);
     }
-    logTaskEvent(prevTask, 'Unfocused', activeOccurrenceDate);
+    logOccurrenceEvent(prevTask, activeOccurrenceDate, 'Unfocused');
   }
   activeTaskId = newId;
   activeOccurrenceDate = newId ? occurrenceDate : null;
   saveActiveTaskId();
   const nextTask = tasks.find((t) => t.id === activeTaskId);
   if (nextTask) {
-    // Only actually resume the timer if it belongs to the occurrence being
-    // focused now -- nextTask can be the very same task object as prevTask
-    // above (switching which of a recurring task's own occurrences is
-    // focused, not switching task entirely), whose timer was just frozen a
-    // moment ago but still tagged to the *previous* occurrence. Without this
-    // check it would immediately un-pause again here, ticking away on an
-    // occurrence that no longer shows as focused.
-    if (timerMatchesOccurrence(nextTask.timer, activeOccurrenceDate)) nextTask.timer.runningSince = Date.now();
+    // nextTask can be the very same task object as prevTask above (switching
+    // which of a recurring task's own occurrences is focused, not switching
+    // task entirely) -- its timer, if any, already lives on the Occurrence
+    // row for THIS specific occurrenceDate now, so there's no risk of
+    // resuming a timer that actually belongs to the occurrence just
+    // unfocused above (unlike before, when both shared one task-level slot).
+    const nextOccurrence = findOccurrence(nextTask, activeOccurrenceDate);
+    if (nextOccurrence && nextOccurrence.timer) nextOccurrence.timer.runningSince = Date.now();
     else activeFocusOnlySince = Date.now();
-    logTaskEvent(nextTask, 'Focused', activeOccurrenceDate);
+    logOccurrenceEvent(nextTask, activeOccurrenceDate, 'Focused');
   }
   saveTasks();
 }
 
-// task.focusLog is per-occurrence -- { [occurrenceDate]: { focusedSeconds,
-// timerSeconds } }. `occurrenceDate`, if given (a timer session always has
-// one, see task.timer.occurrenceDate; so does a focus-only session, see
-// activeOccurrenceDate), is exactly which occurrence to credit; otherwise it
-// falls back to whichever is currently pending for the task (today's, if it
-// has one, otherwise the most recent carried-over one) -- kept only for
-// robustness against a caller that genuinely has no specific occurrence in
-// mind, not exercised by either of this app's own call sites anymore.
-// Session lengths are flushed in here rather than measured after the fact,
-// so a focus-only session that happens to straddle midnight is simply
-// credited to whatever occurrence is current at flush time -- not worth the
-// bookkeeping needed to split it precisely.
+// Credits focused/timer time to the specific occurrence it was actually
+// earned against (see Occurrence.focusedSeconds/timerSeconds) -- falls back
+// to whichever is currently pending for the task (today's, if it has one,
+// otherwise the most recent carried-over one) if no occurrenceDate is given,
+// for robustness against a caller with no specific occurrence in mind; not
+// exercised by either of this app's own call sites anymore, both of which
+// always know their occurrence. Session lengths are flushed in here rather
+// than measured after the fact, so a focus-only session that happens to
+// straddle midnight is simply credited to whatever occurrence is current at
+// flush time -- not worth the bookkeeping needed to split it precisely.
 function addFocusStat(task, kind, seconds, occurrenceDate) {
   if (!(seconds > 0)) return;
   const date = occurrenceDate || Recurrence.mostRecentOccurrenceOnOrBefore(task, Recurrence.dateToISO(new Date())) || task.dueDate;
-  if (!task.focusLog) task.focusLog = {};
-  if (!task.focusLog[date]) task.focusLog[date] = { focusedSeconds: 0, timerSeconds: 0 };
-  task.focusLog[date][kind] += seconds;
+  ensureOccurrence(task, date)[kind] += seconds;
 }
 
 // Logs whatever a currently-running timer has accumulated since it last
@@ -1632,23 +1693,24 @@ function addFocusStat(task, kind, seconds, occurrenceDate) {
 // checkpoints remainingSeconds, not the stats log), or the timer being
 // cancelled outright. A no-op for an already-paused timer (runningSince ==
 // null): its elapsed time up to the pause was already flushed when it was
-// paused. Credited to the specific occurrence the timer was started against
-// (task.timer.occurrenceDate) rather than recomputed from today's date, so
+// paused. `occurrenceDate` is always the specific occurrence the timer
+// belongs to (it lives on that Occurrence row -- see Occurrence.timer), so
 // it can't drift to a different occurrence than the one actually worked --
 // e.g. a timer started against yesterday's still-overdue occurrence stays
 // credited to yesterday even if it's flushed after midnight.
-function flushTimerElapsed(task) {
-  if (task.timer && task.timer.runningSince != null) {
-    addFocusStat(task, 'timerSeconds', (Date.now() - task.timer.runningSince) / 1000, task.timer.occurrenceDate);
+function flushTimerElapsed(task, occurrenceDate) {
+  const occurrence = findOccurrence(task, occurrenceDate);
+  if (occurrence && occurrence.timer && occurrence.timer.runningSince != null) {
+    addFocusStat(task, 'timerSeconds', (Date.now() - occurrence.timer.runningSince) / 1000, occurrenceDate);
   }
 }
 
 // Logs whatever the active-but-timerless task has accumulated since it (or a
 // since-cancelled timer on it, see cancelTaskTimer) started this focus-only
 // session. A no-op if there's no such session live.
-function flushFocusOnlyElapsed(task) {
+function flushFocusOnlyElapsed(task, occurrenceDate) {
   if (activeFocusOnlySince != null) {
-    addFocusStat(task, 'focusedSeconds', (Date.now() - activeFocusOnlySince) / 1000, activeOccurrenceDate);
+    addFocusStat(task, 'focusedSeconds', (Date.now() - activeFocusOnlySince) / 1000, occurrenceDate);
     activeFocusOnlySince = null;
   }
 }
@@ -1704,21 +1766,13 @@ function timerProgressPercent(timer) {
 // A recurring task can show up to three rows at once for the same task
 // object (yesterday's still-overdue occurrence, today's, and tomorrow's
 // preview -- see computeTodoDisplayItems/computeNextRecurrenceItems), but a
-// timer only ever belongs to whichever single occurrence it was started
-// against (task.timer.occurrenceDate, see startTaskTimerPrompt) -- this is
-// what decides both which row renders the countdown (see timerBelongsToItem)
-// and, in setActiveTaskId, whether focusing a given occurrence is allowed to
-// resume it. Falls back to matching today's date for a timer saved before
-// occurrenceDate existed (undefined there), since that's what this app has
-// always effectively meant by "the" occurrence up to now.
-function timerMatchesOccurrence(timer, occurrenceDate) {
-  if (!timer) return false;
-  if (timer.occurrenceDate != null) return timer.occurrenceDate === occurrenceDate;
-  return occurrenceDate === Recurrence.dateToISO(new Date());
-}
-
+// timer lives on one specific Occurrence row (see Occurrence.timer,
+// startTaskTimerPrompt) -- this is what decides both which row renders the
+// countdown (see below) and, in setActiveTaskId, whether focusing a given
+// occurrence is allowed to resume it.
 function timerBelongsToItem(item) {
-  return timerMatchesOccurrence(item.task.timer, item.occurrenceDate);
+  const occurrence = findOccurrence(item.task, item.occurrenceDate);
+  return !!(occurrence && occurrence.timer);
 }
 
 // Snapshots a running timer's current remaining time back into
@@ -1818,19 +1872,19 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
   // runningSince stays null, exactly like a paused timer (see freezeTimer),
   // so it just sits there until the user starts it themselves. That's
   // already exactly what focusing the task does for any task with an
-  // unstarted/paused timer (see setActiveTaskId's nextTask.timer branch --
-  // the same mechanism "Resume timer" on the context menu uses), so no
+  // unstarted/paused timer (see setActiveTaskId's nextOccurrence.timer
+  // branch -- the same mechanism "Resume timer" on the context menu uses), so no
   // separate start-on-focus logic is needed here.
+  const occurrence = ensureOccurrence(task, occurrenceDate);
   if (result[MODAL_SECONDARY_RESULT]) {
-    task.timer = {
+    occurrence.timer = {
       mode: countUp ? 'countup' : 'countdown',
       continuePastZero: result.continuePastZero.length > 0,
       totalSeconds,
       remainingSeconds: totalSeconds,
       runningSince: null,
-      occurrenceDate,
     };
-    logTaskEvent(task, 'Timer set', occurrenceDate);
+    logOccurrenceEvent(task, occurrenceDate, 'Timer set');
     saveTasks();
     renderTodo();
     return;
@@ -1844,20 +1898,19 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
   // otherwise flush it. (If it was active on a *different* occurrence of
   // this same task, that's a real switch, not a no-op -- setActiveTaskId
   // below handles flushing that one itself.)
-  if (task.id === activeTaskId && activeOccurrenceDate === occurrenceDate && !task.timer) flushFocusOnlyElapsed(task);
+  if (task.id === activeTaskId && activeOccurrenceDate === occurrenceDate && !occurrence.timer) flushFocusOnlyElapsed(task, occurrenceDate);
   // runningSince is set here directly, not left for setActiveTaskId below to
   // fill in -- if this task+occurrence was already the active one (e.g. it
   // stayed active after a previous timer on it was cancelled), setActiveTaskId
   // is a no-op and would never start this brand-new timer ticking.
-  task.timer = {
+  occurrence.timer = {
     mode: countUp ? 'countup' : 'countdown',
     continuePastZero: result.continuePastZero.length > 0,
     totalSeconds,
     remainingSeconds: totalSeconds,
     runningSince: Date.now(),
-    occurrenceDate,
   };
-  logTaskEvent(task, 'Timer set', occurrenceDate);
+  logOccurrenceEvent(task, occurrenceDate, 'Timer set');
   saveTasks();
   setActiveTaskId(task.id, occurrenceDate);
   renderTodo();
@@ -1868,11 +1921,10 @@ async function startTaskTimerPrompt(task, occurrenceDate) {
 // than just discarding it; see flushTimerElapsed. If the task is still
 // active afterward (cancelling doesn't itself un-focus it, just removes the
 // timer), it keeps being focused, now in plain focus-only mode.
-function cancelTaskTimer(task) {
-  const occurrenceDate = task.timer.occurrenceDate;
-  flushTimerElapsed(task);
-  task.timer = null;
-  logTaskEvent(task, 'Timer cancelled', occurrenceDate);
+function cancelTaskTimer(task, occurrenceDate) {
+  flushTimerElapsed(task, occurrenceDate);
+  ensureOccurrence(task, occurrenceDate).timer = null;
+  logOccurrenceEvent(task, occurrenceDate, 'Timer cancelled');
   if (task.id === activeTaskId) activeFocusOnlySince = Date.now();
   saveTasks();
   renderTodo();
@@ -1912,6 +1964,9 @@ document.addEventListener('keydown', (e) => {
 // stats is offered, same as if every other group here were empty.
 function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
   const { task, occurrenceDate, completed, failed, kind } = item;
+  // Same "this occurrence only" override handling as buildTodoItemRow -- see
+  // its own comment.
+  const effectiveTask = Occurrence.applyOverrides(task, findOccurrence(task, occurrenceDate));
   // Whether THIS row's own occurrence, specifically, is the focused one --
   // not just whether the task is focused on some other occurrence of itself
   // (a recurring task can show up to three rows at once; see
@@ -1932,14 +1987,11 @@ function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
     groups[groupIndex].push({ label, onClick });
   }
 
-  // Gated on timerBelongsToItem(item), not just task.timer -- a task only
-  // ever has one timer slot, but it's tagged to a single occurrence (see
-  // timerMatchesOccurrence), so a row whose occurrence *isn't* the one the
-  // timer belongs to is treated the same as having no timer at all: offering
-  // "Timer" there would start a fresh one (replacing whatever's parked on
-  // the other occurrence), not touch that other one. Without this, "Cancel
-  // timer" on this row could delete a timer that actually belongs to (and is
-  // still shown ticking or paused on) a completely different occurrence of
+  // Gated on timerBelongsToItem(item), not just whether the task has any
+  // timer anywhere -- a timer lives on one specific Occurrence row, so a row
+  // whose occurrence has no timer of its own is treated the same as having
+  // no timer at all: offering "Timer" there starts a fresh one on THIS
+  // occurrence, never touching a timer parked on a different occurrence of
   // the same recurring task.
   const isFutureItem = kind === 'tomorrow' || kind === 'upcoming';
   const timerIsHere = timerBelongsToItem(item);
@@ -1952,7 +2004,7 @@ function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
       setActiveTaskId(null);
       renderTodo();
     });
-    addItem(0, t('menu.cancelTimer'), () => cancelTaskTimer(task));
+    addItem(0, t('menu.cancelTimer'), () => cancelTaskTimer(task, occurrenceDate));
   } else {
     if (canWorkOnNow) {
       addItem(0, t('menu.resumeTimer'), () => {
@@ -1960,14 +2012,14 @@ function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
         renderTodo();
       });
     }
-    addItem(0, t('menu.cancelTimer'), () => cancelTaskTimer(task));
+    addItem(0, t('menu.cancelTimer'), () => cancelTaskTimer(task, occurrenceDate));
   }
 
   if (!isFutureItem) {
-    if (!task.passive && !completed && !isProtectedTask(task)) {
+    if (!effectiveTask.passive && !completed && !isProtectedTask(task)) {
       addItem(1, t('menu.markDone'), () => attemptResolveTaskOccurrence(task, occurrenceDate, toggleTaskCompletion));
     }
-    if (task.passive && !failed && !isProtectedTask(task)) {
+    if (effectiveTask.passive && !failed && !isProtectedTask(task)) {
       addItem(1, t('menu.markFailed'), () => attemptResolveTaskOccurrence(task, occurrenceDate, toggleTaskFailedMark));
     }
 
@@ -1985,7 +2037,7 @@ function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
     }
 
     if (kind === 'carried-over') {
-      if (task.dismissed[occurrenceDate]) {
+      if (item.dismissed) {
         addItem(1, t('menu.show'), () => restoreOccurrence(task, occurrenceDate));
       } else {
         addItem(1, t('menu.hide'), () => dismissOccurrence(task, occurrenceDate));
@@ -2258,7 +2310,7 @@ function canCreateTaskOfKind(isRecurring) {
 }
 
 function notesUsedFor(task) {
-  return tasks.filter((t) => t.taskId === task.taskId).reduce((sum, t) => sum + (t.comments ? t.comments.length : 0), 0);
+  return Occurrence.notesCount(tasks, occurrences, task.taskId);
 }
 
 function canAddNoteToTask(task) {
@@ -2268,37 +2320,42 @@ function canAddNoteToTask(task) {
 }
 
 // Settings' data import (see settingsImportDataFileInput.onchange) bulk-
-// replaces the whole task list in one shot, bypassing canCreateTaskOfKind/
-// canAddNoteToTask -- both only ever gate one new task/note at a time, so an
-// imported backup could otherwise hand a free/lapsed account far more tasks
-// and notes than it could ever have created on its own. Enforce the same
-// numeric limits here instead of just leaving the excess to sit permanently
-// padlocked (see unlockedTaskIds): drop taskIds/notes beyond the limit
-// outright, same grandfather-by-createdAt/timestamp order as the rest of
-// this section, rather than importing them just to freeze them. Returns the
-// possibly-trimmed array unchanged if the account already has an active
+// replaces the whole task/occurrence state in one shot, bypassing
+// canCreateTaskOfKind/canAddNoteToTask -- both only ever gate one new
+// task/note at a time, so an imported backup could otherwise hand a
+// free/lapsed account far more tasks and notes than it could ever have
+// created on its own. Enforce the same numeric limits here instead of just
+// leaving the excess to sit permanently padlocked (see unlockedTaskIds):
+// drop taskIds beyond the limit outright (both their Task records and their
+// Occurrence rows), and pool+trim notes (Task-level and Occurrence-level
+// together, same as notesUsedFor counts them) down to NOTES_PER_TASK_LIMIT,
+// same grandfather-by-createdAt/timestamp order as the rest of this section,
+// rather than importing them just to freeze them. Returns
+// { tasks, occurrences } unchanged if the account already has an active
 // subscription.
-function applyFreeTierLimitsToImportedTasks(imported) {
-  if (isSubscriptionActive()) return imported;
+function applyFreeTierLimitsToImportedTasks(importedTasks, importedOccurrences) {
+  if (isSubscriptionActive()) return { tasks: importedTasks, occurrences: importedOccurrences };
 
-  const isRecurringTaskId = (taskId) => imported.some((t) => t.taskId === taskId && t.frequency.type !== 'once');
-  const earliestCreatedAt = (taskId) => Math.min(...imported.filter((t) => t.taskId === taskId).map((t) => t.createdAt));
+  const isRecurringTaskId = (taskId) => importedTasks.some((t) => t.taskId === taskId && t.frequency.type !== 'once');
+  const earliestCreatedAt = (taskId) => Math.min(...importedTasks.filter((t) => t.taskId === taskId).map((t) => t.createdAt));
 
-  const taskIds = [...new Set(imported.filter((t) => !isProtectedTask(t)).map((t) => t.taskId))];
+  const taskIds = [...new Set(importedTasks.filter((t) => !isProtectedTask(t)).map((t) => t.taskId))];
   const once = taskIds.filter((id) => !isRecurringTaskId(id)).sort((a, b) => earliestCreatedAt(a) - earliestCreatedAt(b));
   const recurring = taskIds.filter((id) => isRecurringTaskId(id)).sort((a, b) => earliestCreatedAt(a) - earliestCreatedAt(b));
   const allowedTaskIds = new Set([...once.slice(0, FREE_TASK_LIMITS.once), ...recurring.slice(0, FREE_TASK_LIMITS.recurring)]);
 
-  const kept = imported.filter((t) => isProtectedTask(t) || allowedTaskIds.has(t.taskId));
+  const keptTasks = importedTasks.filter((t) => isProtectedTask(t) || allowedTaskIds.has(t.taskId));
+  const keptOccurrences = importedOccurrences.filter((o) => allowedTaskIds.has(o.taskId));
 
-  // Notes are stored per record but counted per taskId across all of a
-  // taskId's fragments (see notesUsedFor) -- pool them across fragments,
-  // keep only the earliest NOTES_PER_TASK_LIMIT by timestamp, same as if
-  // they'd been added one at a time on a free account.
+  // Notes are stored per record (Task-level) or per occurrence
+  // (Occurrence-level) but counted per taskId across both (see
+  // notesUsedFor) -- pool them together, keep only the earliest
+  // NOTES_PER_TASK_LIMIT by timestamp, same as if they'd been added one at a
+  // time on a free account.
   const entriesByTaskId = {};
-  for (const task of kept) {
-    for (const comment of task.comments || []) {
-      (entriesByTaskId[task.taskId] || (entriesByTaskId[task.taskId] = [])).push({ task, comment });
+  for (const record of [...keptTasks, ...keptOccurrences]) {
+    for (const comment of record.comments || []) {
+      (entriesByTaskId[record.taskId] || (entriesByTaskId[record.taskId] = [])).push({ record, comment });
     }
   }
   for (const taskId in entriesByTaskId) {
@@ -2309,12 +2366,12 @@ function applyFreeTierLimitsToImportedTasks(imported) {
         .map((entry) => entry.comment)
     );
     if (!dropped.size) continue;
-    for (const task of kept) {
-      if (task.taskId === taskId && task.comments) task.comments = task.comments.filter((c) => !dropped.has(c));
+    for (const record of [...keptTasks, ...keptOccurrences]) {
+      if (record.taskId === taskId && record.comments) record.comments = record.comments.filter((c) => !dropped.has(c));
     }
   }
 
-  return kept;
+  return { tasks: keptTasks, occurrences: keptOccurrences };
 }
 
 // Checks whether creating a task of this kind is currently allowed,
@@ -2369,13 +2426,11 @@ function ensureSubscriptionPromptTask() {
     appointment: false,
     passive: false,
     recurUntilCompleted: false,
-    pendingReschedules: [],
     endDate: null,
     frequency: { type: 'days', interval: 1 },
-    completions: {},
-    dismissed: {},
-    markedFailed: {},
     createdAt: Date.now(),
+    log: [],
+    comments: [],
   });
   saveTasks();
 }
@@ -2834,6 +2889,17 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     // the original pattern, so re-snapping it here would silently discard
     // that progress.
     const startingRecurUntilCompleted = recurUntilCompleted && !existingTask.recurUntilCompleted;
+    // Only when turning the flag off -- otherwise editing anything else
+    // about a task mid-chain (e.g. its name) would silently discard however
+    // far its current reschedule chain has already gotten. Preserves
+    // wherever the chain actually is (not the stale original dueDate) as
+    // the new plain anchor once it stops being recurUntilCompleted; the now
+    // orphaned Occurrence row itself is harmless leftover data -- an
+    // ordinary task only ever looks occurrences up by their real
+    // pattern-predicted date, so a row that doesn't happen to land on one is
+    // simply never found again.
+    const stoppingRecurUntilCompleted = !recurUntilCompleted && existingTask.recurUntilCompleted;
+    const currentOccurrence = stoppingRecurUntilCompleted ? findOccurrence(existingTask, null) : null;
     existingTask.name = result.name;
     existingTask.description = result.description;
     existingTask.details = result.details;
@@ -2842,21 +2908,24 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
     // endDate only a few days out) -- same null-guard as
     // nextRecurUntilCompletedDueDate's own call site, rather than saving a
     // broken dueDate: null task.
-    existingTask.dueDate = startingRecurUntilCompleted
-      ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: result.dueDate, frequency, endDate }) || result.dueDate
-      : result.dueDate;
+    existingTask.dueDate = currentOccurrence
+      ? Occurrence.effectiveDueDate(currentOccurrence)
+      : startingRecurUntilCompleted
+        ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: result.dueDate, frequency, endDate }) || result.dueDate
+        : result.dueDate;
     existingTask.dueTime = dueTime;
     existingTask.allDay = allDay;
     existingTask.appointment = appointment;
     existingTask.passive = passive;
-    // Only cleared when turning the flag off -- otherwise editing anything
-    // else about a task mid-chain (e.g. its name) would silently wipe out
-    // however far its current reschedule chain has already gotten.
-    if (!recurUntilCompleted) existingTask.pendingReschedules = [];
     existingTask.recurUntilCompleted = recurUntilCompleted;
     existingTask.frequency = frequency;
     existingTask.endDate = endDate;
     logTaskEvent(existingTask, 'Edited');
+    // Seeds the first live Occurrence for a task newly becoming
+    // recurUntilCompleted -- an already-recurUntilCompleted task already has
+    // one (wherever its chain currently is), which stays exactly as valid
+    // under whatever else this edit just changed.
+    if (startingRecurUntilCompleted) ensureOccurrence(existingTask, existingTask.dueDate);
   } else {
     const isRecurring = frequency.type !== 'once';
     if (!(await ensureCanCreateTaskOfKind(isRecurring))) return;
@@ -2888,13 +2957,11 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       appointment,
       passive,
       recurUntilCompleted,
-      pendingReschedules: [],
       endDate,
       frequency,
-      completions: {},
-      dismissed: {},
-      markedFailed: {},
       createdAt: Date.now(),
+      log: [],
+      comments: [],
     };
     // Joining an existing series -- carry its saved name over so
     // getSeriesName can find it on this record too, not just whichever
@@ -2907,6 +2974,7 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
       if (namedMember) newTask.seriesName = namedMember.seriesName;
     }
     tasks.push(newTask);
+    if (recurUntilCompleted) ensureOccurrence(newTask, dueDate);
   }
   saveTasks();
   renderTodo();
@@ -2916,28 +2984,47 @@ async function openTaskForm(existingTask, splitContext, initialDueDate, seriesOp
 // Splits a recurring task's series around newOccurrenceDate -- the split
 // point, which is normally the occurrence that was double-clicked
 // (originalOccurrenceDate) but becomes wherever the user retargeted the
-// "Due date" field to in the edit form, if they changed it. scope:
-//  - 'instance': the historical portion ends at the occurrence just before
-//    this one (or is dropped entirely if this was the series' very first
-//    occurrence -- nothing historical to keep). This occurrence becomes its
-//    own standalone 'once' task carrying the edits. The rest of the
-//    ORIGINAL series (its own unedited settings) continues, starting at the
-//    next occurrence after this one.
-//  - 'following': the historical portion ends the same way, but a single new
-//    task with the EDITED settings takes over starting at this occurrence
-//    (no separate "original settings continue" task -- there's nothing left
-//    of the old pattern after this point).
+// "Due date" field to in the edit form, if they changed it (following scope
+// only -- see below). scope:
+//  - 'instance': no split at all anymore -- the rest of the pattern is
+//    completely untouched. This is purely a per-occurrence override
+//    (Occurrence.overrides) on the EXISTING task, keyed at its own pattern
+//    slot (originalOccurrenceDate); the task's own history needs nothing
+//    copied anywhere, since every already-recorded Occurrence already
+//    belongs to the right taskId regardless of which Task record currently
+//    owns the pattern. Unlike before, an 'instance' edit can no longer also
+//    move this occurrence to a different calendar date -- an Occurrence
+//    row's date is its own identity -- only its other fields (name/
+//    description/details/dueTime/allDay/appointment/passive).
+//  - 'following': the historical portion ends right before this occurrence
+//    (or is dropped entirely if this was the series' very first occurrence
+//    -- nothing historical to keep), and a single new task with the EDITED
+//    settings takes over starting at newOccurrenceDate. Keeps the ORIGINAL
+//    task's taskId -- still the same logical task, however many records its
+//    pattern's history now spans (see the "task" side of the series/task
+//    distinction in the manage-tasks modal and the side panel's per-task
+//    aggregation) -- so every already-recorded Occurrence stays correctly
+//    associated without anything needing to be copied forward.
 function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDate, scope }, edited) {
   if (isProtectedTask(originalTask)) return;
+
+  if (scope === 'instance') {
+    const occurrence = ensureOccurrence(originalTask, originalOccurrenceDate);
+    occurrence.overrides = {
+      name: edited.name,
+      description: edited.description,
+      details: edited.details,
+      dueTime: edited.dueTime,
+      allDay: edited.allDay,
+      appointment: edited.appointment,
+      passive: edited.passive,
+    };
+    occurrence.log.push({ message: 'Recurrence edited (only this occurrence)', timestamp: Date.now(), occurrenceDate: null });
+    return;
+  }
+
   const originalTaskId = originalTask.taskId;
-  const originalCompletions = originalTask.completions || {};
-  const originalDismissed = originalTask.dismissed || {};
-  const originalMarkedFailed = originalTask.markedFailed || {};
-  const originalEndDate = originalTask.endDate || null;
-  const wasOriginalOccurrenceDone = !!originalCompletions[originalOccurrenceDate];
-  const wasOriginalOccurrenceFailed = !!originalMarkedFailed[originalOccurrenceDate];
-  const prevDate = Recurrence.previousOccurrenceBefore(originalTask, newOccurrenceDate);
-  const nextDate = Recurrence.nextOccurrenceAfter(originalTask, newOccurrenceDate);
+  const prevDate = previousOccurrenceBeforeDate(originalTask, newOccurrenceDate);
 
   if (prevDate) {
     originalTask.endDate = prevDate; // truncate the historical portion to end right before this occurrence
@@ -2951,107 +3038,49 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
     tasks = tasks.filter((t) => t.id !== originalTask.id); // this was the series' very first occurrence -- nothing historical to keep
   }
 
-  // Every fragment created here keeps the ORIGINAL task's taskId -- it's
-  // still the same logical task, however many records its history now
-  // spans (see the "task" side of the series/task distinction in the
-  // manage-tasks modal and the side panel's per-task aggregation).
-  if (scope === 'instance') {
-    const editedFragment = {
-      id: uid(),
-      taskId: originalTaskId,
-      seriesId: originalTask.seriesId,
-      seriesName: originalTask.seriesName,
-      name: edited.name,
-      description: edited.description,
-      details: edited.details,
-      dueDate: newOccurrenceDate,
-      dueTime: edited.dueTime,
-      allDay: edited.allDay,
-      appointment: edited.appointment,
-      passive: edited.passive,
-      recurUntilCompleted: edited.recurUntilCompleted,
-      pendingReschedules: [],
-      frequency: { type: 'once', interval: 1 },
-      endDate: null,
-      completions: wasOriginalOccurrenceDone ? { [newOccurrenceDate]: true } : {},
-      dismissed: {},
-      markedFailed: wasOriginalOccurrenceFailed ? { [newOccurrenceDate]: true } : {},
-      createdAt: originalTask.createdAt,
-    };
-    tasks.push(editedFragment);
-    logTaskEvent(editedFragment, 'Recurrence edited (only this occurrence)', newOccurrenceDate);
-
-    if (nextDate) {
-      tasks.push({
-        id: uid(),
-        taskId: originalTaskId,
-        seriesId: originalTask.seriesId,
-        seriesName: originalTask.seriesName,
-        name: originalTask.name,
-        description: originalTask.description,
-        details: originalTask.details,
-        dueDate: nextDate,
-        dueTime: originalTask.dueTime,
-        allDay: originalTask.allDay,
-        appointment: originalTask.appointment,
-        passive: originalTask.passive,
-        recurUntilCompleted: originalTask.recurUntilCompleted,
-        pendingReschedules: [],
-        frequency: originalTask.frequency,
-        endDate: originalEndDate,
-        completions: { ...originalCompletions },
-        dismissed: { ...originalDismissed },
-        markedFailed: { ...originalMarkedFailed },
-        createdAt: originalTask.createdAt,
-      });
-    }
-  } else if (scope === 'following') {
-    // This fragment starts a brand-new occurrence chain from here on (same
-    // as a freshly-created task, not an incremental edit of one already in
-    // progress) -- if it's (becoming) recurUntilCompleted, its dueDate needs
-    // the same snap-to-the-pattern's-actual-first-occurrence treatment a new
-    // task gets (see the no-existingTask branch above and
-    // firstRecurUntilCompletedDueDate's own comment), since newOccurrenceDate
-    // is just whatever the form's due-date field held and isn't guaranteed
-    // to itself be a date `edited.frequency` lands on -- most obviously when
-    // this same edit also changes the frequency to something the split
-    // point doesn't match. Applied here (once) rather than at every call
-    // site so the completions/markedFailed carry-over below stays keyed to
-    // whatever date the fragment actually ends up due on.
-    const fragmentDueDate = edited.recurUntilCompleted
-      ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: newOccurrenceDate, frequency: edited.frequency, endDate: edited.endDate }) ||
-        newOccurrenceDate
-      : newOccurrenceDate;
-    const editedFragment = {
-      id: uid(),
-      taskId: originalTaskId,
-      seriesId: originalTask.seriesId,
-      seriesName: originalTask.seriesName,
-      name: edited.name,
-      description: edited.description,
-      details: edited.details,
-      dueDate: fragmentDueDate,
-      dueTime: edited.dueTime,
-      allDay: edited.allDay,
-      appointment: edited.appointment,
-      passive: edited.passive,
-      recurUntilCompleted: edited.recurUntilCompleted,
-      pendingReschedules: [],
-      frequency: edited.frequency,
-      endDate: edited.endDate,
-      completions: {
-        ...originalCompletions,
-        ...(wasOriginalOccurrenceDone ? { [fragmentDueDate]: true } : {}),
-      },
-      dismissed: { ...originalDismissed },
-      markedFailed: {
-        ...originalMarkedFailed,
-        ...(wasOriginalOccurrenceFailed ? { [fragmentDueDate]: true } : {}),
-      },
-      createdAt: originalTask.createdAt,
-    };
-    tasks.push(editedFragment);
-    logTaskEvent(editedFragment, 'Recurrence edited (this and following occurrences)', newOccurrenceDate);
+  // This fragment starts a brand-new occurrence chain from here on (same as
+  // a freshly-created task, not an incremental edit of one already in
+  // progress) -- if it's (becoming) recurUntilCompleted, its dueDate needs
+  // the same snap-to-the-pattern's-actual-first-occurrence treatment a new
+  // task gets (see the no-existingTask branch of openTaskForm's submit
+  // handler and firstRecurUntilCompletedDueDate's own comment), since
+  // newOccurrenceDate is just whatever the form's due-date field held and
+  // isn't guaranteed to itself be a date `edited.frequency` lands on --
+  // most obviously when this same edit also changes the frequency to
+  // something the split point doesn't match.
+  const fragmentDueDate = edited.recurUntilCompleted
+    ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: newOccurrenceDate, frequency: edited.frequency, endDate: edited.endDate }) ||
+      newOccurrenceDate
+    : newOccurrenceDate;
+  const editedFragment = {
+    id: uid(),
+    taskId: originalTaskId,
+    seriesId: originalTask.seriesId,
+    seriesName: originalTask.seriesName,
+    name: edited.name,
+    description: edited.description,
+    details: edited.details,
+    dueDate: fragmentDueDate,
+    dueTime: edited.dueTime,
+    allDay: edited.allDay,
+    appointment: edited.appointment,
+    passive: edited.passive,
+    recurUntilCompleted: edited.recurUntilCompleted,
+    frequency: edited.frequency,
+    endDate: edited.endDate,
+    createdAt: originalTask.createdAt,
+    log: [],
+    comments: [],
+  };
+  tasks.push(editedFragment);
+  logTaskEvent(editedFragment, 'Recurrence edited (this and following occurrences)', newOccurrenceDate);
+  // Seeds the first live Occurrence for a task newly becoming
+  // recurUntilCompleted via this same edit -- an already-recurUntilCompleted
+  // taskId already has a live pending Occurrence (wherever its chain
+  // currently is), which stays exactly as valid under this fragment's own
+  // settings; nothing to seed.
+  if (edited.recurUntilCompleted && !originalTask.recurUntilCompleted) {
+    ensureOccurrence(editedFragment, fragmentDueDate);
   }
 }
 
@@ -3067,12 +3096,9 @@ function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDat
 function applySplitDelete(originalTask, occurrenceDate, scope) {
   if (isProtectedTask(originalTask)) return;
   const originalTaskId = originalTask.taskId;
-  const originalCompletions = originalTask.completions || {};
-  const originalDismissed = originalTask.dismissed || {};
-  const originalMarkedFailed = originalTask.markedFailed || {};
   const originalEndDate = originalTask.endDate || null;
-  const prevDate = Recurrence.previousOccurrenceBefore(originalTask, occurrenceDate);
-  const nextDate = Recurrence.nextOccurrenceAfter(originalTask, occurrenceDate);
+  const prevDate = previousOccurrenceBeforeDate(originalTask, occurrenceDate);
+  const nextDate = nextOccurrenceAfterDate(originalTask, occurrenceDate);
   const originalKept = !!prevDate;
 
   if (prevDate) {
@@ -3085,7 +3111,9 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
   // Whichever fragment still carries this taskId forward afterward gets the
   // log line -- the new continuation task if there is one, otherwise the
   // truncated original if it's still around, otherwise there's nothing left
-  // of this taskId to log against at all.
+  // of this taskId to log against at all. No occurrence data needs copying
+  // either way -- every already-recorded Occurrence already belongs to the
+  // right taskId regardless of which Task record currently owns the pattern.
   let loggedFragment = originalKept ? originalTask : null;
   if (scope === 'instance' && nextDate) {
     const continuation = {
@@ -3102,13 +3130,11 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
       appointment: originalTask.appointment,
       passive: originalTask.passive,
       recurUntilCompleted: originalTask.recurUntilCompleted,
-      pendingReschedules: [],
       frequency: originalTask.frequency,
       endDate: originalEndDate,
-      completions: { ...originalCompletions },
-      dismissed: { ...originalDismissed },
-      markedFailed: { ...originalMarkedFailed },
       createdAt: originalTask.createdAt,
+      log: [],
+      comments: [],
     };
     tasks.push(continuation);
     loggedFragment = continuation;
@@ -3122,7 +3148,69 @@ function applySplitDelete(originalTask, occurrenceDate, scope) {
   }
 }
 
+// task-shaped view for previousOccurrenceBeforeDate/nextOccurrenceAfterDate's
+// own generic scan (via Recurrence.occursOn) -- an ordinary task's own
+// fields already work directly; a recurUntilCompleted task has no pattern to
+// scan this way (see occurrence.js's own module comment) -- there's just its
+// one live pending Occurrence's own occurrenceDate/pendingReschedules chain,
+// fed through the same occursOn via Occurrence.recurrenceShim. This
+// deliberately only ever reflects the CURRENT pending Occurrence, not any
+// already-resolved one -- "what's the next/previous occurrence relative to
+// what's still live" is a different question from "list everything that's
+// ever been recorded" (see allRecurUntilCompletedDatesInRange below, used by
+// forEachOccurrenceBefore/InRange instead, for exactly that reason). null if
+// a recurUntilCompleted task somehow has no pending Occurrence yet (nothing
+// to scan).
+function occurrenceScanShape(task) {
+  if (!task.recurUntilCompleted) return task;
+  const occurrence = findOccurrence(task, null);
+  return occurrence ? Occurrence.recurrenceShim(task, occurrence) : null;
+}
+
+// occursOn, generalized for recurUntilCompleted -- but unlike
+// occurrenceScanShape above, this needs to answer "is there ANY recorded
+// Occurrence (resolved or still pending) at exactly this date", not just
+// "does the current pending chain cover it": once an occurrence resolves,
+// it's a fixed historical fact at its own date forever, and findOccurrence's
+// own exact-match-first lookup (see its own comment) already finds it
+// regardless of status -- this is what lets a completed recurUntilCompleted
+// occurrence still show up (crossed out) on its own date instead of
+// vanishing the moment a new pending occurrence takes over.
+function occursOnDate(task, dateISO) {
+  if (task.recurUntilCompleted) return !!findOccurrence(task, dateISO);
+  return Recurrence.occursOn(task, dateISO);
+}
+
+function previousOccurrenceBeforeDate(task, dateISO) {
+  const shape = occurrenceScanShape(task);
+  return shape ? Recurrence.previousOccurrenceBefore(shape, dateISO) : null;
+}
+
+function nextOccurrenceAfterDate(task, afterISO) {
+  const shape = occurrenceScanShape(task);
+  return shape ? Recurrence.nextOccurrenceAfter(shape, afterISO) : null;
+}
+
+// Every date recurUntilCompleted's own forEachOccurrenceBefore/InRange
+// should visit: every already-resolved Occurrence's own (fixed,
+// never-repeated) date, plus -- for whichever one Occurrence is still
+// 'pending' -- its full live chain (occurrenceDate and every
+// pendingReschedules entry), same as before. Listing every resolved
+// occurrence (not just the live one) is what lets a month view keep showing
+// an occurrence crossed out on its own date after a later one has already
+// taken over as current.
+function allRecurUntilCompletedDatesInRange(task, startISO, cutoffISO, fn) {
+  for (const occurrence of occurrences) {
+    if (occurrence.taskId !== task.taskId) continue;
+    const dates = occurrence.status === 'pending' ? [occurrence.occurrenceDate, ...(occurrence.pendingReschedules || [])] : [occurrence.occurrenceDate];
+    for (const date of dates) {
+      if (date >= startISO && date < cutoffISO) fn(date);
+    }
+  }
+}
+
 function forEachOccurrenceBefore(task, cutoffISO, fn) {
+  if (task.recurUntilCompleted) return allRecurUntilCompletedDatesInRange(task, '', cutoffISO, fn);
   let cursor = task.dueDate;
   for (let i = 0; i < 3660 && cursor < cutoffISO; i++) {
     if (Recurrence.occursOn(task, cursor)) fn(cursor);
@@ -3136,6 +3224,7 @@ function forEachOccurrenceBefore(task, cutoffISO, fn) {
 // e.g. this month -- see computeAllTasksItems/the "pending/overdue" side of
 // computeTodoDisplayItems).
 function forEachOccurrenceInRange(task, startISO, cutoffISO, fn) {
+  if (task.recurUntilCompleted) return allRecurUntilCompletedDatesInRange(task, startISO, cutoffISO, fn);
   let cursor = task.dueDate > startISO ? task.dueDate : startISO;
   for (let i = 0; i < 3660 && cursor < cutoffISO; i++) {
     if (Recurrence.occursOn(task, cursor)) fn(cursor);
@@ -3144,7 +3233,7 @@ function forEachOccurrenceInRange(task, startISO, cutoffISO, fn) {
 }
 
 // Marks every occurrence of task strictly before cutoffISO as dismissed
-// (task.dismissed, not task.completions -- whether it was ever actually
+// (Occurrence.dismissed, not its status -- whether it was ever actually
 // done stays whatever it already was, so an appointment's genuinely missed
 // past occurrences stay recorded as failed rather than silently rewritten
 // to "completed") -- used right after truncating a split-off historical
@@ -3152,9 +3241,19 @@ function forEachOccurrenceInRange(task, startISO, cutoffISO, fn) {
 // over" item forever. Immediate, unlike scheduleOccurrencesDismissalBefore
 // below -- there's no live "uncheck to undo" interaction happening here to
 // leave a linger window for.
+//
+// Never dismisses a recurUntilCompleted task's still-'pending' occurrence,
+// even if forEachOccurrenceBefore visits one of its (overdue) dates here --
+// that one Occurrence row is still live and governed by whichever Task
+// fragment now owns the pattern going forward (its taskId doesn't change
+// across a split), so hiding it would bury something still actionable, not
+// sweep away dead history (see autoDismissStaleCarriedOverOccurrences'
+// own comment on the same exemption).
 function markOccurrencesDismissedBefore(task, cutoffISO) {
   forEachOccurrenceBefore(task, cutoffISO, (date) => {
-    task.dismissed[date] = true;
+    const occurrence = ensureOccurrence(task, date);
+    if (task.recurUntilCompleted && occurrence.status === 'pending') return;
+    occurrence.dismissed = true;
   });
 }
 
@@ -3192,10 +3291,11 @@ function scheduleOccurrencesDismissalBefore(task, cutoffISO) {
 // right away, while one that happened to be separately completed on its own
 // stays exactly as it was.
 function restorePriorOccurrenceIfIncomplete(task, cutoffISO) {
-  const priorDate = Recurrence.previousOccurrenceBefore(task, cutoffISO);
+  const priorDate = previousOccurrenceBeforeDate(task, cutoffISO);
   if (!priorDate) return;
   cancelScheduledDismissal(task, priorDate);
-  task.dismissed[priorDate] = !!task.completions[priorDate];
+  const occurrence = ensureOccurrence(task, priorDate);
+  occurrence.dismissed = occurrence.status === 'completed';
 }
 
 const editScopeOverlay = document.getElementById('edit-scope-overlay');
@@ -3255,34 +3355,36 @@ function deleteTask(taskId) {
   refreshTodoManageModal();
 }
 
-// Resolves a task.recurUntilCompleted task's current occurrence once
-// whichever instance of it is marked done (see toggleTaskCompletion) --
-// task.dueDate becomes wherever `frequency` lands *next*, counted from
-// *today* (real time, when this actually runs) rather than completedDate
-// itself (see Recurrence.nextRecurUntilCompletedDueDate) -- "the date of
-// completion" is when the task was actually done, not whichever backlogged
-// instance's row happened to get clicked. Using completedDate instead would
-// make completing an old backlogged instance (rather than the most recent
-// one) immediately fall behind again by however many days separate them,
-// needing another whole run of catch-up reschedules right on the next
-// render, instead of actually resolving anything. pendingReschedules is
-// cleared either way -- every date that was in it (and task's own previous
-// dueDate, now superseded) stops being a valid occurrence at all the
-// instant this runs (see occursOn's own comment on the field), which is
-// what actually makes them "removed from schedule" rather than merely
-// hidden. A 'once' task (or one whose task.endDate is now behind it) has no
-// next occurrence -- task.dueDate just becomes completedDate itself, so it
-// stays visible (crossed out, same as any other completed task) instead of
-// vanishing outright.
-function resolveRecurUntilCompletedOccurrence(task, completedDate) {
+// Resolves a task.recurUntilCompleted task's current pending Occurrence once
+// whichever instance of it is marked done (see toggleTaskCompletion) -- the
+// next occurrence's own due date is computed counted from *today* (real
+// time, when this actually runs) rather than completedDate itself (see
+// Recurrence.nextRecurUntilCompletedDueDate) -- "the date of completion" is
+// when the task was actually done, not whichever backlogged instance's row
+// happened to get clicked. Using completedDate instead would make
+// completing an old backlogged instance (rather than the most recent one)
+// immediately fall behind again by however many days separate them, needing
+// another whole run of catch-up reschedules right on the next render,
+// instead of actually resolving anything. A fresh 'pending' Occurrence is
+// created for that next cycle; `occurrence` itself is marked 'completed' and
+// never touched again -- unlike before, there's no shared dueDate pointer
+// left for a later edit to collide with. A 'once' task (or one whose
+// endDate is now behind it) has no next occurrence -- nothing new is
+// created, so the just-completed occurrence (crossed out) is all that's
+// left to show.
+function resolveRecurUntilCompletedOccurrence(task, occurrence) {
+  occurrence.status = 'completed';
+  occurrence.resolvedAt = Date.now();
   const todayISO = Recurrence.dateToISO(new Date());
-  task.dueDate = Recurrence.nextRecurUntilCompletedDueDate(task, todayISO) || completedDate;
-  task.pendingReschedules = [];
+  const nextDate = Recurrence.nextRecurUntilCompletedDueDate(task, todayISO) || null;
+  if (nextDate) ensureOccurrence(task, nextDate);
 }
 
 function toggleTaskCompletion(task, occurrenceDate) {
-  if (task.completions[occurrenceDate]) {
-    delete task.completions[occurrenceDate];
+  const occurrence = ensureOccurrence(task, occurrenceDate);
+  if (occurrence.status === 'completed') {
+    occurrence.status = 'pending';
+    occurrence.resolvedAt = null;
     // Cancels this occurrence's own pending dismissal (computeTodoDisplayItems
     // schedules one for the "prior occurrence" slot once it displays as
     // completed, but deliberately never cancels one on a plain re-render --
@@ -3298,19 +3400,21 @@ function toggleTaskCompletion(task, occurrenceDate) {
     if (occurrenceDate === Recurrence.dateToISO(new Date())) {
       restorePriorOccurrenceIfIncomplete(task, occurrenceDate);
     }
-    logTaskEvent(task, 'Marked not done', occurrenceDate);
+    logOccurrenceEvent(task, occurrenceDate, 'Marked not done');
   } else {
-    task.completions[occurrenceDate] = true;
-    logTaskEvent(task, 'Marked done', occurrenceDate);
+    occurrence.status = 'completed';
+    occurrence.resolvedAt = Date.now();
+    logOccurrenceEvent(task, occurrenceDate, 'Marked done');
     if (task.recurUntilCompleted) {
-      // Whichever instance of the chain this was (task.dueDate itself, or
-      // one it's since been pushed to -- see occursOn's own comment on the
-      // field), completing it resolves the whole chain: every other date in
-      // it stops being a valid occurrence at all (see resolveRecur
-      // UntilCompletedOccurrence), rather than lingering as a dismissed-once-
-      // the-more-recent-one-completes carried-over item the way an ordinary
-      // task's missed occurrences do below.
-      resolveRecurUntilCompletedOccurrence(task, occurrenceDate);
+      // Whichever instance of the chain this was (occurrence.occurrenceDate
+      // itself, or one its own pendingReschedules has since pushed it to --
+      // see occurrence.js's own comment on the field), completing it
+      // resolves the whole chain: a fresh Occurrence takes over as the
+      // live pending one (see resolveRecurUntilCompletedOccurrence), rather
+      // than lingering as a dismissed-once-the-more-recent-one-completes
+      // carried-over item the way an ordinary task's missed occurrences do
+      // below.
+      resolveRecurUntilCompletedOccurrence(task, occurrence);
     } else {
       // Only this task's "today" or carried-over occurrence is ever checked
       // off this way (see the checkbox's disabled condition below), so
@@ -3318,27 +3422,27 @@ function toggleTaskCompletion(task, occurrenceDate) {
       // earlier occurrence(s) skipped without ever being explicitly checked
       // off (e.g. missed a few days), otherwise they'd stay shown in the data
       // forever and can resurface as "ghost" carried-over items if the task's
-      // recurrence is edited later. Their completions entry is untouched --
-      // they're dismissed, not retroactively marked done, so an appointment's
+      // recurrence is edited later. Their own status is untouched -- they're
+      // dismissed, not retroactively marked done, so an appointment's
       // genuinely missed occurrences stay recorded as failed. Scheduled with
       // the same short linger as an ordinary completion, not instant, so
       // unchecking this one right back still has a window to cancel it.
       scheduleOccurrencesDismissalBefore(task, occurrenceDate);
     }
-    // A running timer stops making sense once its task is done -- cancelled
-    // outright rather than just frozen. renderTodo's own "no longer
-    // eligible" check un-marks it as active right after this, via
+    // A running timer stops making sense once its occurrence is done --
+    // cancelled outright rather than just frozen. renderTodo's own "no
+    // longer eligible" check un-marks it as active right after this, via
     // setActiveTaskId, same as completing any other active task already does
     // (which is what flushes this task's own now-empty focus-only session,
     // so it isn't set up again here).
-    if (task.timer) {
-      flushTimerElapsed(task);
-      task.timer = null;
+    if (occurrence.timer) {
+      flushTimerElapsed(task, occurrenceDate);
+      occurrence.timer = null;
     }
   }
   // Not on narrow screens (see isNarrowLayout) -- checking a task off is a
   // plain list action there, not a request to see its full-screen details.
-  if (!isNarrowLayout()) selectTaskForSidePanel(task);
+  if (!isNarrowLayout()) selectTaskForSidePanel(task, occurrenceDate);
   saveTasks();
   renderTodo();
 }
@@ -3359,12 +3463,12 @@ function toggleTaskCompletion(task, occurrenceDate) {
 //
 // A "passive" task (a plain reminder, see the form's checkbox) is neither --
 // it's never auto-marked failed just for going past due (`completed` is
-// always false for it too, since it has no completions entry to begin with;
+// always false for it too, since it has no completed status to begin with;
 // see toggleTaskFailedMark instead of toggleTaskCompletion). It stays
 // "overdue" through the one extra day it's shown carried-over (see
 // autoDismissStaleCarriedOverOccurrences, which clears away ANY carried-over
 // occurrence once it's older than that, passive or not), giving the user a
-// chance to instead mark it failed (task.markedFailed) or dismiss it (see
+// chance to instead mark it failed (Occurrence.status) or dismiss it (see
 // dismissOccurrence) before it's cleared away on its own.
 function pastDueStatus(task, occurrenceDate, completed, now) {
   // Never overdue or failed -- a missed occurrence is rescheduled to the
@@ -3373,7 +3477,8 @@ function pastDueStatus(task, occurrenceDate, completed, now) {
   // expire as.
   if (task.recurUntilCompleted) return { overdue: false, failed: false };
   if (task.passive) {
-    if (task.markedFailed && task.markedFailed[occurrenceDate]) return { overdue: false, failed: true };
+    const occurrence = findOccurrence(task, occurrenceDate);
+    if (occurrence && occurrence.status === 'failed') return { overdue: false, failed: true };
     return { overdue: Recurrence.isOverdue(task, occurrenceDate, now), failed: false };
   }
   if (completed || !Recurrence.isOverdue(task, occurrenceDate, now)) return { overdue: false, failed: false };
@@ -3386,16 +3491,18 @@ function pastDueStatus(task, occurrenceDate, completed, now) {
 // passive task's checkbox means this instead of "mark complete" (see
 // buildTodoItemRow), since it's a plain reminder with no real "done" state.
 function toggleTaskFailedMark(task, occurrenceDate) {
-  if (!task.markedFailed) task.markedFailed = {};
-  if (task.markedFailed[occurrenceDate]) {
-    delete task.markedFailed[occurrenceDate];
-    logTaskEvent(task, 'Marked not failed', occurrenceDate);
+  const occurrence = ensureOccurrence(task, occurrenceDate);
+  if (occurrence.status === 'failed') {
+    occurrence.status = 'pending';
+    occurrence.resolvedAt = null;
+    logOccurrenceEvent(task, occurrenceDate, 'Marked not failed');
   } else {
-    task.markedFailed[occurrenceDate] = true;
-    logTaskEvent(task, 'Marked failed', occurrenceDate);
+    occurrence.status = 'failed';
+    occurrence.resolvedAt = Date.now();
+    logOccurrenceEvent(task, occurrenceDate, 'Marked failed');
   }
   // See the same guard in toggleTaskCompletion above.
-  if (!isNarrowLayout()) selectTaskForSidePanel(task);
+  if (!isNarrowLayout()) selectTaskForSidePanel(task, occurrenceDate);
   saveTasks();
   renderTodo();
 }
@@ -3406,7 +3513,8 @@ function toggleTaskFailedMark(task, occurrenceDate) {
 // something that was completed/failed before a subscription lapsed always
 // stays possible. See canCompleteOrNoteTask for what "allowed" means here.
 async function attemptResolveTaskOccurrence(task, occurrenceDate, resolveFn) {
-  const alreadyResolved = task.passive ? !!(task.markedFailed && task.markedFailed[occurrenceDate]) : !!task.completions[occurrenceDate];
+  const occurrence = findOccurrence(task, occurrenceDate);
+  const alreadyResolved = occurrence ? occurrence.status === (task.passive ? 'failed' : 'completed') : false;
   if (!alreadyResolved && !canCompleteOrNoteTask(task)) {
     const accepted = await offerSubscriptionUpgrade(t('subscribe.reasonTaskLimit'));
     if (!accepted) return;
@@ -3423,36 +3531,37 @@ async function attemptResolveTaskOccurrence(task, occurrenceDate, resolveFn) {
 // a direct, deliberate action with nothing to visually confirm, so it takes
 // effect right away.
 function dismissOccurrence(task, occurrenceDate) {
-  task.dismissed[occurrenceDate] = true;
-  selectTaskForSidePanel(task);
+  ensureOccurrence(task, occurrenceDate).dismissed = true;
+  selectTaskForSidePanel(task, occurrenceDate);
   saveTasks();
   renderTodo();
 }
 
 // Undoes dismissOccurrence -- brings a hidden carried-over occurrence back
 // (the "pending/overdue" and "all tasks" views show it either way, since
-// both already ignore task.dismissed, but "next recurrence" only shows it
-// once this clears the flag).
+// both already ignore Occurrence.dismissed, but "next recurrence" only shows
+// it once this clears the flag).
 function restoreOccurrence(task, occurrenceDate) {
-  delete task.dismissed[occurrenceDate];
-  selectTaskForSidePanel(task);
+  ensureOccurrence(task, occurrenceDate).dismissed = false;
+  selectTaskForSidePanel(task, occurrenceDate);
   saveTasks();
   renderTodo();
 }
 
 // Whether an occurrence still needs to show on the to-do list is tracked
-// separately from whether it's complete (task.dismissed, alongside
-// task.completions) -- otherwise "done" and "no longer relevant to show"
+// separately from whether it's complete (Occurrence.dismissed, alongside
+// Occurrence.status) -- otherwise "done" and "no longer relevant to show"
 // end up conflated, which would force treating an appointment's missed
 // (failed, never actually done) past occurrences as if they'd been
 // completed just to stop them cluttering the list. A carried-over
 // occurrence (an ordinary one, or the "yesterday companion" below) that's
 // just been completed lingers crossed out for a few seconds instead of
 // vanishing the instant it's done, so the checkmark is actually visible
-// before it disappears -- scheduleDismissal sets task.dismissed after that
-// delay, which is what actually hides it (see the `if (task.dismissed[...])
-// continue/return null` checks below and in computeTodoDisplayItems). Since
-// task.dismissed is persisted, it survives reload/restart.
+// before it disappears -- scheduleDismissal sets Occurrence.dismissed after
+// that delay, which is what actually hides it (see the `if
+// (occurrence.dismissed) continue/return null` checks below and in
+// computeTodoDisplayItems). Since it's persisted, it survives
+// reload/restart.
 const dismissalTimers = new Map(); // "taskId:date" -> timer handle, in-memory only
 
 function scheduleDismissal(task, occurrenceDate) {
@@ -3462,7 +3571,7 @@ function scheduleDismissal(task, occurrenceDate) {
     key,
     setTimeout(() => {
       dismissalTimers.delete(key);
-      task.dismissed[occurrenceDate] = true;
+      ensureOccurrence(task, occurrenceDate).dismissed = true;
       saveTasks();
       renderTodo();
     }, 5000)
@@ -3484,7 +3593,7 @@ function isDismissalPending(task, occurrenceDate) {
 
 // "Pending/overdue" view: every occurrence since the start of viewedMonthKey
 // that's overdue or failed (see pastDueStatus) -- regardless of
-// task.dismissed, unlike every other view here. This is meant to be a
+// Occurrence.dismissed, unlike every other view here. This is meant to be a
 // standing audit of everything unresolved in that month, not a decluttered
 // day-to-day list, so a dismissal made to tidy up the "next recurrence" view
 // doesn't also hide something from this one. A completed occurrence is
@@ -3513,29 +3622,32 @@ function computeTodoDisplayItems(viewedMonthKey) {
 
   for (const task of tasks) {
     forEachOccurrenceInRange(task, monthStartISO, scanCutoffISO, (date) => {
-      if (task.completions[date]) return; // resolved -- not "pending/overdue" anymore
+      const occurrence = findOccurrence(task, date);
+      if (occurrence && occurrence.status === 'completed') return; // resolved -- not "pending/overdue" anymore
       const { overdue, failed } = pastDueStatus(task, date, false, now);
       if (overdue || failed) {
-        items.push({ task, occurrenceDate: date, completed: false, overdue, failed, dismissed: !!task.dismissed[date], kind: 'carried-over' });
+        items.push({ task, occurrenceDate: date, completed: false, overdue, failed, dismissed: !!(occurrence && occurrence.dismissed), kind: 'carried-over' });
       }
     });
 
     if (!isCurrentMonth) continue;
 
-    if (Recurrence.occursOn(task, todayISO)) {
-      const completed = !!task.completions[todayISO];
+    if (occursOnDate(task, todayISO)) {
+      const occurrence = findOccurrence(task, todayISO);
+      const completed = !!(occurrence && occurrence.status === 'completed');
       const { overdue, failed } = pastDueStatus(task, todayISO, completed, now);
-      items.push({ task, occurrenceDate: todayISO, completed, overdue, failed, dismissed: !!task.dismissed[todayISO], kind: 'today' });
+      items.push({ task, occurrenceDate: todayISO, completed, overdue, failed, dismissed: !!(occurrence && occurrence.dismissed), kind: 'today' });
     }
 
-    if (Recurrence.occursOn(task, tomorrowISO)) {
+    if (occursOnDate(task, tomorrowISO)) {
+      const occurrence = findOccurrence(task, tomorrowISO);
       items.push({
         task,
         occurrenceDate: tomorrowISO,
         completed: false,
         overdue: false,
         failed: false,
-        dismissed: !!task.dismissed[tomorrowISO],
+        dismissed: !!(occurrence && occurrence.dismissed),
         kind: 'tomorrow',
       });
     }
@@ -3548,7 +3660,7 @@ function computeTodoDisplayItems(viewedMonthKey) {
 // viewedMonthKey, start to end, whatever its state -- done or not, failed or
 // not, dismissed or not. A plain calendar-month listing rather than a
 // todo-workflow view like the other two, so nothing here is filtered by
-// task.dismissed/task.completions the way they are.
+// Occurrence.dismissed/status the way they are.
 function computeAllTasksItems(viewedMonthKey) {
   const now = new Date();
   const todayISO = Recurrence.dateToISO(now);
@@ -3561,10 +3673,11 @@ function computeAllTasksItems(viewedMonthKey) {
 
   for (const task of tasks) {
     forEachOccurrenceInRange(task, monthStartISO, monthEndExclusiveISO, (date) => {
-      const completed = !!task.completions[date];
+      const occurrence = findOccurrence(task, date);
+      const completed = !!(occurrence && occurrence.status === 'completed');
       const { overdue, failed } = completed ? { overdue: false, failed: false } : pastDueStatus(task, date, false, now);
       const kind = date < todayISO ? 'carried-over' : date === todayISO ? 'today' : date === tomorrowISO ? 'tomorrow' : 'upcoming';
-      items.push({ task, occurrenceDate: date, completed, overdue, failed, dismissed: !!task.dismissed[date], kind });
+      items.push({ task, occurrenceDate: date, completed, overdue, failed, dismissed: !!(occurrence && occurrence.dismissed), kind });
     });
   }
 
@@ -3586,7 +3699,7 @@ function computeNextRecurrenceItems() {
   const items = [];
 
   for (const task of tasks) {
-    const todayOccurs = Recurrence.occursOn(task, todayISO);
+    const todayOccurs = occursOnDate(task, todayISO);
     // A failed occurrence (a past-due appointment, or a manually-marked-
     // failed passive task -- see pastDueStatus) is just as resolved as a
     // completed one for the purposes of previewing what's next: neither is
@@ -3594,7 +3707,8 @@ function computeNextRecurrenceItems() {
     // occurrence's preview until they explicitly check it off too.
     let todayPending = false;
     if (todayOccurs) {
-      const completed = !!task.completions[todayISO];
+      const todayOccurrence = findOccurrence(task, todayISO);
+      const completed = !!(todayOccurrence && todayOccurrence.status === 'completed');
       if (completed) {
         // Still shows (crossed out) alongside whatever's next -- confirms
         // what was just checked off without it just vanishing.
@@ -3606,10 +3720,11 @@ function computeNextRecurrenceItems() {
       }
     }
 
-    const priorDate = Recurrence.previousOccurrenceBefore(task, todayISO);
+    const priorDate = previousOccurrenceBeforeDate(task, todayISO);
+    const priorOccurrence = priorDate ? findOccurrence(task, priorDate) : null;
     let priorPending = false;
-    if (priorDate && !task.dismissed[priorDate]) {
-      const completed = !!task.completions[priorDate];
+    if (priorDate && !(priorOccurrence && priorOccurrence.dismissed)) {
+      const completed = !!(priorOccurrence && priorOccurrence.status === 'completed');
       // A dismissal can be pending here for two different reasons: the
       // occurrence was genuinely completed (its own linger), or it was
       // swept up by scheduleOccurrencesDismissalBefore when a *later*
@@ -3631,14 +3746,15 @@ function computeNextRecurrenceItems() {
     // Nothing left pending (today's, if it has one, is done; the prior
     // occurrence, if any, is done/lingering-before-dismissal or dismissed)
     // -- preview what's next. When the task hasn't had any occurrence at all
-    // yet (recentDate null), search from the day before its due date rather
-    // than assuming the due date itself is a valid occurrence -- it's just
-    // the pattern's anchor point, not necessarily a date the pattern itself
-    // lands on (see nextOccurrenceAfter).
+    // yet (recentDate null), search from yesterday rather than assuming the
+    // due date itself is a valid occurrence -- it's just the pattern's
+    // anchor point, not necessarily a date the pattern itself lands on (see
+    // nextOccurrenceAfterDate) -- yesterday works as a safe start regardless
+    // of how far in the future the task's first/next occurrence actually is.
     if (!todayPending && !priorPending) {
       const recentDate = todayOccurs ? todayISO : priorDate;
-      const searchFrom = recentDate == null ? Recurrence.dateToISO(Recurrence.addDays(new Date(task.dueDate + 'T00:00:00'), -1)) : recentDate;
-      const nextDate = Recurrence.nextOccurrenceAfter(task, searchFrom);
+      const searchFrom = recentDate == null ? Recurrence.dateToISO(Recurrence.addDays(now, -1)) : recentDate;
+      const nextDate = nextOccurrenceAfterDate(task, searchFrom);
       if (nextDate) {
         items.push({
           task,
@@ -3654,7 +3770,7 @@ function computeNextRecurrenceItems() {
   if (now.getHours() >= 18) {
     for (const task of tasks) {
       const alreadyShown = items.some((i) => i.task.id === task.id && i.occurrenceDate === tomorrowISO);
-      if (!alreadyShown && Recurrence.occursOn(task, tomorrowISO)) {
+      if (!alreadyShown && occursOnDate(task, tomorrowISO)) {
         items.push({ task, occurrenceDate: tomorrowISO, completed: false, overdue: false, kind: 'tomorrow' });
       }
     }
@@ -3908,26 +4024,34 @@ function buildTodoItemRow(item, isToday) {
   // (a recurring task can show up to three rows at once; see
   // activeOccurrenceDate).
   const isActiveHere = item.task.id === activeTaskId && item.occurrenceDate === activeOccurrenceDate;
+  // A "this occurrence only" edit (see applySplitEdit's 'instance' scope)
+  // stores its overrides on the Occurrence row itself rather than the task
+  // -- effectiveTask is what should actually be displayed for this one row;
+  // item.task stays the real record for identity/actions (taskId lookups,
+  // toggling, editing, ...).
+  const rowOccurrence = findOccurrence(item.task, item.occurrenceDate);
+  const effectiveTask = Occurrence.applyOverrides(item.task, rowOccurrence);
   const row = document.createElement('div');
   row.__task = item.task; // back-reference for refreshSelectedHighlight's cheap re-tag, see there
+  row.__occurrenceDate = item.occurrenceDate;
   row.className =
     'todo-item' +
     (item.completed ? ' completed' : '') +
     (item.failed ? ' failed' : '') +
     (isActiveHere ? ' focused' : '') +
-    (item.task.allDay ? ' all-day' : '') +
+    (effectiveTask.allDay ? ' all-day' : '') +
     // Only while it's neither failed nor done yet -- see pastDueStatus;
     // an appointment past its due date is tagged .failed instead (red,
     // crossed out), and once checked off it just looks like any other
     // completed task, not still flagged green.
-    (item.task.appointment && !item.completed && !item.failed ? ' appointment' : '') +
+    (effectiveTask.appointment && !item.completed && !item.failed ? ' appointment' : '') +
     // Same idea for a passive task's own tint -- once it's marked failed
     // (see toggleTaskFailedMark), .failed's own red styling takes over.
-    (item.task.passive && !item.failed ? ' passive' : '') +
+    (effectiveTask.passive && !item.failed ? ' passive' : '') +
     // The "pending/overdue" and "all tasks" views show a dismissed
     // occurrence right alongside ones that aren't (see
     // computeTodoDisplayItems/computeAllTasksItems, both of which ignore
-    // task.dismissed for filtering) -- this is the only visual cue telling
+    // Occurrence.dismissed for filtering) -- this is the only visual cue telling
     // the two apart, since otherwise a dismissed item looks identical to an
     // active one. "Next recurrence" never shows a dismissed item at all, so
     // item.dismissed is always false there.
@@ -3936,7 +4060,7 @@ function buildTodoItemRow(item, isToday) {
     // panel (see selectTaskForSidePanel) -- reference equality against the
     // exact record last interacted with, not just a matching id, since a
     // recurring task's own separate occurrences are still separate rows.
-    (item.task === sidePanelTask ? ' selected' : '') +
+    (item.task === sidePanelTask && item.occurrenceDate === sidePanelOccurrenceDate ? ' selected' : '') +
     (isToday ? '' : ' not-today');
 
   // A reverse progress bar behind the row's own content -- full at the
@@ -3949,7 +4073,7 @@ function buildTodoItemRow(item, isToday) {
   if (timerIsForThisRow) {
     const bar = document.createElement('div');
     bar.className = 'todo-timer-bar';
-    bar.style.width = `${Math.max(0, Math.min(100, timerProgressPercent(item.task.timer)))}%`;
+    bar.style.width = `${Math.max(0, Math.min(100, timerProgressPercent(rowOccurrence.timer)))}%`;
     row.appendChild(bar);
   }
 
@@ -3960,7 +4084,7 @@ function buildTodoItemRow(item, isToday) {
   // (tomorrow/upcoming) or "this is the nag task itself". Never true once
   // already resolved: completing/failing it while still licensed and only
   // losing that license afterward doesn't retroactively hide the result.
-  const isResolved = item.task.passive ? item.failed : item.completed;
+  const isResolved = effectiveTask.passive ? item.failed : item.completed;
   const isLockedByLimit = !isResolved && !isProtectedTask(item.task) && !canCompleteOrNoteTask(item.task);
 
   if (isLockedByLimit) {
@@ -3980,7 +4104,7 @@ function buildTodoItemRow(item, isToday) {
     // "marked failed" instead (see toggleTaskFailedMark), so it reflects
     // item.failed rather than item.completed (which is always false for it
     // anyway, see pastDueStatus).
-    checkbox.checked = item.task.passive ? item.failed : item.completed;
+    checkbox.checked = effectiveTask.passive ? item.failed : item.completed;
     // Styled as a red "X" instead of the usual checkbox (see
     // .todo-checkbox-failed) purely to read as "failed", not to change what
     // clicking it does -- a failed appointment (or a passive task marked
@@ -3989,7 +4113,7 @@ function buildTodoItemRow(item, isToday) {
     checkbox.disabled = item.kind === 'tomorrow' || item.kind === 'upcoming' || isProtectedTask(item.task);
     checkbox.onclick = (e) => {
       e.stopPropagation();
-      attemptResolveTaskOccurrence(item.task, item.occurrenceDate, item.task.passive ? toggleTaskFailedMark : toggleTaskCompletion);
+      attemptResolveTaskOccurrence(item.task, item.occurrenceDate, effectiveTask.passive ? toggleTaskFailedMark : toggleTaskCompletion);
     };
     row.appendChild(checkbox);
   }
@@ -4004,17 +4128,17 @@ function buildTodoItemRow(item, isToday) {
   // a single task or same-taskId recurring fragments just show their own
   // name, as before.
   const seriesLabelInfo = seriesRowLabelInfo(item.task.seriesId);
-  name.textContent = seriesLabelInfo.mixed ? `${seriesLabelInfo.name}: ${item.task.name}` : item.task.name;
+  name.textContent = seriesLabelInfo.mixed ? `${seriesLabelInfo.name}: ${effectiveTask.name}` : effectiveTask.name;
   text.appendChild(name);
 
   // Always rendered, even when empty -- so every row reserves the same
   // description line and they're all the same height (see .todo-item-desc),
   // instead of a description-less task's row being shorter than one with a
   // description.
-  if (item.task.description) {
+  if (effectiveTask.description) {
     const desc = document.createElement('div');
     desc.className = 'todo-item-desc';
-    desc.textContent = item.task.description;
+    desc.textContent = effectiveTask.description;
     text.appendChild(desc);
   }
 
@@ -4028,7 +4152,7 @@ function buildTodoItemRow(item, isToday) {
     // "X of Y" as before; a count-up timer, or a countdown that's run past
     // zero into overtime, switch to the elapsed-time wording instead since
     // there's no meaningful "of Y" left (see startTaskTimerPrompt).
-    const timer = item.task.timer;
+    const timer = rowOccurrence.timer;
     const remaining = currentTimerRemaining(timer);
     if (timer.mode === 'countup') {
       meta.textContent = t('todo.timerElapsed', { elapsed: formatElapsedDuration(timerElapsedSeconds(timer)) });
@@ -4044,7 +4168,7 @@ function buildTodoItemRow(item, isToday) {
       });
     }
   } else {
-    meta.textContent = item.task.allDay
+    meta.textContent = effectiveTask.allDay
       ? item.kind === 'tomorrow'
         ? t('todo.tomorrowAllDay')
         : item.failed
@@ -4053,20 +4177,20 @@ function buildTodoItemRow(item, isToday) {
             ? t('todo.overdueSince', { date: item.occurrenceDate })
             : t('todo.allDay')
       : item.kind === 'tomorrow'
-        ? t('todo.tomorrowAt', { time: formatTimeOfDay(item.task.dueTime) })
+        ? t('todo.tomorrowAt', { time: formatTimeOfDay(effectiveTask.dueTime) })
         : item.failed
-          ? t('todo.failedWasDueAt', { date: item.occurrenceDate, time: formatTimeOfDay(item.task.dueTime) })
+          ? t('todo.failedWasDueAt', { date: item.occurrenceDate, time: formatTimeOfDay(effectiveTask.dueTime) })
           : item.overdue && !item.completed
-            ? t('todo.overdueSinceAt', { date: item.occurrenceDate, time: formatTimeOfDay(item.task.dueTime) })
-            : t('todo.due', { time: formatTimeOfDay(item.task.dueTime) });
+            ? t('todo.overdueSinceAt', { date: item.occurrenceDate, time: formatTimeOfDay(effectiveTask.dueTime) })
+            : t('todo.due', { time: formatTimeOfDay(effectiveTask.dueTime) });
   }
   text.appendChild(meta);
 
   // Render description to reserve space and make all todo items same height.
-  if (!item.task.description) {
+  if (!effectiveTask.description) {
     const desc = document.createElement('div');
     desc.className = 'todo-item-desc';
-    desc.textContent = item.task.description;
+    desc.textContent = effectiveTask.description;
     text.appendChild(desc);
   }
 
@@ -4093,7 +4217,7 @@ function buildTodoItemRow(item, isToday) {
   // the timer instead. Excludes a locked occurrence too (see isLockedByLimit
   // above) -- there's nothing to work toward on a task that can't actually
   // be resolved right now.
-  const canWorkOnNow = !item.task.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed && !isLockedByLimit;
+  const canWorkOnNow = !effectiveTask.passive && (item.kind === 'today' || item.kind === 'carried-over') && !item.completed && !item.failed && !isLockedByLimit;
   if (canWorkOnNow) {
     const workOnBtn = document.createElement('button');
     workOnBtn.className = 'todo-work-on-btn' + (isActiveHere ? ' active' : '');
@@ -4104,7 +4228,7 @@ function buildTodoItemRow(item, isToday) {
       setActiveTaskId(isActiveHere ? null : item.task.id, item.occurrenceDate);
       // See the same guard in toggleTaskCompletion -- focusing/unfocusing is
       // a plain list action on narrow screens, not a request to see details.
-      if (!isNarrowLayout()) selectTaskForSidePanel(item.task);
+      if (!isNarrowLayout()) selectTaskForSidePanel(item.task, item.occurrenceDate);
       renderTodo();
     };
     row.appendChild(workOnBtn);
@@ -4118,10 +4242,10 @@ function buildTodoItemRow(item, isToday) {
   // state (see autoDismissStaleCarriedOverOccurrences); this button just
   // lets the user do it themselves right away instead of waiting out that
   // day. Once dismissed, the "pending/overdue" and "all tasks" views still
-  // show it (both ignore task.dismissed -- see computeTodoDisplayItems/
+  // show it (both ignore Occurrence.dismissed -- see computeTodoDisplayItems/
   // computeAllTasksItems), so the button flips to undoing that instead.
   if (item.kind === 'carried-over') {
-    const isDismissed = !!item.task.dismissed[item.occurrenceDate];
+    const isDismissed = item.dismissed;
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'todo-focus-btn';
     dismissBtn.innerHTML = isDismissed ? SHOW_ICON : DISMISS_ICON;
@@ -4142,7 +4266,7 @@ function buildTodoItemRow(item, isToday) {
   // tomorrow/upcoming preview row).
   row.oncontextmenu = (e) => {
     e.preventDefault();
-    selectTaskForSidePanel(item.task);
+    selectTaskForSidePanel(item.task, item.occurrenceDate);
     showTodoContextMenu(e, item, canWorkOnNow, isLockedByLimit);
   };
 
@@ -4158,8 +4282,8 @@ function buildTodoItemRow(item, isToday) {
   // row.ondblclick below, since the second click then lands on a different
   // element than the first.
   row.onclick = () => {
-    if (item.task === sidePanelTask) deselectSidePanelTask();
-    else selectTaskForSidePanel(item.task);
+    if (item.task === sidePanelTask && item.occurrenceDate === sidePanelOccurrenceDate) deselectSidePanelTask();
+    else selectTaskForSidePanel(item.task, item.occurrenceDate);
   };
 
   // A locked occurrence has nothing to edit right now (see
@@ -4220,19 +4344,23 @@ function playTimerChime() {
 // to stay focused on it for.
 function expireFinishedTimers() {
   let changed = false;
-  for (const t of tasks) {
-    if (!t.timer) continue;
-    const remaining = currentTimerRemaining(t.timer);
-    const ranPastCap = timerElapsedSeconds(t.timer) >= MAX_TIMER_SECONDS;
-    const countdownDone = t.timer.mode !== 'countup' && !t.timer.continuePastZero && remaining <= 0;
+  const activeTask = tasks.find((t) => t.id === activeTaskId);
+  for (const occurrence of occurrences) {
+    if (!occurrence.timer) continue;
+    const remaining = currentTimerRemaining(occurrence.timer);
+    const ranPastCap = timerElapsedSeconds(occurrence.timer) >= MAX_TIMER_SECONDS;
+    const countdownDone = occurrence.timer.mode !== 'countup' && !occurrence.timer.continuePastZero && remaining <= 0;
     if (countdownDone || ranPastCap) {
-      const occurrenceDate = t.timer.occurrenceDate;
-      flushTimerElapsed(t);
-      t.timer = null;
-      logTaskEvent(t, 'Timer elapsed', occurrenceDate);
+      if (occurrence.timer.runningSince != null) {
+        occurrence.timerSeconds += (Date.now() - occurrence.timer.runningSince) / 1000;
+      }
+      occurrence.timer = null;
+      occurrence.log.push({ message: 'Timer elapsed', timestamp: Date.now() });
       changed = true;
       playTimerChime();
-      if (t.id === activeTaskId) setActiveTaskId(null);
+      if (activeTask && activeTask.taskId === occurrence.taskId && activeOccurrenceDate === occurrence.occurrenceDate) {
+        setActiveTaskId(null);
+      }
     }
   }
   if (changed) saveTasks();
@@ -4256,23 +4384,24 @@ function autoDismissStaleCarriedOverOccurrences() {
     // until the chain actually resolves, however old they get.
     if (task.recurUntilCompleted) continue;
     const priorDate = Recurrence.previousOccurrenceBefore(task, todayISO);
-    if (!priorDate || task.dismissed[priorDate]) continue;
+    const priorOccurrence = priorDate ? findOccurrence(task, priorDate) : null;
+    if (!priorDate || (priorOccurrence && priorOccurrence.dismissed)) continue;
     if (priorDate < yesterdayISO) {
-      task.dismissed[priorDate] = true;
+      ensureOccurrence(task, priorDate).dismissed = true;
       changed = true;
     }
   }
   if (changed) saveTasks();
 }
 
-// A recurUntilCompleted task's current occurrence, once its due date has
-// passed without being completed, gets pushed one day at a time (same due
-// time) rather than going overdue/failed (see pastDueStatus) -- this is
+// A recurUntilCompleted task's current pending Occurrence, once its due date
+// has passed without being completed, gets pushed one day at a time (same
+// due time) rather than going overdue/failed (see pastDueStatus) -- this is
 // what actually does that pushing, backfilling one entry per day since the
 // app was last open (see Recurrence.advanceRecurUntilCompletedChain), not
-// just today's. The previous entries stay in task.pendingReschedules (not
-// replaced) -- occursOn treats every one of them as its own still-live
-// occurrence until the chain is finally resolved (see
+// just today's. The previous entries stay in the occurrence's own
+// pendingReschedules (not replaced) -- occursOn treats every one of them as
+// its own still-live occurrence until the chain is finally resolved (see
 // resolveRecurUntilCompletedOccurrence), which is what keeps each of them
 // visible on the to-do list rather than just the latest.
 function advanceRecurUntilCompletedTasks() {
@@ -4280,9 +4409,11 @@ function advanceRecurUntilCompletedTasks() {
   let changed = false;
   for (const task of tasks) {
     if (!task.recurUntilCompleted) continue;
-    const grown = Recurrence.advanceRecurUntilCompletedChain(task, todayISO);
-    if (grown !== task.pendingReschedules) {
-      task.pendingReschedules = grown;
+    const occurrence = findOccurrence(task, null);
+    if (!occurrence) continue;
+    const grown = Recurrence.advanceRecurUntilCompletedChain(Occurrence.recurrenceShim(task, occurrence), todayISO);
+    if (grown !== occurrence.pendingReschedules) {
+      occurrence.pendingReschedules = grown;
       changed = true;
     }
   }
@@ -4436,7 +4567,8 @@ function renderTodo() {
 let timerTickIntervalId = null;
 function ensureTimerTicking() {
   const activeTask = tasks.find((t) => t.id === activeTaskId);
-  const shouldTick = !!(activeTask && activeTask.timer && activeTask.timer.runningSince != null);
+  const activeOccurrence = activeTask ? findOccurrence(activeTask, activeOccurrenceDate) : null;
+  const shouldTick = !!(activeOccurrence && activeOccurrence.timer && activeOccurrence.timer.runningSince != null);
   if (shouldTick && !timerTickIntervalId) {
     timerTickIntervalId = setInterval(renderTodo, 1000);
   } else if (!shouldTick && timerTickIntervalId) {
@@ -4492,6 +4624,11 @@ function updateSidePanelScopeThumb(activeIndex) {
 }
 
 let sidePanelTask = null; // the specific task record last interacted with
+// Which occurrence of sidePanelTask was actually clicked -- a recurring task
+// can show more than one row at once (carried-over/today/tomorrow), and only
+// 'occurrence' scope's own notes/log actually depend on which one this is
+// (see sidePanelOccurrence/renderSidePanel); 'task'/'series' scope don't care.
+let sidePanelOccurrenceDate = null;
 let sidePanelScope = 'task'; // 'occurrence' | 'task' | 'series'
 // Whether notes show their edit/delete controls -- off by default, and reset
 // back off whenever a different task is selected (see the sidePanelTask
@@ -4516,9 +4653,10 @@ function isNarrowLayout() {
 // so this only matters for reaching today's agenda with nothing selected.
 let agendaDrawerOpenNarrow = false;
 
-function selectTaskForSidePanel(task) {
-  if (task !== sidePanelTask) sidePanelEditMode = false;
+function selectTaskForSidePanel(task, occurrenceDate) {
+  if (task !== sidePanelTask || occurrenceDate !== sidePanelOccurrenceDate) sidePanelEditMode = false;
   sidePanelTask = task;
+  sidePanelOccurrenceDate = occurrenceDate;
   // A task being selected already shows the panel on its own -- reset so
   // deselecting it later closes the panel back up instead of falling back
   // to a drawer left open from before this selection.
@@ -4532,6 +4670,7 @@ function selectTaskForSidePanel(task) {
 // and the document-level Escape listener below.
 function deselectSidePanelTask() {
   sidePanelTask = null;
+  sidePanelOccurrenceDate = null;
   sidePanelEditMode = false;
   renderSidePanel();
   refreshSelectedHighlight();
@@ -4564,7 +4703,7 @@ function refreshSelectedHighlight() {
   document.querySelectorAll('.todo-item.selected').forEach((el) => el.classList.remove('selected'));
   if (!sidePanelTask) return;
   document.querySelectorAll('.todo-item').forEach((el) => {
-    if (el.__task === sidePanelTask) el.classList.add('selected');
+    if (el.__task === sidePanelTask && el.__occurrenceDate === sidePanelOccurrenceDate) el.classList.add('selected');
   });
 }
 
@@ -4573,6 +4712,15 @@ function sidePanelRecords() {
   if (sidePanelScope === 'series') return tasksInSeries(sidePanelTask.seriesId);
   if (sidePanelScope === 'task') return tasks.filter((t) => t.taskId === sidePanelTask.taskId);
   return [sidePanelTask];
+}
+
+// The one Occurrence row 'occurrence' scope shows notes/log for -- found (not
+// created) so merely *viewing* the panel never materializes a row for a
+// still-untouched occurrence; find-or-create only happens when the user
+// actually adds a note/log entry against it (see the comment-add handler).
+function sidePanelOccurrence() {
+  if (!sidePanelTask || sidePanelOccurrenceDate == null) return null;
+  return findOccurrence(sidePanelTask, sidePanelOccurrenceDate);
 }
 
 function buildSidePanelEmptyRow(text) {
@@ -4635,13 +4783,13 @@ function agendaTimeToMinutes(hhmm) {
 function averageFocusedMinutesForCompletedOccurrences(task) {
   let totalSeconds = 0;
   let qualifyingCount = 0;
-  for (const t of tasksInSeries(task.seriesId)) {
-    for (const [date, entry] of Object.entries(t.focusLog || {})) {
-      const seconds = (entry.focusedSeconds || 0) + (entry.timerSeconds || 0);
-      if (seconds <= 0 || !t.completions[date]) continue;
-      totalSeconds += seconds;
-      qualifyingCount++;
-    }
+  const taskIds = new Set(tasksInSeries(task.seriesId).map((t) => t.taskId));
+  for (const occurrence of occurrences) {
+    if (!taskIds.has(occurrence.taskId) || occurrence.status !== 'completed') continue;
+    const seconds = (occurrence.focusedSeconds || 0) + (occurrence.timerSeconds || 0);
+    if (seconds <= 0) continue;
+    totalSeconds += seconds;
+    qualifyingCount++;
   }
   return qualifyingCount === 0 ? null : totalSeconds / qualifyingCount / 60;
 }
@@ -4659,8 +4807,9 @@ function buildTodayAgendaItems() {
   const todayISO = Recurrence.dateToISO(now);
   const items = [];
   for (const task of tasks) {
-    if (!Recurrence.occursOn(task, todayISO)) continue;
-    const completed = !!task.completions[todayISO];
+    if (!occursOnDate(task, todayISO)) continue;
+    const occurrence = findOccurrence(task, todayISO);
+    const completed = !!(occurrence && occurrence.status === 'completed');
     const { failed } = completed ? { failed: false } : pastDueStatus(task, todayISO, completed, now);
     items.push({ task, completed, failed, color: resolveAgendaColor(task, completed, failed) });
   }
@@ -4815,7 +4964,7 @@ async function editCommentPrompt(comment) {
 // when the panel is merging multiple records together (series scope) --
 // in single-task scope every note already obviously belongs to the one
 // task on screen.
-function buildSidePanelCommentRow(task, comment, showTaskInfo) {
+function buildSidePanelCommentRow(owner, comment, label) {
   const item = document.createElement('div');
   item.className = 'side-panel-comment-item';
 
@@ -4823,7 +4972,7 @@ function buildSidePanelCommentRow(task, comment, showTaskInfo) {
   topRow.className = 'side-panel-comment-top-row';
   const time = document.createElement('div');
   time.className = 'side-panel-comment-time';
-  time.textContent = showTaskInfo ? `${task.name} · ${formatDateTime(comment.timestamp)}` : formatDateTime(comment.timestamp);
+  time.textContent = label ? `${label} · ${formatDateTime(comment.timestamp)}` : formatDateTime(comment.timestamp);
   topRow.appendChild(time);
 
   if (sidePanelEditMode) {
@@ -4838,7 +4987,7 @@ function buildSidePanelCommentRow(task, comment, showTaskInfo) {
     actions.appendChild(editBtn);
 
     appendDeleteButton(actions, () => {
-      task.comments.splice(task.comments.indexOf(comment), 1);
+      owner.comments.splice(owner.comments.indexOf(comment), 1);
       saveTasks();
       renderSidePanel();
     });
@@ -4854,17 +5003,15 @@ function buildSidePanelCommentRow(task, comment, showTaskInfo) {
   return item;
 }
 
-// `task` is the specific record `entry` was logged against -- shown inline
-// (name + the occurrence it was actually about) only when the panel is
-// merging multiple records together (series scope): in single-task scope
-// every entry already obviously belongs to the one task on screen, so naming
-// it again on every row would just be noise. Description isn't repeated here
-// even in series scope -- it's already shown once per task in the
-// task-summaries block at the top of the panel (see buildSidePanelTaskSummary).
-// Falls back to task.dueDate for an entry with no occurrenceDate of its own
-// (an action on the task/series as a whole, e.g. a plain edit -- or an entry
-// logged before occurrenceDate started being recorded at all).
-function buildSidePanelLogRow(task, entry, showTaskInfo) {
+// `label` (name + the occurrence it was actually about, precomputed by the
+// caller -- see renderSidePanel) is shown inline only when the panel is
+// merging multiple records together ('task'/'series' scope): in 'occurrence'
+// scope every entry already obviously belongs to the one occurrence on
+// screen, so naming it again on every row would just be noise. Description
+// isn't repeated here even in series scope -- it's already shown once per
+// task in the task-summaries block at the top of the panel (see
+// buildSidePanelTaskSummary).
+function buildSidePanelLogRow(entry, label) {
   const item = document.createElement('div');
   item.className = 'side-panel-log-item';
 
@@ -4872,8 +5019,7 @@ function buildSidePanelLogRow(task, entry, showTaskInfo) {
   topRow.className = 'side-panel-log-top-row';
   const msg = document.createElement('span');
   msg.className = 'side-panel-log-message';
-  const shownDate = entry.occurrenceDate || task.dueDate;
-  msg.textContent = showTaskInfo ? `${task.name}, ${shownDate} -- ${entry.message}` : entry.message;
+  msg.textContent = label ? `${label} -- ${entry.message}` : entry.message;
   const time = document.createElement('span');
   time.className = 'side-panel-log-time';
   time.textContent = formatDateTime(entry.timestamp);
@@ -4882,6 +5028,14 @@ function buildSidePanelLogRow(task, entry, showTaskInfo) {
   item.appendChild(topRow);
 
   return item;
+}
+
+// Any surviving fragment sharing taskId will do -- purely a display label
+// for an Occurrence-level comment/log entry in 'task'/'series' scope; a
+// name difference across split fragments isn't worth chasing down here.
+function taskNameForId(taskId) {
+  const match = tasks.find((t) => t.taskId === taskId);
+  return match ? match.name : '';
 }
 
 // One block per task record -- its own name/description/details, since
@@ -4917,7 +5071,10 @@ function renderSidePanel() {
   // The selected record can vanish out from under the panel (deleted, or
   // merged away -- tasksInSeries/taskId lookups above would just silently
   // return nothing for it), so this doubles as the panel's own cleanup.
-  if (!sidePanelTask || !tasks.includes(sidePanelTask)) sidePanelTask = null;
+  if (!sidePanelTask || !tasks.includes(sidePanelTask)) {
+    sidePanelTask = null;
+    sidePanelOccurrenceDate = null;
+  }
 
   // Narrow screens only (see style.css) -- irrelevant at normal widths,
   // where .side-panel is always visible via its own permanent column and
@@ -4977,31 +5134,53 @@ function renderSidePanel() {
     sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(sidePanelTask));
   }
 
-  // Paired with the owning record (not just the comment itself) so edits/
-  // deletes -- only offered once sidePanelEditMode is on -- can mutate the
-  // right record's own `comments` array, even though this list is merged
-  // across every record in scope (see sidePanelRecords/sidePanelScope).
-  const commentEntries = records
-    .flatMap((t) => (t.comments || []).map((comment) => ({ task: t, comment })))
-    .sort((a, b) => b.comment.timestamp - a.comment.timestamp);
+  // 'occurrence' scope shows only the one selected Occurrence's own
+  // comments/log; 'task'/'series' scope unions every in-scope record's
+  // Task-level comments/log (general, not tied to one date) with every
+  // Occurrence row's for their taskIds (per-date) -- see occurrence.js's own
+  // module comment on why these are two separate buckets. Paired with the
+  // owning record (not just the comment itself) so edits/deletes -- only
+  // offered once sidePanelEditMode is on -- can mutate the right record's
+  // own `comments` array.
+  const commentEntries = [];
+  const logEntries = [];
+  if (sidePanelScope === 'occurrence') {
+    const occurrence = sidePanelOccurrence();
+    if (occurrence) {
+      for (const comment of occurrence.comments) commentEntries.push({ owner: occurrence, comment, label: null });
+      for (const entry of occurrence.log) logEntries.push({ entry, label: null });
+    }
+  } else {
+    for (const rec of records) {
+      for (const comment of rec.comments || []) commentEntries.push({ owner: rec, comment, label: rec.name });
+      for (const entry of rec.log || []) logEntries.push({ entry, label: `${rec.name}, ${entry.occurrenceDate || rec.dueDate}` });
+    }
+    const taskIds = new Set(records.map((rec) => rec.taskId));
+    for (const occurrence of occurrences) {
+      if (!taskIds.has(occurrence.taskId)) continue;
+      const label = `${taskNameForId(occurrence.taskId)}, ${occurrence.occurrenceDate}`;
+      for (const comment of occurrence.comments) commentEntries.push({ owner: occurrence, comment, label });
+      for (const entry of occurrence.log) logEntries.push({ entry, label });
+    }
+  }
+  commentEntries.sort((a, b) => b.comment.timestamp - a.comment.timestamp);
+  logEntries.sort((a, b) => b.entry.timestamp - a.entry.timestamp);
+
   sidePanelCommentsEl.innerHTML = '';
   if (commentEntries.length === 0) {
     sidePanelCommentsEl.appendChild(buildSidePanelEmptyRow(t('sidePanel.noNotes')));
   } else {
-    for (const { task, comment } of commentEntries) {
-      sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(task, comment, showTaskInfo));
+    for (const { owner, comment, label } of commentEntries) {
+      sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(owner, comment, label));
     }
   }
 
-  const logEntries = records
-    .flatMap((t) => (t.log || []).map((entry) => ({ task: t, entry })))
-    .sort((a, b) => b.entry.timestamp - a.entry.timestamp);
   sidePanelLogEl.innerHTML = '';
   if (logEntries.length === 0) {
     sidePanelLogEl.appendChild(buildSidePanelEmptyRow(t('sidePanel.noActivity')));
   } else {
-    for (const { task, entry } of logEntries) {
-      sidePanelLogEl.appendChild(buildSidePanelLogRow(task, entry, showTaskInfo));
+    for (const { entry, label } of logEntries) {
+      sidePanelLogEl.appendChild(buildSidePanelLogRow(entry, label));
     }
   }
 }
@@ -5028,7 +5207,11 @@ sidePanelCommentAddBtn.onclick = async () => {
     const accepted = await offerSubscriptionUpgrade(reason);
     if (!accepted) return;
   }
-  addTaskComment(sidePanelTask, text);
+  if (sidePanelScope === 'occurrence' && sidePanelOccurrenceDate != null) {
+    addOccurrenceComment(sidePanelTask, sidePanelOccurrenceDate, text);
+  } else {
+    addTaskComment(sidePanelTask, text);
+  }
   sidePanelCommentInput.value = '';
   saveTasks();
   renderSidePanel();
@@ -5092,14 +5275,27 @@ function formatMonthLabel(monthKey) {
 
 // Whether `task` lands on any date within monthKey, without enumerating
 // every day in it -- the first occurrence on/after the month's first day
-// either falls inside the month or it doesn't.
+// either falls inside the month or it doesn't. recurUntilCompleted is the
+// exception: "the first occurrence on/after the month start" only ever
+// reflects the current pending chain (see occurrenceScanShape's own
+// comment), which would miss a month that only has an already-resolved
+// occurrence in it -- checked directly against every recorded Occurrence
+// instead (see allRecurUntilCompletedDatesInRange).
 function taskOccursInMonth(task, monthKey) {
   const [year, month] = monthKey.split('-').map(Number);
   const startISO = `${monthKey}-01`;
+  if (task.recurUntilCompleted) {
+    const endExclusiveISO = Recurrence.dateToISO(Recurrence.addDays(new Date(year, month - 1, 1), Recurrence.daysInMonth(year, month - 1)));
+    let found = false;
+    allRecurUntilCompletedDatesInRange(task, startISO, endExclusiveISO, () => {
+      found = true;
+    });
+    return found;
+  }
   const endISO = `${monthKey}-${String(Recurrence.daysInMonth(year, month - 1)).padStart(2, '0')}`;
-  if (Recurrence.occursOn(task, startISO)) return true;
+  if (occursOnDate(task, startISO)) return true;
   const dayBeforeStart = Recurrence.dateToISO(Recurrence.addDays(new Date(startISO + 'T00:00:00'), -1));
-  const occ = Recurrence.nextOccurrenceAfter(task, dayBeforeStart);
+  const occ = nextOccurrenceAfterDate(task, dayBeforeStart);
   return !!occ && occ <= endISO;
 }
 
@@ -5279,7 +5475,7 @@ async function promptManualOccurrence(sourceTask) {
     : null;
   const frequency = isRecurring ? sourceTask.frequency : { type: 'once', interval: 1 };
 
-  const occurrence = {
+  const manualFragment = {
     id: uid(),
     taskId: sourceTask.taskId,
     seriesId: sourceTask.seriesId,
@@ -5293,16 +5489,15 @@ async function promptManualOccurrence(sourceTask) {
     appointment: sourceTask.appointment,
     passive: sourceTask.passive,
     recurUntilCompleted: sourceTask.recurUntilCompleted,
-    pendingReschedules: [],
     endDate,
     frequency,
-    completions: {},
-    dismissed: {},
-    markedFailed: {},
     createdAt: sourceTask.createdAt,
+    log: [],
+    comments: [],
   };
-  tasks.push(occurrence);
-  logTaskEvent(occurrence, 'Manual occurrence added', occurrence.dueDate);
+  tasks.push(manualFragment);
+  logTaskEvent(manualFragment, 'Manual occurrence added', manualFragment.dueDate);
+  if (manualFragment.recurUntilCompleted) ensureOccurrence(manualFragment, manualFragment.dueDate);
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
@@ -5545,30 +5740,38 @@ function isRecurringSeries(seriesTasks) {
   return seriesTasks.length > 1 || seriesTasks.some((t) => t.frequency.type !== 'once');
 }
 
-// Merges every fragment's focusLog into one per-occurrence-date map plus
-// running totals. Fragments' date ranges never overlap (each split truncates
-// the historical portion's endDate right before the next fragment starts),
-// so this never double-counts a date across fragments.
+// Merges every fragment's (by taskId) Occurrence focus stats into one
+// per-occurrence-date map plus running totals. Fragments' date ranges never
+// overlap (each split truncates the historical portion's endDate right
+// before the next fragment starts), and Occurrence rows are keyed by taskId
+// rather than which fragment currently owns the pattern, so this never
+// double-counts a date across fragments.
 function aggregateFocusLog(seriesTasks) {
+  const taskIds = new Set(seriesTasks.map((t) => t.taskId));
   const byDate = new Map();
   let totalFocusedSeconds = 0;
   let totalTimerSeconds = 0;
-  for (const t of seriesTasks) {
-    for (const [date, entry] of Object.entries(t.focusLog || {})) {
-      const bucket = byDate.get(date) || { focusedSeconds: 0, timerSeconds: 0 };
-      bucket.focusedSeconds += entry.focusedSeconds || 0;
-      bucket.timerSeconds += entry.timerSeconds || 0;
-      byDate.set(date, bucket);
-      totalFocusedSeconds += entry.focusedSeconds || 0;
-      totalTimerSeconds += entry.timerSeconds || 0;
-    }
+  for (const occurrence of occurrences) {
+    if (!taskIds.has(occurrence.taskId)) continue;
+    const focusedSeconds = occurrence.focusedSeconds || 0;
+    const timerSeconds = occurrence.timerSeconds || 0;
+    if (focusedSeconds === 0 && timerSeconds === 0) continue;
+    const bucket = byDate.get(occurrence.occurrenceDate) || { focusedSeconds: 0, timerSeconds: 0 };
+    bucket.focusedSeconds += focusedSeconds;
+    bucket.timerSeconds += timerSeconds;
+    byDate.set(occurrence.occurrenceDate, bucket);
+    totalFocusedSeconds += focusedSeconds;
+    totalTimerSeconds += timerSeconds;
   }
   return { byDate, totalFocusedSeconds, totalTimerSeconds };
 }
 
 function countSeriesCompletions(seriesTasks) {
+  const taskIds = new Set(seriesTasks.map((t) => t.taskId));
   let count = 0;
-  for (const t of seriesTasks) count += Object.values(t.completions || {}).filter(Boolean).length;
+  for (const occurrence of occurrences) {
+    if (taskIds.has(occurrence.taskId) && occurrence.status === 'completed') count++;
+  }
   return count;
 }
 
@@ -5994,6 +6197,7 @@ function collectUserDataExport() {
     version: USER_DATA_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     tasks,
+    occurrences,
     userProfile: currentUserProfileSnapshot(),
     activeTaskId,
     activeOccurrenceDate,
@@ -6039,11 +6243,14 @@ settingsImportDataFileInput.onchange = async () => {
   }
   if (!confirm(t('data.importConfirm'))) return;
 
-  const normalized = normalizeLoadedTasks(data.tasks);
-  const commentsBefore = normalized.reduce((sum, task) => sum + (task.comments ? task.comments.length : 0), 0);
-  tasks = applyFreeTierLimitsToImportedTasks(normalized);
-  const commentsAfter = tasks.reduce((sum, task) => sum + (task.comments ? task.comments.length : 0), 0);
-  if (tasks.length < normalized.length || commentsAfter < commentsBefore) showInfoModal(t('data.importLimitedByFreePlan'));
+  const normalizedTasks = normalizeLoadedTasks(data.tasks);
+  const importedOccurrences = Array.isArray(data.occurrences) ? data.occurrences : [];
+  const totalNotesBefore = [...normalizedTasks, ...importedOccurrences].reduce((sum, r) => sum + (r.comments ? r.comments.length : 0), 0);
+  const limited = applyFreeTierLimitsToImportedTasks(normalizedTasks, importedOccurrences);
+  tasks = limited.tasks;
+  occurrences = limited.occurrences;
+  const totalNotesAfter = [...tasks, ...occurrences].reduce((sum, r) => sum + (r.comments ? r.comments.length : 0), 0);
+  if (tasks.length < normalizedTasks.length || totalNotesAfter < totalNotesBefore) showInfoModal(t('data.importLimitedByFreePlan'));
 
   ensureSubscriptionPromptTask(); // re-derive from the current account's subscription, not whatever the imported file happened to contain
 
@@ -6054,7 +6261,7 @@ settingsImportDataFileInput.onchange = async () => {
   // this, caused by a backend bug since fixed) -- awaited here so a failure
   // can be surfaced instead of just console.error'd.
   try {
-    await apiFetch('/tasks', { method: 'PUT', body: tasks });
+    await apiFetch('/tasks', { method: 'PUT', body: { tasks, occurrences } });
   } catch (err) {
     console.error('Failed to save imported tasks:', err);
     showInfoModal(t('data.importSaveFailed', { message: err.message }));
@@ -6523,7 +6730,7 @@ function renderAppTitle() {
 // IP-based language/time-format guess (detectLanguageAndTimeFormatFromLocation)
 // in the background, applying and saving it whenever it resolves.
 async function startApp(needsLanguageDetection) {
-  tasks = await loadTasks();
+  ({ tasks, occurrences } = await loadTasks());
   ensureSubscriptionPromptTask();
   applyStaticTranslations();
   renderAppTitle();
