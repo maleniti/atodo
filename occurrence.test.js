@@ -105,6 +105,34 @@ assert.strictEqual(
   'moved back onto a date still lingering in its own history -- current occupant, not an exclusion'
 );
 
+// -- occurrenceBelongsToFragment -------------------------------------------
+// Two fragments sharing one taskId, as after a 'following' split: an old
+// plain one truncated to end 09-15, then a recurUntilCompleted one from 09-23.
+const oldFragment = { taskId: 'tS', dueDate: '2026-09-09', endDate: '2026-09-15', recurUntilCompleted: false };
+const rucFragment = { taskId: 'tS', dueDate: '2026-09-23', endDate: null, recurUntilCompleted: true };
+const laterCompleted = { taskId: 'tS', occurrenceDate: '2026-09-23', pendingReschedules: ['2026-09-24'], status: 'completed' };
+const stalePending = { taskId: 'tS', occurrenceDate: '2026-09-09', pendingReschedules: [], status: 'pending' };
+const livePending = { taskId: 'tS', occurrenceDate: '2026-09-30', pendingReschedules: [], status: 'pending' };
+assert.strictEqual(O.occurrenceBelongsToFragment(oldFragment, laterCompleted), false, "a later fragment's row, past the old fragment's own endDate");
+assert.strictEqual(O.occurrenceBelongsToFragment(rucFragment, laterCompleted), true, "within the recurUntilCompleted fragment's own range");
+assert.strictEqual(O.occurrenceBelongsToFragment(oldFragment, stalePending), true, "the old fragment's own row");
+assert.strictEqual(
+  O.occurrenceBelongsToFragment(rucFragment, stalePending),
+  false,
+  "a stale plain-task 'pending' row from before the recurUntilCompleted fragment began is never its live chain"
+);
+assert.strictEqual(O.occurrenceBelongsToFragment(rucFragment, livePending), true);
+assert.strictEqual(
+  O.occurrenceBelongsToFragment(rucFragment, { taskId: 'tS', occurrenceDate: '2026-09-20', pendingReschedules: ['2026-09-21', '2026-09-23'], status: 'pending' }),
+  true,
+  'a pending chain begun before the fragment, but currently within it, still belongs'
+);
+assert.strictEqual(
+  O.occurrenceBelongsToFragment(oldFragment, { taskId: 'tS', occurrenceDate: '2026-09-20', pendingReschedules: ['2026-09-15'], status: 'pending' }),
+  true,
+  "a plain row rescheduled out past endDate still belongs to the fragment it was originally scheduled under"
+);
+
 // -- statusOf -------------------------------------------------------------
 assert.strictEqual(O.statusOf(occurrences, 't1', '2026-09-23'), 'completed');
 assert.strictEqual(O.statusOf(occurrences, 't1', '2026-10-05'), 'pending', 'no row at all -- still pending, not an error');

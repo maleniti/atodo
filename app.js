@@ -1675,12 +1675,25 @@ let occurrences = [];
 // occurrenceDate == null means "just the current pending one, whichever
 // date it's at" (see occurrenceScanShape and friends) -- skips the exact
 // match entirely, since there's no date to match.
+//
+// The pending lookup only considers rows belonging to this fragment (see
+// Occurrence.occurrenceBelongsToFragment) -- a taskId whose history predates
+// its recurUntilCompleted fragment can still carry a stale plain-task
+// 'pending' row from back then, which must never be mistaken for the live
+// chain. If several still qualify, the latest-starting one wins: a stale
+// row always predates the live chain, and once mistaken for it would get
+// advanced (advanceRecurUntilCompletedTasks) right into this fragment's own
+// range, qualifying by effectiveDueDate from then on.
 function findOccurrence(task, occurrenceDate) {
   if (!task.recurUntilCompleted) return Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
-  if (occurrenceDate == null) return Occurrence.pendingOccurrenceFor(occurrences, task.taskId);
+  let pending = null;
+  for (const o of occurrences) {
+    if (o.taskId !== task.taskId || o.status !== 'pending' || !Occurrence.occurrenceBelongsToFragment(task, o)) continue;
+    if (!pending || o.occurrenceDate > pending.occurrenceDate) pending = o;
+  }
+  if (occurrenceDate == null) return pending;
   const exact = Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
   if (exact) return exact;
-  const pending = Occurrence.pendingOccurrenceFor(occurrences, task.taskId);
   return pending && (pending.pendingReschedules || []).includes(occurrenceDate) ? pending : null;
 }
 
@@ -3530,9 +3543,16 @@ function occurrenceScanShape(task) {
 //    alongside the real one now sitting on its new date. See
 //    Occurrence.isDateExcluded for how the vacated date is tracked (reusing
 //    pendingReschedules' own array-of-dates shape).
+//
+// A found row only counts if it belongs to THIS fragment (see
+// Occurrence.occurrenceBelongsToFragment) -- otherwise every fragment
+// sharing a taskId would also render every other fragment's rows, e.g. an
+// old truncated fragment showing a later one's occurrence past its own
+// endDate.
 function occursOnDate(task, dateISO) {
-  if (task.recurUntilCompleted) return !!findOccurrence(task, dateISO);
-  if (findOccurrence(task, dateISO)) return true;
+  const found = findOccurrence(task, dateISO);
+  if (found && Occurrence.occurrenceBelongsToFragment(task, found)) return true;
+  if (task.recurUntilCompleted) return false;
   return Recurrence.occursOn(task, dateISO) && !Occurrence.isDateExcluded(occurrences, task.taskId, dateISO);
 }
 
@@ -3583,7 +3603,7 @@ function nextOccurrenceAfterDate(task, afterISO) {
 // taken over as current.
 function allRecurUntilCompletedDatesInRange(task, startISO, cutoffISO, fn) {
   for (const occurrence of occurrences) {
-    if (occurrence.taskId !== task.taskId) continue;
+    if (occurrence.taskId !== task.taskId || !Occurrence.occurrenceBelongsToFragment(task, occurrence)) continue;
     const dates = occurrence.status === 'pending' ? [occurrence.occurrenceDate, ...(occurrence.pendingReschedules || [])] : [occurrence.occurrenceDate];
     for (const date of dates) {
       if (date >= startISO && date < cutoffISO) fn(date);

@@ -116,6 +116,28 @@ function canManageOccurrenceDirectly(task, occurrence) {
   return !(task.recurUntilCompleted && occurrence.status === 'pending');
 }
 
+// Occurrence rows are keyed by taskId alone, but after a 'following' split
+// several Task fragments share that taskId, each owning its own
+// [dueDate, endDate] slice of the timeline. Without this check every
+// fragment claims every row of its taskId -- e.g. an old, truncated
+// fragment rendering a later fragment's occurrence past its own endDate, where
+// deleting it via that old fragment (applySplitDelete) can't do anything,
+// since that date isn't part of the old fragment's pattern at all.
+// A plain task's rescheduled row still belongs to the fragment it was
+// originally scheduled under (pendingReschedules[0], see isDateExcluded),
+// wherever it has since moved to. A recurUntilCompleted task's
+// still-'pending' row is judged by where its chain currently is
+// (effectiveDueDate), not where it started -- a chain begun under an earlier
+// fragment can still be the live one of whichever fragment governs it now,
+// whereas a stale plain-task 'pending' row left behind before the
+// fragment's own start never is.
+function occurrenceBelongsToFragment(task, occurrence) {
+  const inRange = (d) => !!d && d >= task.dueDate && (!task.endDate || d <= task.endDate);
+  if (task.recurUntilCompleted && occurrence.status === 'pending') return inRange(effectiveDueDate(occurrence));
+  if (inRange(occurrence.occurrenceDate)) return true;
+  return !task.recurUntilCompleted && inRange((occurrence.pendingReschedules || [])[0]);
+}
+
 // A date a plain (non-recurUntilCompleted) task's own pattern might still
 // predict, but which some Occurrence for taskId has since been rescheduled
 // AWAY from (see app.js's rescheduleOccurrencePrompt, which pushes the
@@ -167,6 +189,7 @@ const occurrenceApi = {
   recurrenceShim,
   applyOverrides,
   canManageOccurrenceDirectly,
+  occurrenceBelongsToFragment,
   isDateExcluded,
   statusOf,
   notesCount,
