@@ -16,6 +16,11 @@
 // recurUntilCompleted tasks keep at most one 'pending' Occurrence alive at a
 // time -- see recurrenceShim below for how its pendingReschedules chain
 // feeds back into recurrence.js's own chain-membership logic unchanged.
+// pendingReschedules is reused for a second, unrelated purpose on a plain
+// task's occurrence too: the history of dates it's been manually
+// rescheduled AWAY from (see isDateExcluded) -- same "every date this
+// occurrence has touched" shape, opposite direction (still-live chain vs.
+// dead exclusions), never both meaningful on the same occurrence at once.
 
 function findOccurrence(occurrences, taskId, occurrenceDate) {
   for (const o of occurrences) {
@@ -100,6 +105,38 @@ function applyOverrides(task, occurrence) {
   return { ...task, ...overrides };
 }
 
+// A still-'pending' occurrence of a recurUntilCompleted task is the one live
+// slot its reschedule chain is anchored to (see effectiveDueDate/
+// pendingReschedules) -- deleting it or reassigning its occurrenceDate
+// directly would orphan that chain, since nothing regenerates a missing
+// pending occurrence for such a task the way an ordinary task's pattern
+// recomputes on its own. Any resolved (completed/failed) occurrence, or any
+// occurrence at all of a plain (non-recurUntilCompleted) task, is safe.
+function canManageOccurrenceDirectly(task, occurrence) {
+  return !(task.recurUntilCompleted && occurrence.status === 'pending');
+}
+
+// A date a plain (non-recurUntilCompleted) task's own pattern might still
+// predict, but which some Occurrence for taskId has since been rescheduled
+// AWAY from (see app.js's rescheduleOccurrencePrompt, which pushes the
+// vacated date onto that occurrence's own pendingReschedules right before
+// moving its occurrenceDate) -- excluded from ever being re-treated as a
+// fresh, unclaimed pattern date, the same way a date an Occurrence's own
+// current occurrenceDate already covers is "excluded" by simply being found
+// there instead of synthesized. Reuses pendingReschedules' existing array
+// shape rather than a new field: for a recurUntilCompleted task it means
+// "every date pushed through since the still-live current occurrenceDate";
+// here it means "every date this now-elsewhere occurrence has moved away
+// from" -- same "history of dates this occurrence has touched" idea, never
+// consulted for the same task at the same time (a recurUntilCompleted task's
+// own occursOn short-circuits entirely, see recurrence.js, never reaching
+// the pattern math this guards). `o.occurrenceDate !== dateISO` skips an
+// occurrence that's since moved back onto this exact date -- it's the
+// current, real occupant then, not an exclusion.
+function isDateExcluded(occurrences, taskId, dateISO) {
+  return occurrences.some((o) => o.taskId === taskId && o.occurrenceDate !== dateISO && (o.pendingReschedules || []).includes(dateISO));
+}
+
 // 'pending' for a date with no recorded Occurrence row at all -- same
 // meaning as an absent key in the old completions/dismissed/markedFailed
 // maps.
@@ -129,6 +166,8 @@ const occurrenceApi = {
   effectiveDueDate,
   recurrenceShim,
   applyOverrides,
+  canManageOccurrenceDirectly,
+  isDateExcluded,
   statusOf,
   notesCount,
 };

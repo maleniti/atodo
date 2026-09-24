@@ -67,6 +67,44 @@ assert.deepStrictEqual(
   'only the overridden field changes, everything else still comes from the task'
 );
 
+// -- canManageOccurrenceDirectly --------------------------------------------
+assert.strictEqual(
+  O.canManageOccurrenceDirectly({ recurUntilCompleted: true }, { status: 'pending' }),
+  false,
+  "the one live pending slot of a recurUntilCompleted task's chain"
+);
+assert.strictEqual(
+  O.canManageOccurrenceDirectly({ recurUntilCompleted: true }, { status: 'completed' }),
+  true,
+  'a resolved recurUntilCompleted occurrence is frozen history'
+);
+assert.strictEqual(
+  O.canManageOccurrenceDirectly({ recurUntilCompleted: false }, { status: 'pending' }),
+  true,
+  'an ordinary task self-recomputes its pattern regardless'
+);
+
+// -- isDateExcluded ---------------------------------------------------------
+const rescheduled = [
+  // Moved from 2026-09-24 to 2026-09-25 -- the vacated date is recorded in
+  // its own pendingReschedules.
+  { id: 'r1', taskId: 't1', occurrenceDate: '2026-09-25', pendingReschedules: ['2026-09-24'] },
+  { id: 'r2', taskId: 't2', occurrenceDate: '2026-09-20', pendingReschedules: [] },
+];
+assert.strictEqual(O.isDateExcluded(rescheduled, 't1', '2026-09-24'), true, 'vacated by a reschedule -- excluded from regenerating');
+assert.strictEqual(O.isDateExcluded(rescheduled, 't1', '2026-09-25'), false, "the occurrence's own current date is never excluded");
+assert.strictEqual(O.isDateExcluded(rescheduled, 't1', '2026-09-26'), false, 'an untouched date is not excluded');
+assert.strictEqual(O.isDateExcluded(rescheduled, 't2', '2026-09-24'), false, 'scoped by taskId -- another task vacating a date has no effect here');
+assert.strictEqual(
+  O.isDateExcluded(
+    [{ id: 'r3', taskId: 't1', occurrenceDate: '2026-09-24', pendingReschedules: ['2026-09-24'] }],
+    't1',
+    '2026-09-24'
+  ),
+  false,
+  'moved back onto a date still lingering in its own history -- current occupant, not an exclusion'
+);
+
 // -- statusOf -------------------------------------------------------------
 assert.strictEqual(O.statusOf(occurrences, 't1', '2026-09-23'), 'completed');
 assert.strictEqual(O.statusOf(occurrences, 't1', '2026-10-05'), 'pending', 'no row at all -- still pending, not an error');

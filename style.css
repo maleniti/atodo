@@ -519,6 +519,43 @@ main {
   background: #d93025;
   color: #fff;
 }
+
+/* Direct actions on the selected Occurrence itself (renderSidePanelOccurrenceActions,
+   app.js) -- only ever shown for 'occurrence' scope. Labeled buttons (edit/
+   reschedule) reuse .menu-btn-small as-is; the delete button comes from the
+   shared appendDeleteButton (app.js) and gets the same small circular
+   icon-button treatment .side-panel-comment-actions gives its own delete
+   button, so the two don't look like different UI idioms next to each other. */
+.side-panel-occurrence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.side-panel-occurrence-actions button:not(.menu-btn-small) {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.side-panel-occurrence-actions button:not(.menu-btn-small):hover { background: rgba(255, 255, 255, 0.1); color: var(--text-primary); }
+.side-panel-occurrence-actions button:not(.menu-btn-small).confirm,
+.side-panel-occurrence-actions button:not(.menu-btn-small).confirm:hover {
+  background: #d93025;
+  color: #fff;
+}
+.side-panel-occurrence-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .side-panel-comment-text {
   font-size: 12px;
   color: var(--text-primary);
