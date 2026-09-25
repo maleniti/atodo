@@ -122,6 +122,13 @@
         </div>
       </div>
 
+      <!-- Shown only while a task save has failed and is being retried --
+           see saveTasks/renderSaveStatus in app.js. -->
+      <div id="save-status-banner" class="save-status-banner hidden" role="alert">
+        <span id="save-status-message" class="save-status-message"></span>
+        <button id="save-status-retry" class="menu-btn-small" data-i18n="saveStatus.retryNow">Retry now</button>
+      </div>
+
       <div id="todo-section" class="todo-section hidden">
         <div class="todo-toolbar">
           <div id="todo-month-nav" class="todo-month-nav">

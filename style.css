@@ -318,6 +318,19 @@ main {
   text-overflow: ellipsis;
 }
 
+/* A completed occurrence stays on the agenda (it still took up that time)
+   but recedes: faded, with its name crossed out like in the to-do list.
+   Opacity on the whole element rather than a lower background alpha, so the
+   name/time text fades along with the fill. */
+.agenda-all-day-pill.completed,
+.agenda-block.completed {
+  opacity: 0.45;
+}
+.agenda-all-day-pill.completed,
+.agenda-block.completed .agenda-block-name {
+  text-decoration: line-through;
+}
+
 .side-panel-content {
   display: flex;
   flex-direction: column;
@@ -589,6 +602,24 @@ main {
   margin-bottom: 20px;
   flex: none;
 }
+/* A failed task save, still being retried (see saveTasks in app.js) --
+   deliberately loud: until it clears, a reload loses everything since. */
+.save-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -8px 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  background: var(--glass-menu-bg);
+  color: var(--danger);
+  font-size: 13px;
+  flex: none;
+}
+.save-status-message { flex: 1; min-width: 0; }
+.save-status-banner .menu-btn-small { flex: none; }
+
 .app-header h1 {
   font-size: 20px;
   font-weight: 700;

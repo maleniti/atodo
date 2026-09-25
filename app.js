@@ -235,6 +235,7 @@ const I18N = {
     'occurrencePanel.rescheduleDateLabel': 'New date',
     'occurrencePanel.rescheduleCollision': 'Another occurrence of this task is already recorded on that date.',
     'occurrencePanel.blockedRecurUntilCompleted': "Not available while this task's next occurrence is still pending.",
+    'todo.reopenBlockedRecurUntilCompleted': 'A later occurrence of this task has already been completed since, so this one can no longer be marked not done.',
 
     'taskStats.title': 'Stats: {name}',
     'taskStats.totalFocusedAllRecurrences': 'Total time focused (all recurrences)',
@@ -344,6 +345,9 @@ const I18N = {
     'data.importConfirm': "Importing will replace all of your current tasks and settings with what's in this file. Continue?",
     'data.importLimitedByFreePlan':
       "Your free plan's limits apply to imports too, so some of this file's tasks and/or notes were left out. Subscribe to import everything.",
+    'saveStatus.failed': "Your latest changes haven't been saved yet ({message}). Retrying automatically -- keep this tab open until this message goes away, or they'll be lost.",
+    'saveStatus.retryNow': 'Retry now',
+    'saveStatus.retrying': 'Retrying…',
     'data.importSaveFailed':
       "Your tasks were imported here, but saving them to your account failed, so they may not actually be there yet: {message} Try again in a bit, and if it keeps happening, please contact support and attach the file you tried to import so we can look into it.",
   },
@@ -558,6 +562,7 @@ const I18N = {
     'occurrencePanel.rescheduleDateLabel': 'Novi datum',
     'occurrencePanel.rescheduleCollision': 'Druga pojava ovog zadatka već je zabilježena na taj datum.',
     'occurrencePanel.blockedRecurUntilCompleted': 'Nije dostupno dok je sljedeća pojava ovog zadatka još na čekanju.',
+    'todo.reopenBlockedRecurUntilCompleted': 'Kasnija pojava ovog zadatka od tada je već dovršena, pa se ova više ne može označiti kao nedovršena.',
 
     'taskStats.title': 'Statistika: {name}',
     'taskStats.totalFocusedAllRecurrences': 'Ukupno vrijeme fokusa (sva ponavljanja)',
@@ -667,6 +672,9 @@ const I18N = {
     'data.importConfirm': 'Uvoz će zamijeniti sve vaše trenutne zadatke i postavke sadržajem ove datoteke. Želite li nastaviti?',
     'data.importLimitedByFreePlan':
       'Ograničenja vašeg besplatnog plana vrijede i za uvoz, pa su neki zadaci i/ili bilješke iz ove datoteke izostavljeni. Pretplatite se za potpuni uvoz.',
+    'saveStatus.failed': 'Vaše posljednje promjene još nisu spremljene ({message}). Spremanje se automatski ponavlja -- ne zatvarajte ovu karticu dok ova poruka ne nestane, inače će se promjene izgubiti.',
+    'saveStatus.retryNow': 'Pokušaj ponovno',
+    'saveStatus.retrying': 'Ponovni pokušaj…',
     'data.importSaveFailed':
       'Zadaci su uvezeni ovdje, ali njihovo spremanje na vaš račun nije uspjelo, pa možda još nisu tamo: {message} Pokušajte ponovno za koji trenutak, a ako se problem nastavi, javite se podršci i priložite datoteku koju ste pokušali uvesti kako bismo to mogli istražiti.',
   },
@@ -760,6 +768,67 @@ function logTaskEvent(task, message, occurrenceDate) {
 // about is already implied by the row it's attached to.
 function logOccurrenceEvent(task, occurrenceDate, message) {
   ensureOccurrence(task, occurrenceDate).log.push({ message, timestamp: Date.now() });
+}
+
+// Focusing an occurrence and then unfocusing it again (or vice versa)
+// within this window is treated as a misclick rather than a real change --
+// neither toggle ends up in the log.
+const FOCUS_TOGGLE_LOG_WINDOW_MS = 10 * 1000;
+
+// Checking off the focused occurrence also unfocuses it, synchronously
+// within the very same click (renderTodo's "no longer eligible" check, via
+// setActiveTaskId) -- one user action, so it's logged as one combined entry
+// instead of two separate ones. No 'Marked failed' counterpart: that's only
+// ever a passive task's action, and a passive task can't be focused at all
+// (see canWorkOnNow in buildTodoItemRow).
+const RESOLVE_WITH_UNFOCUS_MESSAGES = {
+  'Marked done': 'Unfocused and marked done',
+};
+const RESOLVE_WITH_UNFOCUS_WINDOW_MS = 1000;
+
+// logOccurrenceEvent for 'Focused'/'Unfocused' -- drops the opposite entry
+// instead of logging this one when it's the occurrence's very last entry
+// and recent enough (see FOCUS_TOGGLE_LOG_WINDOW_MS). The time actually
+// spent focused is still credited (focusedSeconds/timerSeconds), only the
+// log entries go. An 'Unfocused' that's really just the side effect of the
+// occurrence having been resolved a moment ago is folded into that entry
+// instead (see RESOLVE_WITH_UNFOCUS_MESSAGES).
+function logFocusToggle(task, occurrenceDate, message, oppositeMessage) {
+  const log = ensureOccurrence(task, occurrenceDate).log;
+  const last = log[log.length - 1];
+  if (last && last.message === oppositeMessage && Date.now() - last.timestamp < FOCUS_TOGGLE_LOG_WINDOW_MS) {
+    log.pop();
+    return;
+  }
+  const combined = message === 'Unfocused' && last && RESOLVE_WITH_UNFOCUS_MESSAGES[last.message];
+  if (combined && Date.now() - last.timestamp < RESOLVE_WITH_UNFOCUS_WINDOW_MS) {
+    last.message = combined;
+    return;
+  }
+  logOccurrenceEvent(task, occurrenceDate, message);
+}
+
+// Undoing a resolution (marking an occurrence not done/not failed) straight
+// back after making it, with no other action on it in between, takes back
+// its log entry instead of adding an opposite one -- returns whether it
+// did. A plain 'Marked done'/'Marked failed' entry is simply removed; a
+// combined 'Unfocused and marked ...' one (see RESOLVE_WITH_UNFOCUS_MESSAGES)
+// is turned back into a plain 'Unfocused', since that part of it did happen
+// and isn't undone. A note added to the occurrence, or a task-level entry
+// tagged with it, since then counts as an action in between.
+function takeBackResolutionLogEntry(task, occurrence, resolvedMessage) {
+  const log = occurrence.log;
+  const last = log[log.length - 1];
+  const combined = RESOLVE_WITH_UNFOCUS_MESSAGES[resolvedMessage];
+  if (!last || (last.message !== resolvedMessage && last.message !== combined)) return false;
+  if ((occurrence.comments || []).some((c) => c.timestamp >= last.timestamp)) return false;
+  const taskLevelSince = tasks.some(
+    (t) => t.taskId === task.taskId && (t.log || []).some((e) => e.occurrenceDate === occurrence.occurrenceDate && e.timestamp >= last.timestamp)
+  );
+  if (taskLevelSince) return false;
+  if (last.message === combined) last.message = 'Unfocused';
+  else log.pop();
+  return true;
 }
 
 // task.comments ({ text, timestamp }[]) -- general notes about the task as a
@@ -1669,9 +1738,14 @@ let occurrences = [];
 // exact row exists does this fall back to chain membership -- the clicked
 // date might be one of the current pending occurrence's own
 // pendingReschedules entries rather than its own occurrenceDate (see
-// occurrence.js's own comment on the field) -- checked only against the
-// still-'pending' occurrence, since a resolved one's chain is frozen
-// history, not something a new date could still belong to.
+// occurrence.js's own comment on the field). The live pending chain is
+// checked first; failing that, a resolved occurrence whose (now frozen)
+// chain covers the date is still that same occurrence -- e.g. one checked
+// off from a carried-over date, whose 'Marked done' entry and the
+// automatic unfocus right after are both logged against that date AFTER its
+// status has already changed. Without this, both would mint a stray new
+// 'pending' row there instead. Chains only ever move forward, so no two
+// occurrences' chains within one fragment overlap.
 // occurrenceDate == null means "just the current pending one, whichever
 // date it's at" (see occurrenceScanShape and friends) -- skips the exact
 // match entirely, since there's no date to match.
@@ -1694,7 +1768,16 @@ function findOccurrence(task, occurrenceDate) {
   if (occurrenceDate == null) return pending;
   const exact = Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
   if (exact) return exact;
-  return pending && (pending.pendingReschedules || []).includes(occurrenceDate) ? pending : null;
+  if (pending && (pending.pendingReschedules || []).includes(occurrenceDate)) return pending;
+  return (
+    occurrences.find(
+      (o) =>
+        o.taskId === task.taskId &&
+        o.status !== 'pending' &&
+        (o.pendingReschedules || []).includes(occurrenceDate) &&
+        Occurrence.occurrenceBelongsToFragment(task, o)
+    ) || null
+  );
 }
 
 function ensureOccurrence(task, occurrenceDate) {
@@ -1725,14 +1808,99 @@ let activeOccurrenceDate = null;
 let activeFocusOnlySince = null;
 
 // PUT /tasks -- bulk-replaces the account's entire task/occurrence state.
-// Fire-and-forget, same as saveUserProfile: every caller already computes
-// the full resulting `tasks`/`occurrences` arrays locally before calling
-// this, so there's nothing useful to await here, just a background write.
+// Callers still fire-and-forget (every caller already computes the full
+// resulting `tasks`/`occurrences` arrays locally before calling this), but
+// the writes themselves are serialized: at most one request in flight, with
+// any saveTasks() calls made meanwhile folded into one follow-up request
+// carrying whatever the state is by then. Parallel requests could otherwise
+// land out of order, an older state overwriting a newer one, and since
+// every request sends the full state, nothing is lost by skipping the ones
+// in between.
+//
+// A failure is NOT silent: the unsaved state stays queued, a banner says so
+// (renderSaveStatus), it's retried automatically (SAVE_RETRY_DELAYS_MS, or
+// right away on the next change or the banner's Retry button), and the
+// browser's own "leave site?" prompt guards against reloading/closing the
+// tab meanwhile. Before this, a rejected save (e.g. a fractional
+// focusedSeconds the backend's integer column refused -- see addFocusStat)
+// went only to the console, and the next reload quietly lost everything
+// since.
+const SAVE_RETRY_DELAYS_MS = [5000, 15000, 30000, 60000];
+let taskSaveInFlight = false;
+let taskSaveQueued = false; // state has changed since the last attempt began
+let taskSaveFailure = null; // the last error, while unsaved changes remain
+let taskSaveRetryTimer = null;
+let taskSaveRetryCount = 0;
+
 function saveTasks() {
-  apiFetch('/tasks', { method: 'PUT', body: { tasks, occurrences } }).catch((err) => {
-    console.error('Failed to save tasks:', err);
-  });
+  taskSaveQueued = true;
+  if (!taskSaveInFlight) runTaskSave();
 }
+
+async function runTaskSave() {
+  clearTimeout(taskSaveRetryTimer);
+  taskSaveRetryTimer = null;
+  taskSaveInFlight = true;
+  renderSaveStatus();
+  while (taskSaveQueued) {
+    taskSaveQueued = false;
+    try {
+      // apiFetch serializes the body synchronously, before its first await,
+      // so later mutations can't leak into this request -- they re-queue
+      // via saveTasks() and go out in the next loop iteration instead.
+      await apiFetch('/tasks', { method: 'PUT', body: { tasks, occurrences } });
+      taskSaveFailure = null;
+      taskSaveRetryCount = 0;
+    } catch (err) {
+      console.error('Failed to save tasks:', err);
+      taskSaveFailure = err;
+      taskSaveQueued = true; // still unsaved
+      break;
+    }
+  }
+  taskSaveInFlight = false;
+  if (taskSaveFailure) {
+    const delay = SAVE_RETRY_DELAYS_MS[Math.min(taskSaveRetryCount, SAVE_RETRY_DELAYS_MS.length - 1)];
+    taskSaveRetryCount++;
+    taskSaveRetryTimer = setTimeout(runTaskSave, delay);
+  }
+  renderSaveStatus();
+}
+
+function hasUnsavedTaskChanges() {
+  return taskSaveInFlight || taskSaveQueued;
+}
+
+// For a deliberate exit where unsaved task changes no longer matter (the
+// account is being deleted) -- skips the "leave site?" prompt.
+function discardUnsavedTaskChanges() {
+  clearTimeout(taskSaveRetryTimer);
+  taskSaveRetryTimer = null;
+  taskSaveQueued = false;
+  taskSaveFailure = null;
+}
+
+const saveStatusBannerEl = document.getElementById('save-status-banner');
+const saveStatusMessageEl = document.getElementById('save-status-message');
+const saveStatusRetryBtn = document.getElementById('save-status-retry');
+
+function renderSaveStatus() {
+  saveStatusBannerEl.classList.toggle('hidden', !taskSaveFailure);
+  if (!taskSaveFailure) return;
+  saveStatusMessageEl.textContent = t('saveStatus.failed', { message: taskSaveFailure.message });
+  saveStatusRetryBtn.disabled = taskSaveInFlight;
+  saveStatusRetryBtn.textContent = t(taskSaveInFlight ? 'saveStatus.retrying' : 'saveStatus.retryNow');
+}
+
+saveStatusRetryBtn.onclick = () => {
+  if (!taskSaveInFlight) runTaskSave();
+};
+
+window.addEventListener('beforeunload', (e) => {
+  if (!hasUnsavedTaskChanges()) return;
+  e.preventDefault();
+  e.returnValue = ''; // older Chromium only shows the prompt with this set
+});
 
 // activeTaskId/activeOccurrenceDate are User fields, not their own resource
 // (see api-spec.yaml's PATCH /users/me) -- fire-and-forget, same as
@@ -1770,7 +1938,7 @@ function setActiveTaskId(newId, occurrenceDate) {
     } else {
       flushFocusOnlyElapsed(prevTask, activeOccurrenceDate);
     }
-    logOccurrenceEvent(prevTask, activeOccurrenceDate, 'Unfocused');
+    logFocusToggle(prevTask, activeOccurrenceDate, 'Unfocused', 'Focused');
   }
   activeTaskId = newId;
   activeOccurrenceDate = newId ? occurrenceDate : null;
@@ -1786,7 +1954,7 @@ function setActiveTaskId(newId, occurrenceDate) {
     const nextOccurrence = findOccurrence(nextTask, activeOccurrenceDate);
     if (nextOccurrence && nextOccurrence.timer) nextOccurrence.timer.runningSince = Date.now();
     else activeFocusOnlySince = Date.now();
-    logOccurrenceEvent(nextTask, activeOccurrenceDate, 'Focused');
+    logFocusToggle(nextTask, activeOccurrenceDate, 'Focused', 'Unfocused');
   }
   saveTasks();
 }
@@ -1801,10 +1969,16 @@ function setActiveTaskId(newId, occurrenceDate) {
 // than measured after the fact, so a focus-only session that happens to
 // straddle midnight is simply credited to whatever occurrence is current at
 // flush time -- not worth the bookkeeping needed to split it precisely.
+//
+// Rounded to whole seconds: focusedSeconds/timerSeconds are integers in
+// api-spec.yaml (and the backend's own columns), and PUT /tasks is
+// all-or-nothing -- a single fractional value anywhere makes the backend
+// reject the entire save, silently (saveTasks is fire-and-forget).
 function addFocusStat(task, kind, seconds, occurrenceDate) {
-  if (!(seconds > 0)) return;
+  const wholeSeconds = Math.round(seconds);
+  if (!(wholeSeconds > 0)) return;
   const date = occurrenceDate || Recurrence.mostRecentOccurrenceOnOrBefore(task, Recurrence.dateToISO(new Date())) || task.dueDate;
-  ensureOccurrence(task, date)[kind] += seconds;
+  ensureOccurrence(task, date)[kind] += wholeSeconds;
 }
 
 // Logs whatever a currently-running timer has accumulated since it last
@@ -3815,9 +3989,60 @@ function resolveRecurUntilCompletedOccurrence(task, occurrence) {
   if (nextDate) ensureOccurrence(task, nextDate);
 }
 
+// Undoes resolveRecurUntilCompletedOccurrence when a checked-off occurrence
+// is unchecked again: the next cycle that completing it created is taken
+// back, since `occurrence` goes back to being the live pending one --
+// leaving both would give the task two live occurrences at once (see
+// findOccurrence's own comment on stale pending rows). Anything already
+// recorded against that next cycle in the meantime (notes, log, focused/
+// timer time, a still-running timer, overrides) moves onto `occurrence`
+// rather than being lost, and so does being the active/selected
+// occurrence. Returns false (changing nothing) when a LATER cycle has
+// already been resolved since: reopening this one would then put a second
+// live chain back in the middle of history, so it's refused instead.
+function reopenRecurUntilCompletedOccurrence(task, occurrence) {
+  const laterResolved = occurrences.some(
+    (o) =>
+      o !== occurrence &&
+      o.taskId === task.taskId &&
+      o.status !== 'pending' &&
+      o.occurrenceDate > occurrence.occurrenceDate &&
+      Occurrence.occurrenceBelongsToFragment(task, o)
+  );
+  if (laterResolved) return false;
+
+  const successor = findOccurrence(task, null);
+  if (successor && successor !== occurrence) {
+    const byTimestamp = (a, b) => a.timestamp - b.timestamp;
+    occurrence.comments = [...(occurrence.comments || []), ...(successor.comments || [])].sort(byTimestamp);
+    occurrence.log = [...(occurrence.log || []), ...(successor.log || [])].sort(byTimestamp);
+    occurrence.focusedSeconds = (occurrence.focusedSeconds || 0) + (successor.focusedSeconds || 0);
+    occurrence.timerSeconds = (occurrence.timerSeconds || 0) + (successor.timerSeconds || 0);
+    if (!occurrence.timer) occurrence.timer = successor.timer;
+    if (!occurrence.overrides) occurrence.overrides = successor.overrides;
+    const successorDates = [successor.occurrenceDate, ...(successor.pendingReschedules || [])];
+    if (activeTaskId === task.id && successorDates.includes(activeOccurrenceDate)) {
+      activeOccurrenceDate = Occurrence.effectiveDueDate(occurrence);
+      saveActiveTaskId();
+    }
+    if (sidePanelTask === task && successorDates.includes(sidePanelOccurrenceDate)) {
+      sidePanelOccurrenceDate = Occurrence.effectiveDueDate(occurrence);
+    }
+    occurrences.splice(occurrences.indexOf(successor), 1);
+  }
+  // Live again -- a dismissal from its brief post-completion linger would
+  // otherwise hide the task's one current occurrence.
+  occurrence.dismissed = false;
+  return true;
+}
+
 function toggleTaskCompletion(task, occurrenceDate) {
   const occurrence = ensureOccurrence(task, occurrenceDate);
   if (occurrence.status === 'completed') {
+    if (task.recurUntilCompleted && !reopenRecurUntilCompletedOccurrence(task, occurrence)) {
+      showInfoModal(t('todo.reopenBlockedRecurUntilCompleted'));
+      return;
+    }
     occurrence.status = 'pending';
     occurrence.resolvedAt = null;
     // Cancels this occurrence's own pending dismissal (computeTodoDisplayItems
@@ -3835,7 +4060,7 @@ function toggleTaskCompletion(task, occurrenceDate) {
     if (occurrenceDate === Recurrence.dateToISO(new Date())) {
       restorePriorOccurrenceIfIncomplete(task, occurrenceDate);
     }
-    logOccurrenceEvent(task, occurrenceDate, 'Marked not done');
+    if (!takeBackResolutionLogEntry(task, occurrence, 'Marked done')) logOccurrenceEvent(task, occurrenceDate, 'Marked not done');
   } else {
     occurrence.status = 'completed';
     occurrence.resolvedAt = Date.now();
@@ -3930,7 +4155,7 @@ function toggleTaskFailedMark(task, occurrenceDate) {
   if (occurrence.status === 'failed') {
     occurrence.status = 'pending';
     occurrence.resolvedAt = null;
-    logOccurrenceEvent(task, occurrenceDate, 'Marked not failed');
+    if (!takeBackResolutionLogEntry(task, occurrence, 'Marked failed')) logOccurrenceEvent(task, occurrenceDate, 'Marked not failed');
   } else {
     occurrence.status = 'failed';
     occurrence.resolvedAt = Date.now();
@@ -4787,7 +5012,7 @@ function expireFinishedTimers() {
     const countdownDone = occurrence.timer.mode !== 'countup' && !occurrence.timer.continuePastZero && remaining <= 0;
     if (countdownDone || ranPastCap) {
       if (occurrence.timer.runningSince != null) {
-        occurrence.timerSeconds += (Date.now() - occurrence.timer.runningSince) / 1000;
+        occurrence.timerSeconds += Math.round((Date.now() - occurrence.timer.runningSince) / 1000); // whole seconds, see addFocusStat
       }
       occurrence.timer = null;
       occurrence.log.push({ message: 'Timer elapsed', timestamp: Date.now() });
@@ -5352,7 +5577,7 @@ function buildTodayAgendaItems() {
 
 function buildAgendaAllDayPill(item) {
   const pill = document.createElement('div');
-  pill.className = 'agenda-all-day-pill';
+  pill.className = 'agenda-all-day-pill' + (item.completed ? ' completed' : '');
   pill.style.background = agendaHexToRgba(item.color, 0.85);
   pill.textContent = item.task.name;
   pill.title = item.task.name;
@@ -5430,7 +5655,7 @@ function agendaBlockRange(task) {
 
 function buildAgendaBlock(block) {
   const el = document.createElement('div');
-  el.className = 'agenda-block';
+  el.className = 'agenda-block' + (block.item.completed ? ' completed' : '');
   el.style.top = `${(block.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
   el.style.height = `${((block.endMinutes - block.startMinutes) / 60) * AGENDA_HOUR_HEIGHT}px`;
   const widthPercent = 100 / block.totalColumns;
@@ -6964,6 +7189,7 @@ async function deleteCurrentUserAccount() {
   await apiFetch('/users/me', { method: 'DELETE' }).catch((err) => {
     console.error('Failed to delete account:', err);
   });
+  discardUnsavedTaskChanges();
   localStorage.removeItem(AUTH_TOKEN_KEY);
   location.reload();
 }
