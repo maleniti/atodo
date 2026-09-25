@@ -1831,8 +1831,13 @@ html[data-theme="light"] .not-today > .todo-item-text {
 .todo-item-meta.failed { color: var(--danger); }
 
 .todo-item.all-day .todo-item-name { color: var(--accent); }
-/* After .all-day so a task that's both all-day and an appointment (not yet
-   due) shows the appointment color. */
+/* After .completed and .all-day, so a completed appointment (still tagged
+   .appointment -- see the row's className in app.js) stays green rather than
+   .completed's plain white, and one that's also all-day shows the
+   appointment color over the all-day one. Never after .failed, though --
+   the row's className never carries .appointment and .failed together (an
+   overdue appointment is tagged .failed instead), so red always wins there
+   regardless of source order. */
 .todo-item.appointment .todo-item-name { color: var(--success); }
 .todo-item.passive .todo-item-name { color: var(--passive); }
 

@@ -4700,11 +4700,12 @@ function buildTodoItemRow(item, isToday) {
     (item.failed ? ' failed' : '') +
     (isActiveHere ? ' focused' : '') +
     (effectiveTask.allDay ? ' all-day' : '') +
-    // Only while it's neither failed nor done yet -- see pastDueStatus;
-    // an appointment past its due date is tagged .failed instead (red,
-    // crossed out), and once checked off it just looks like any other
-    // completed task, not still flagged green.
-    (effectiveTask.appointment && !item.completed && !item.failed ? ' appointment' : '') +
+    // Kept through .completed (still green, just crossed out like any other
+    // completed task -- see .todo-item.appointment .todo-item-name's own
+    // source-order comment in style.css) but not through .failed -- an
+    // appointment past its due date is tagged .failed instead (red, crossed
+    // out), and that should win over the still-green appointment tint.
+    (effectiveTask.appointment && !item.failed ? ' appointment' : '') +
     // Same idea for a passive task's own tint -- once it's marked failed
     // (see toggleTaskFailedMark), .failed's own red styling takes over.
     (effectiveTask.passive && !item.failed ? ' passive' : '') +
@@ -5513,7 +5514,7 @@ function resolveAgendaColor(task, completed, failed) {
   if (completed) color = '#fff';
   if (failed) color = '#f28b82';
   if (task.allDay) color = '#8ab4f8';
-  if (task.appointment && !completed && !failed) color = '#81c995';
+  if (task.appointment && !failed) color = '#81c995';
   if (task.passive && !failed) color = '#bcaaa4';
   return color;
 }
