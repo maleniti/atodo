@@ -5505,13 +5505,15 @@ function agendaTimeToMinutes(hhmm) {
 // never finished, says nothing about how long this task actually takes, so
 // both are excluded rather than dragging the average toward zero. null
 // (rather than 0) signals "no measurements at all", so callers can fall back
-// to a plain default instead of showing a zero-length block.
+// to a plain default instead of showing a zero-length block. Scoped to this
+// one task (its taskId, i.e. every fragment of it), never its whole series:
+// a series groups otherwise unrelated tasks, whose durations say nothing
+// about this one's.
 function averageFocusedMinutesForCompletedOccurrences(task) {
   let totalSeconds = 0;
   let qualifyingCount = 0;
-  const taskIds = new Set(tasksInSeries(task.seriesId).map((t) => t.taskId));
   for (const occurrence of occurrences) {
-    if (!taskIds.has(occurrence.taskId) || occurrence.status !== 'completed') continue;
+    if (occurrence.taskId !== task.taskId || occurrence.status !== 'completed') continue;
     const seconds = (occurrence.focusedSeconds || 0) + (occurrence.timerSeconds || 0);
     if (seconds <= 0) continue;
     totalSeconds += seconds;
@@ -6626,9 +6628,11 @@ function isRecurringSeries(seriesTasks) {
 // overlap (each split truncates the historical portion's endDate right
 // before the next fragment starts), and Occurrence rows are keyed by taskId
 // rather than which fragment currently owns the pattern, so this never
-// double-counts a date across fragments.
-function aggregateFocusLog(seriesTasks) {
-  const taskIds = new Set(seriesTasks.map((t) => t.taskId));
+// double-counts a date across fragments. Each date's bucket also keeps the
+// Occurrence row(s) it came from, so a bad measurement can be deleted from
+// the stats modal (see clearOccurrenceFocusTime).
+function aggregateFocusLog(taskFragments) {
+  const taskIds = new Set(taskFragments.map((t) => t.taskId));
   const byDate = new Map();
   let totalFocusedSeconds = 0;
   let totalTimerSeconds = 0;
@@ -6637,9 +6641,10 @@ function aggregateFocusLog(seriesTasks) {
     const focusedSeconds = occurrence.focusedSeconds || 0;
     const timerSeconds = occurrence.timerSeconds || 0;
     if (focusedSeconds === 0 && timerSeconds === 0) continue;
-    const bucket = byDate.get(occurrence.occurrenceDate) || { focusedSeconds: 0, timerSeconds: 0 };
+    const bucket = byDate.get(occurrence.occurrenceDate) || { focusedSeconds: 0, timerSeconds: 0, occurrences: [] };
     bucket.focusedSeconds += focusedSeconds;
     bucket.timerSeconds += timerSeconds;
+    bucket.occurrences.push(occurrence);
     byDate.set(occurrence.occurrenceDate, bucket);
     totalFocusedSeconds += focusedSeconds;
     totalTimerSeconds += timerSeconds;
@@ -6708,13 +6713,34 @@ const taskStatsOverlay = document.getElementById('task-stats-overlay');
 const taskStatsTitleEl = document.getElementById('task-stats-title');
 const taskStatsBodyEl = document.getElementById('task-stats-body');
 
+// Deletes an occurrence's measured focus/timer time -- for a measurement
+// that's plainly wrong (e.g. a task accidentally left focused for hours),
+// which would otherwise skew this task's stats and its agenda block length
+// (averageFocusedMinutesForCompletedOccurrences) for good. If that
+// occurrence is being focused/timed right now, the still-unflushed part of
+// the current session is discarded too, by restarting its clock from now
+// -- otherwise it would be added straight back on the next flush.
+function clearOccurrenceFocusTime(occurrence) {
+  occurrence.focusedSeconds = 0;
+  occurrence.timerSeconds = 0;
+  const activeTask = tasks.find((t) => t.id === activeTaskId);
+  if (activeTask && findOccurrence(activeTask, activeOccurrenceDate) === occurrence) {
+    if (occurrence.timer && occurrence.timer.runningSince != null) occurrence.timer.runningSince = Date.now();
+    if (activeFocusOnlySince != null) activeFocusOnlySince = Date.now();
+  }
+  occurrence.log.push({ message: 'Measured focus time deleted', timestamp: Date.now() });
+}
+
+// Stats for this one task -- every fragment sharing its taskId (a recurring
+// task split by "this and following" edits), never its whole series, which
+// groups otherwise unrelated tasks together.
 function showTaskStatsModal(task) {
   taskStatsTitleEl.textContent = t('taskStats.title', { name: task.name });
   taskStatsBodyEl.innerHTML = '';
 
-  const seriesTasks = tasksInSeries(task.seriesId);
-  const recurring = isRecurringSeries(seriesTasks);
-  const { byDate, totalFocusedSeconds, totalTimerSeconds } = aggregateFocusLog(seriesTasks);
+  const taskFragments = tasks.filter((t) => t.taskId === task.taskId);
+  const recurring = isRecurringSeries(taskFragments);
+  const { byDate, totalFocusedSeconds, totalTimerSeconds } = aggregateFocusLog(taskFragments);
 
   const totalsSection = buildStatsSection(recurring ? t('taskStats.totalFocusedAllRecurrences') : t('taskStats.totalFocused'));
   totalsSection.appendChild(buildStatRow(t('taskStats.total'), formatStatsDuration(totalFocusedSeconds + totalTimerSeconds)));
@@ -6728,8 +6754,8 @@ function showTaskStatsModal(task) {
   }
 
   const todayISO = Recurrence.dateToISO(new Date());
-  const completed = countSeriesCompletions(seriesTasks);
-  const occurrences = countSeriesOccurrencesToDate(seriesTasks, todayISO);
+  const completed = countSeriesCompletions(taskFragments);
+  const occurrences = countSeriesOccurrencesToDate(taskFragments, todayISO);
   const percent = occurrences > 0 ? Math.round((completed / occurrences) * 100) : 0;
 
   const completionSection = buildStatsSection(t('taskStats.completion'));
@@ -6763,6 +6789,12 @@ function showTaskStatsModal(task) {
       });
       item.appendChild(dateEl);
       item.appendChild(timeEl);
+      appendDeleteButton(item, () => {
+        for (const occurrence of entry.occurrences) clearOccurrenceFocusTime(occurrence);
+        saveTasks();
+        showTaskStatsModal(task);
+        renderSidePanel(); // the agenda's block lengths come from these measurements
+      });
       list.appendChild(item);
     }
     perRecurrenceSection.appendChild(list);

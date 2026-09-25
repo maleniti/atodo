@@ -2307,6 +2307,31 @@ main,
 }
 .task-stats-occurrence-date { color: var(--text-label); flex: none; }
 .task-stats-occurrence-time { color: var(--text-primary); text-align: right; }
+/* The shared appendDeleteButton (app.js), same small circular icon button
+   as .side-panel-comment-actions' own. align-self: center rather than the
+   row's baseline alignment, since it's an icon, not text. */
+.task-stats-occurrence-time { flex: 1; }
+.task-stats-occurrence-item button {
+  flex: none;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.task-stats-occurrence-item button:hover { background: var(--hover-tint); color: var(--text-primary); }
+.task-stats-occurrence-item button.confirm,
+.task-stats-occurrence-item button.confirm:hover {
+  background: #d93025;
+  color: #fff;
+}
 
 .modal-field {
   margin-bottom: 10px;
