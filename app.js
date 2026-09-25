@@ -5561,6 +5561,20 @@ function agendaDurationMinutes(task) {
 // One entry per task occurring today, in whatever state it's currently in
 // (done, failed, neither) -- same derivation computeAllTasksItems uses, just
 // for today alone rather than a whole viewed month.
+//
+// effectiveTask (Occurrence.applyOverrides, same as buildTodoItemRow's own
+// rowOccurrence handling) is what every display/positioning decision below
+// is based on -- a "this occurrence only" edit (or drag-reschedule, see
+// rescheduleAgendaItem) stores its override on today's own Occurrence row,
+// not on the task, so the agenda has to look there too or it'd keep showing
+// the task's un-overridden due time. `task` itself stays the real record,
+// for identity (drag-reschedule needs it to know what to edit).
+//
+// draggable mirrors buildTodoItemRow's isLockedByLimit gate for its own Edit
+// action (same context-menu item drag-reschedule is a shortcut for) -- a
+// protected task (the subscription nag) or one beyond a lapsed
+// subscription's grandfathered set can't be edited there either, so it isn't
+// here.
 function buildTodayAgendaItems() {
   const now = new Date();
   const todayISO = Recurrence.dateToISO(now);
@@ -5568,9 +5582,20 @@ function buildTodayAgendaItems() {
   for (const task of tasks) {
     if (!occursOnDate(task, todayISO)) continue;
     const occurrence = findOccurrence(task, todayISO);
+    const effectiveTask = Occurrence.applyOverrides(task, occurrence);
     const completed = !!(occurrence && occurrence.status === 'completed');
-    const { failed } = completed ? { failed: false } : pastDueStatus(task, todayISO, completed, now);
-    items.push({ task, completed, failed, color: resolveAgendaColor(task, completed, failed) });
+    const { failed } = completed ? { failed: false } : pastDueStatus(effectiveTask, todayISO, completed, now);
+    const isResolved = effectiveTask.passive ? failed : completed;
+    const isLockedByLimit = !isResolved && !isProtectedTask(task) && !canCompleteOrNoteTask(task);
+    items.push({
+      task,
+      occurrenceDate: todayISO,
+      effectiveTask,
+      completed,
+      failed,
+      color: resolveAgendaColor(effectiveTask, completed, failed),
+      draggable: !isProtectedTask(task) && !isLockedByLimit,
+    });
   }
   return items;
 }
@@ -5579,8 +5604,8 @@ function buildAgendaAllDayPill(item) {
   const pill = document.createElement('div');
   pill.className = 'agenda-all-day-pill' + (item.completed ? ' completed' : '');
   pill.style.background = agendaHexToRgba(item.color, 0.85);
-  pill.textContent = item.task.name;
-  pill.title = item.task.name;
+  pill.textContent = item.effectiveTask.name;
+  pill.title = item.effectiveTask.name;
   return pill;
 }
 
@@ -5603,15 +5628,15 @@ function buildAgendaHourLine(hour) {
 function buildAgendaPassiveBand(item) {
   const band = document.createElement('div');
   band.className = 'agenda-passive-band';
-  const dueMinutes = agendaTimeToMinutes(item.task.dueTime);
+  const dueMinutes = agendaTimeToMinutes(item.effectiveTask.dueTime);
   band.style.height = `${(dueMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
   band.style.background = agendaHexToRgba(item.color, 0.16);
   const label = document.createElement('span');
   label.className = 'agenda-passive-band-label';
   label.style.color = item.color;
-  label.textContent = item.task.name;
+  label.textContent = item.effectiveTask.name;
   band.appendChild(label);
-  band.title = `${item.task.name} · ${t('todo.due', { time: formatTimeOfDay(item.task.dueTime) })}`;
+  band.title = `${item.effectiveTask.name} · ${t('todo.due', { time: formatTimeOfDay(item.effectiveTask.dueTime) })}`;
   return band;
 }
 
@@ -5646,16 +5671,125 @@ function assignAgendaColumns(blocks) {
 // due time is when it begins, not a deadline). Clamped to the visible day
 // (a very early due time with a long lead could otherwise start before
 // midnight) -- the block just starts at the top of the timeline instead.
-function agendaBlockRange(task) {
-  const dueMinutes = agendaTimeToMinutes(task.dueTime);
-  const durationMinutes = agendaDurationMinutes(task);
-  if (task.appointment) return { startMinutes: dueMinutes, endMinutes: dueMinutes + durationMinutes };
+// Split out from agendaBlockRange so attachAgendaBlockDrag can recompute the
+// same start/end shape live, from a candidate due time that isn't saved
+// (i.e. doesn't exist as a task/occurrence yet) while a drag is in progress.
+function agendaRangeForDueMinutes(dueMinutes, durationMinutes, appointment) {
+  if (appointment) return { startMinutes: dueMinutes, endMinutes: dueMinutes + durationMinutes };
   return { startMinutes: Math.max(0, dueMinutes - durationMinutes), endMinutes: dueMinutes };
+}
+
+function agendaBlockRange(task) {
+  return agendaRangeForDueMinutes(agendaTimeToMinutes(task.dueTime), agendaDurationMinutes(task), task.appointment);
+}
+
+// Inverse of agendaTimeToMinutes -- clamped to a single day, since a drag can
+// otherwise walk the candidate due time past midnight in either direction.
+function agendaMinutesToTime(totalMinutes) {
+  const clamped = Math.max(0, Math.min(24 * 60 - 1, Math.round(totalMinutes)));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+const AGENDA_DRAG_SNAP_MINUTES = 15;
+
+// Drag-to-reschedule for a timed block -- vertical mouse movement changes
+// the candidate due time, snapped to the nearest 15 minutes by default or to
+// the exact minute while Ctrl is held. Read live off each mousemove/mouseup
+// event's own ctrlKey rather than a separate keydown/keyup pair, so it
+// reflects whatever's actually held at each point of the drag regardless of
+// which element (if any) has keyboard focus.
+//
+// Only top/height/the time label move live, for feedback -- left/width
+// (column packing) and every other block on the day stay put until the drop
+// actually resolves; renderTodo() (called by rescheduleAgendaItem either
+// way, committed or cancelled) throws this whole DOM subtree away and
+// rebuilds it from the real, saved state, discarding these inline styles
+// along with it, so there's nothing to reset by hand on cancel.
+function attachAgendaBlockDrag(el, item) {
+  const durationMinutes = agendaDurationMinutes(item.effectiveTask);
+  const originalDueMinutes = agendaTimeToMinutes(item.effectiveTask.dueTime);
+  const timeEl = el.querySelector('.agenda-block-time');
+
+  el.addEventListener('mousedown', (downEvent) => {
+    if (downEvent.button !== 0) return;
+    downEvent.preventDefault();
+    const startClientY = downEvent.clientY;
+    let latestDueMinutes = originalDueMinutes;
+    el.classList.add('dragging');
+
+    function onMouseMove(moveEvent) {
+      const deltaMinutes = ((moveEvent.clientY - startClientY) / AGENDA_HOUR_HEIGHT) * 60;
+      const step = moveEvent.ctrlKey ? 1 : AGENDA_DRAG_SNAP_MINUTES;
+      const rawMinutes = originalDueMinutes + deltaMinutes;
+      latestDueMinutes = Math.max(0, Math.min(24 * 60 - 1, Math.round(rawMinutes / step) * step));
+      const range = agendaRangeForDueMinutes(latestDueMinutes, durationMinutes, item.effectiveTask.appointment);
+      el.style.top = `${(range.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
+      el.style.height = `${((range.endMinutes - range.startMinutes) / 60) * AGENDA_HOUR_HEIGHT}px`;
+      if (timeEl) timeEl.textContent = formatTimeOfDay(agendaMinutesToTime(latestDueMinutes));
+    }
+
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      el.classList.remove('dragging');
+      rescheduleAgendaItem(item.task, item.occurrenceDate, agendaMinutesToTime(latestDueMinutes));
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+}
+
+// Applies a drag-reschedule's dropped due time -- same "which occurrence(s)"
+// choice (showEditScopeChoice) and the same underlying apply functions
+// (applyGeneralInfoInPlace/applySplitEdit) as a manual edit through
+// openTaskGeneralInfoForm, just with only dueTime actually changing and
+// everything else carried through from the occurrence's current effective
+// fields untouched -- so a drag produces exactly the same kind of record
+// (and the same activity-log entries) a form edit would. A 'once' task skips
+// the scope choice entirely, same shortcut editTaskOccurrence uses, since
+// there's nothing to split.
+//
+// Called unconditionally on drop (whatever the outcome) so renderTodo()
+// always runs -- see attachAgendaBlockDrag's own comment on why that's what
+// discards the live-drag inline styles, dropped-back-to-the-same-time and
+// cancelled-scope-choice alike.
+async function rescheduleAgendaItem(task, occurrenceDate, newDueTime) {
+  const effective = Occurrence.applyOverrides(task, findOccurrence(task, occurrenceDate));
+  let changed = false;
+  if (effective.dueTime !== newDueTime) {
+    const fields = {
+      name: effective.name,
+      description: effective.description,
+      details: effective.details,
+      dueTime: newDueTime,
+      allDay: effective.allDay,
+      appointment: effective.appointment,
+      passive: effective.passive,
+    };
+    if (task.frequency.type === 'once') {
+      applyGeneralInfoInPlace(task, fields);
+      changed = true;
+    } else {
+      const scope = await showEditScopeChoice();
+      if (scope === 'all') {
+        applyGeneralInfoInPlace(task, fields);
+        changed = true;
+      } else if (scope) {
+        applySplitEdit(task, { originalOccurrenceDate: occurrenceDate, newOccurrenceDate: occurrenceDate, scope }, fields);
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveTasks();
+  renderTodo();
 }
 
 function buildAgendaBlock(block) {
   const el = document.createElement('div');
-  el.className = 'agenda-block' + (block.item.completed ? ' completed' : '');
+  el.className = 'agenda-block' + (block.item.completed ? ' completed' : '') + (block.item.draggable ? ' draggable' : '');
   el.style.top = `${(block.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
   el.style.height = `${((block.endMinutes - block.startMinutes) / 60) * AGENDA_HOUR_HEIGHT}px`;
   const widthPercent = 100 / block.totalColumns;
@@ -5665,15 +5799,16 @@ function buildAgendaBlock(block) {
 
   const name = document.createElement('div');
   name.className = 'agenda-block-name';
-  name.textContent = block.item.task.name;
+  name.textContent = block.item.effectiveTask.name;
   el.appendChild(name);
 
   const time = document.createElement('div');
   time.className = 'agenda-block-time';
-  time.textContent = formatTimeOfDay(block.item.task.dueTime);
+  time.textContent = formatTimeOfDay(block.item.effectiveTask.dueTime);
   el.appendChild(time);
 
-  el.title = block.item.task.name;
+  el.title = block.item.effectiveTask.name;
+  if (block.item.draggable) attachAgendaBlockDrag(el, block.item);
   return el;
 }
 
@@ -5681,7 +5816,7 @@ function renderTodayAgenda() {
   const items = buildTodayAgendaItems();
 
   agendaAllDayEl.innerHTML = '';
-  for (const item of items.filter((i) => i.task.allDay)) {
+  for (const item of items.filter((i) => i.effectiveTask.allDay)) {
     agendaAllDayEl.appendChild(buildAgendaAllDayPill(item));
   }
 
@@ -5693,14 +5828,14 @@ function renderTodayAgenda() {
   for (let h = 0; h < 24; h++) agendaTimelineEl.appendChild(buildAgendaHourLine(h));
 
   agendaTracksEl.innerHTML = '';
-  const timedItems = items.filter((i) => !i.task.allDay);
-  for (const item of timedItems.filter((i) => i.task.passive)) {
+  const timedItems = items.filter((i) => !i.effectiveTask.allDay);
+  for (const item of timedItems.filter((i) => i.effectiveTask.passive)) {
     agendaTracksEl.appendChild(buildAgendaPassiveBand(item));
   }
 
   const blocks = timedItems
-    .filter((i) => !i.task.passive)
-    .map((item) => ({ item, ...agendaBlockRange(item.task) }));
+    .filter((i) => !i.effectiveTask.passive)
+    .map((item) => ({ item, ...agendaBlockRange(item.effectiveTask) }));
   assignAgendaColumns(blocks);
   for (const block of blocks) agendaTracksEl.appendChild(buildAgendaBlock(block));
 

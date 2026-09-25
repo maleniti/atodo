@@ -301,6 +301,16 @@ main {
   /* Override .side-panel's text-shadow property. */
   text-shadow: none;
 }
+/* Only a block whose task can actually be edited gets drag-to-reschedule
+   (see buildTodayAgendaItems' own draggable/attachAgendaBlockDrag) -- an
+   un-draggable one keeps the plain default cursor rather than promising an
+   interaction it'll silently ignore. */
+.agenda-block.draggable { cursor: grab; }
+.agenda-block.dragging {
+  cursor: grabbing;
+  z-index: 2;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
 .agenda-block-name {
   font-size: 11px;
   font-weight: 600;
