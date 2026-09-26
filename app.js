@@ -299,6 +299,29 @@ const I18N = {
     'settings.cancelScheduledDeletion': 'Cancel scheduled deletion',
     'settings.password': 'Password',
     'settings.changePassword': 'Change password…',
+    'settings.email': 'Login email',
+    'settings.changeEmail': 'Change email…',
+    'settings.pendingEmail': 'Waiting for you to confirm {email} -- check that inbox for the link.',
+    'changeEmail.title': 'Change login email',
+    'changeEmail.new': 'New email',
+    'changeEmail.submit': 'Send confirmation link',
+    'changeEmail.sent': "We sent a confirmation link to {email} (valid for 6 hours). Until you open it, keep logging in with {current}. {current} also got a notice with a link to undo the change, in case it wasn't you.",
+    'changeEmail.invalid': 'Enter a valid email address.',
+    'changeEmail.same': 'That is already your login email.',
+    'changeEmail.taken': 'An account with that email already exists.',
+    'changeEmail.genericError': "Couldn't start the email change. Please try again.",
+    'verifyEmailChange.success': 'Your login email is now {email}.',
+    'verifyEmailChange.expired': 'That confirmation link has expired. Request the email change again from Settings.',
+    'verifyEmailChange.invalid': 'That confirmation link is invalid or has already been used.',
+    'verifyEmailChange.taken': 'That address has been taken by another account in the meantime, so the change was cancelled.',
+    'undoEmailChange.title': 'Email change undone -- set a new password',
+    'undoEmailChange.intro': 'Your login email is {email} again, and every session has been signed out. Whoever changed it may know your password, so choose a new one now.',
+    'undoEmailChange.submit': 'Set new password',
+    'undoEmailChange.done': 'Your login email is {email} again, and your new password is set.',
+    'undoEmailChange.skipped': "Your login email is {email} again, and every session has been signed out. You can still log in with your current password -- change it in Settings as soon as you can.",
+    'undoEmailChange.invalid': 'That undo link is invalid, has expired, or has already been used.',
+    'undoEmailChange.taken': "Your previous address now belongs to another account, so it couldn't be restored. Please contact support.",
+    'undoEmailChange.resetExpired': 'That password reset has expired. Log in with your current password and change it in Settings.',
     'settings.data': 'Data',
     'settings.downloadData': 'Download my data…',
     'settings.importData': 'Import data…',
@@ -644,6 +667,29 @@ const I18N = {
     'settings.cancelScheduledDeletion': 'Otkaži zakazano brisanje',
     'settings.password': 'Lozinka',
     'settings.changePassword': 'Promijeni lozinku…',
+    'settings.email': 'E-pošta za prijavu',
+    'settings.changeEmail': 'Promijeni e-poštu…',
+    'settings.pendingEmail': 'Čeka se potvrda adrese {email} -- poveznicu potražite u tom sandučiću.',
+    'changeEmail.title': 'Promijeni e-poštu za prijavu',
+    'changeEmail.new': 'Nova e-pošta',
+    'changeEmail.submit': 'Pošalji poveznicu za potvrdu',
+    'changeEmail.sent': 'Poveznicu za potvrdu poslali smo na {email} (vrijedi 6 sati). Dok je ne otvorite, i dalje se prijavljujte s {current}. Na {current} stigla je i obavijest s poveznicom za poništavanje promjene, za slučaj da to niste bili vi.',
+    'changeEmail.invalid': 'Unesite ispravnu adresu e-pošte.',
+    'changeEmail.same': 'To je već vaša e-pošta za prijavu.',
+    'changeEmail.taken': 'Račun s tom adresom e-pošte već postoji.',
+    'changeEmail.genericError': 'Promjenu e-pošte nije bilo moguće pokrenuti. Pokušajte ponovno.',
+    'verifyEmailChange.success': 'Vaša e-pošta za prijavu sada je {email}.',
+    'verifyEmailChange.expired': 'Poveznica za potvrdu je istekla. Ponovno zatražite promjenu e-pošte u Postavkama.',
+    'verifyEmailChange.invalid': 'Poveznica za potvrdu nije ispravna ili je već iskorištena.',
+    'verifyEmailChange.taken': 'Tu je adresu u međuvremenu preuzeo drugi račun, pa je promjena otkazana.',
+    'undoEmailChange.title': 'Promjena e-pošte poništena -- postavite novu lozinku',
+    'undoEmailChange.intro': 'Vaša e-pošta za prijavu ponovno je {email}, a sve su sesije odjavljene. Tko god ju je promijenio možda zna vašu lozinku, pa odmah odaberite novu.',
+    'undoEmailChange.submit': 'Postavi novu lozinku',
+    'undoEmailChange.done': 'Vaša e-pošta za prijavu ponovno je {email}, a nova lozinka je postavljena.',
+    'undoEmailChange.skipped': 'Vaša e-pošta za prijavu ponovno je {email}, a sve su sesije odjavljene. I dalje se možete prijaviti trenutnom lozinkom -- promijenite je u Postavkama čim prije.',
+    'undoEmailChange.invalid': 'Poveznica za poništavanje nije ispravna, istekla je ili je već iskorištena.',
+    'undoEmailChange.taken': 'Vaša prethodna adresa sada pripada drugom računu, pa je nije bilo moguće vratiti. Obratite se podršci.',
+    'undoEmailChange.resetExpired': 'Postavljanje lozinke je isteklo. Prijavite se trenutnom lozinkom i promijenite je u Postavkama.',
     'settings.data': 'Podaci',
     'settings.downloadData': 'Preuzmi moje podatke…',
     'settings.importData': 'Uvezi podatke…',
@@ -1471,7 +1517,9 @@ function showFormModal(title, fields, opts = {}) {
           host.appendChild(input);
           interactiveEls.push(input);
           fieldEls = [input];
-          getValue = () => input.value.trim();
+          // Passwords are taken exactly as typed -- trimming would quietly
+          // change one that starts/ends with a space.
+          getValue = () => (field.type === 'password' ? input.value : input.value.trim());
         }
 
         fieldGetters.push({
@@ -1748,6 +1796,10 @@ let currentUserLanguage = 'en'; // 'en' | 'hr' -- see the i18n section up top (t
 let currentUserTheme = 'dark'; // 'dark' | 'light' -- see applyTheme below
 // 0 (Sunday) .. 6, or null if never chosen -- see effectiveWeekStart.
 let currentUserWeekStart = null;
+// The login email, and one a change is waiting to have verified (null if
+// none) -- shown in Settings, see renderSettingsEmailSection.
+let currentUserEmail = null;
+let currentUserPendingEmail = null;
 
 // The first day of the week calendars and weekday lists start on: the
 // user's own choice (Settings), else each language's usual convention --
@@ -7295,6 +7347,7 @@ function openSettingsModal() {
   settingsNicknameInput.value = currentUserNickname || '';
   settingsLanguageSelect.value = currentUserLanguage;
   renderSettingsToggles();
+  renderSettingsEmailSection();
   settingsPendingAvatar = undefined;
   renderSettingsAvatarPreview();
   renderSettingsBackgroundPreview();
@@ -7539,6 +7592,133 @@ settingsImportDataFileInput.onchange = async () => {
 // password is required at all (a bearer token alone isn't proof enough).
 // ---------------------------------------------------------------------------
 
+const settingsEmailEl = document.getElementById('settings-email');
+const settingsPendingEmailEl = document.getElementById('settings-pending-email');
+
+function renderSettingsEmailSection() {
+  settingsEmailEl.textContent = currentUserEmail || '';
+  settingsPendingEmailEl.classList.toggle('hidden', !currentUserPendingEmail);
+  if (currentUserPendingEmail) settingsPendingEmailEl.textContent = t('settings.pendingEmail', { email: currentUserPendingEmail });
+}
+
+// POST /users/me/change-email (see api-spec.yaml) -- the login email itself
+// doesn't change here: the new address gets a confirmation link, the current
+// one a notice with an undo link. A failed attempt reopens the form with the
+// reason in its title, keeping what was typed.
+async function promptChangeEmail() {
+  let title = t('changeEmail.title');
+  let newEmail = '';
+  for (;;) {
+    const result = await showFormModal(
+      title,
+      [
+        { name: 'newEmail', label: t('changeEmail.new'), type: 'email', value: newEmail },
+        { name: 'currentPassword', label: t('changePassword.current'), type: 'password', value: '' },
+      ],
+      { okLabel: t('changeEmail.submit') }
+    );
+    if (!result) return;
+    newEmail = result.newEmail;
+    try {
+      const user = await apiFetch('/users/me/change-email', {
+        method: 'POST',
+        body: { newEmail: result.newEmail, currentPassword: result.currentPassword },
+      });
+      currentUserPendingEmail = user.pendingEmail || null;
+      renderSettingsEmailSection();
+      showInfoModal(t('changeEmail.sent', { email: result.newEmail, current: currentUserEmail }), 'success');
+      return;
+    } catch (err) {
+      const reason =
+        {
+          INVALID_EMAIL: 'changeEmail.invalid',
+          SAME_EMAIL: 'changeEmail.same',
+          EMAIL_TAKEN: 'changeEmail.taken',
+          INVALID_CREDENTIALS: 'changePassword.wrongCurrent',
+        }[err.code] || 'changeEmail.genericError';
+      title = `${t('changeEmail.title')} -- ${t(reason)}`;
+    }
+  }
+}
+
+document.getElementById('settings-change-email-btn').onclick = () => promptChangeEmail();
+
+// A notice to show once the next boot() has put up the login screen or the
+// app -- for a flow that has to reload the page first (see
+// handleUndoEmailChangeLink). sessionStorage: this tab only, and gone once
+// shown.
+const POST_BOOT_NOTICE_KEY = 'atodo.postBootNotice';
+
+function reloadWithNotice(text, kind) {
+  try {
+    sessionStorage.setItem(POST_BOOT_NOTICE_KEY, JSON.stringify({ text, kind }));
+  } catch {
+    // Storage unavailable -- the reload still happens, just without the notice.
+  }
+  location.replace(location.pathname + location.search + location.hash);
+}
+
+function showPostBootNotice() {
+  let notice = null;
+  try {
+    notice = JSON.parse(sessionStorage.getItem(POST_BOOT_NOTICE_KEY) || 'null');
+    sessionStorage.removeItem(POST_BOOT_NOTICE_KEY);
+  } catch {
+    return;
+  }
+  if (notice) setTimeout(() => showInfoModal(notice.text, notice.kind), 0);
+}
+
+function takeUrlParam(name) {
+  const params = new URLSearchParams(location.search);
+  const value = params.get(name);
+  if (value == null) return null;
+  params.delete(name);
+  const search = params.toString();
+  history.replaceState(null, '', location.pathname + (search ? `?${search}` : '') + location.hash);
+  return value;
+}
+
+// `?verifyEmailChange=<token>` -- the link emailed to the NEW address (POST
+// /auth/verify-email-change). Works logged in or not; like
+// handleEmailVerificationLink, boot() doesn't wait for it.
+async function handleEmailChangeVerificationLink() {
+  const token = takeUrlParam('verifyEmailChange');
+  if (!token) return;
+  try {
+    const { email } = await apiFetch('/auth/verify-email-change', { method: 'POST', body: { token } });
+    document.getElementById('login-email').value = email;
+    if (currentUserId) {
+      currentUserEmail = email;
+      currentUserPendingEmail = null;
+    }
+    showInfoModal(t('verifyEmailChange.success', { email }), 'success');
+  } catch (err) {
+    showInfoModal(
+      t({ EXPIRED: 'verifyEmailChange.expired', EMAIL_TAKEN: 'verifyEmailChange.taken' }[err.code] || 'verifyEmailChange.invalid')
+    );
+  }
+}
+
+// `?undoEmailChange=<token>` -- the link emailed to the OLD address (POST
+// /auth/undo-email-change). Handled before boot() signs anything in: the
+// undo ends every session, so this one's stored token is dropped too. Then
+// straight to setting a new password (the change-password modal in reset
+// mode, see openPasswordResetModal) -- whoever changed the email may know
+// the current one. Every outcome reloads into a normal boot(), with a notice.
+async function handleUndoEmailChangeLink() {
+  const token = takeUrlParam('undoEmailChange');
+  let result;
+  try {
+    result = await apiFetch('/auth/undo-email-change', { method: 'POST', body: { token } });
+  } catch (err) {
+    reloadWithNotice(t(err.code === 'EMAIL_TAKEN' ? 'undoEmailChange.taken' : 'undoEmailChange.invalid'), 'error');
+    return;
+  }
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  openPasswordResetModal({ resetToken: result.resetToken, email: result.email });
+}
+
 const settingsChangePasswordBtn = document.getElementById('settings-change-password-btn');
 const changePasswordOverlay = document.getElementById('change-password-overlay');
 const changePasswordFormEl = document.getElementById('change-password-form');
@@ -7547,13 +7727,41 @@ const changePasswordCurrentInput = document.getElementById('change-password-curr
 const changePasswordNewInput = document.getElementById('change-password-new');
 const changePasswordConfirmInput = document.getElementById('change-password-confirm');
 
+const changePasswordTitleEl = changePasswordOverlay.querySelector('.modal-title');
+const changePasswordCurrentField = changePasswordCurrentInput.closest('.modal-field');
+const changePasswordSubmitBtn = changePasswordFormEl.querySelector('button[type="submit"]');
+// Non-null while this modal is setting a new password after an email-change
+// undo ({ resetToken, email }, see handleUndoEmailChangeLink): no current
+// password (the reset token stands in for it), and POST /auth/reset-password
+// instead of change-password.
+let passwordResetContext = null;
+
 function openChangePasswordModal() {
+  passwordResetContext = null;
   changePasswordFormEl.reset();
   clearAuthMessage(changePasswordMessageEl);
+  changePasswordTitleEl.textContent = t('changePassword.title');
+  changePasswordSubmitBtn.textContent = t('changePassword.submit');
+  changePasswordCurrentField.classList.remove('hidden');
   changePasswordOverlay.classList.remove('hidden');
 }
+
+function openPasswordResetModal(context) {
+  passwordResetContext = context;
+  changePasswordFormEl.reset();
+  changePasswordTitleEl.textContent = t('undoEmailChange.title');
+  changePasswordSubmitBtn.textContent = t('undoEmailChange.submit');
+  changePasswordCurrentField.classList.add('hidden');
+  showAuthMessage(changePasswordMessageEl, 'success', t('undoEmailChange.intro', { email: context.email }));
+  changePasswordOverlay.classList.remove('hidden');
+  changePasswordNewInput.focus();
+}
+
 function closeChangePasswordModal() {
   changePasswordOverlay.classList.add('hidden');
+  // Skipping the new password after an undo still has to land somewhere --
+  // signed out, on the login screen, told what happened.
+  if (passwordResetContext) reloadWithNotice(t('undoEmailChange.skipped', { email: passwordResetContext.email }), 'success');
 }
 
 settingsChangePasswordBtn.onclick = openChangePasswordModal;
@@ -7563,6 +7771,10 @@ document.getElementById('change-password-cancel').onclick = closeChangePasswordM
 changePasswordFormEl.onsubmit = async (e) => {
   e.preventDefault();
   clearAuthMessage(changePasswordMessageEl);
+  if (passwordResetContext) {
+    submitPasswordReset();
+    return;
+  }
   const currentPassword = changePasswordCurrentInput.value;
   const newPassword = changePasswordNewInput.value;
   const confirmPassword = changePasswordConfirmInput.value;
@@ -7591,6 +7803,33 @@ changePasswordFormEl.onsubmit = async (e) => {
   closeChangePasswordModal();
   showInfoModal(t('changePassword.success'), 'success');
 };
+
+async function submitPasswordReset() {
+  const newPassword = changePasswordNewInput.value;
+  if (newPassword.length < 8) {
+    showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.tooShort'));
+    return;
+  }
+  if (newPassword !== changePasswordConfirmInput.value) {
+    showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.mismatch'));
+    return;
+  }
+  const { resetToken, email } = passwordResetContext;
+  try {
+    const { token } = await apiFetch('/auth/reset-password', { method: 'POST', body: { resetToken, newPassword } });
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } catch (err) {
+    if (err.code === 'INVALID_PASSWORD') {
+      showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.tooShort'));
+      return;
+    }
+    passwordResetContext = null;
+    reloadWithNotice(t('undoEmailChange.resetExpired'), 'error');
+    return;
+  }
+  passwordResetContext = null;
+  reloadWithNotice(t('undoEmailChange.done', { email }), 'success');
+}
 
 // ---------------------------------------------------------------------------
 // Account deletion -- Settings' "Delete account" opens a dedicated
@@ -7940,6 +8179,8 @@ function applyUserSession(user) {
   currentUserId = user.id;
   currentUserNickname = user.nickname;
   currentUserAvatar = user.avatar;
+  currentUserEmail = user.email;
+  currentUserPendingEmail = user.pendingEmail || null;
   currentUserTimeFormat = user.timeFormat;
   currentUserBackground = user.background;
   currentUserLanguage = user.language || 'en';
@@ -8076,7 +8317,13 @@ function boot() {
       applyPreLoginLanguage(btn.dataset.lang);
     };
   });
+  if (new URLSearchParams(location.search).has('undoEmailChange')) {
+    handleUndoEmailChangeLink(); // reloads into a fresh boot() once done
+    return;
+  }
+  showPostBootNotice();
   handleEmailVerificationLink();
+  handleEmailChangeVerificationLink();
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) {
     loginScreenEl.classList.remove('hidden');

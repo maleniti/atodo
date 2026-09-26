@@ -766,6 +766,8 @@ main {
   text-shadow: none;
 }
 
+.settings-email { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; color: var(--text-primary); }
+
 .settings-avatar-preview {
   width: 56px;
   height: 56px;
