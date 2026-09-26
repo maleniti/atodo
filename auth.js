@@ -140,6 +140,14 @@ async function getCheckoutSessionStatus(sessionId) {
 // there's nothing active to cancel (see cancelCurrentUserSubscription in
 // app.js, which already only offers this when there is). Returns
 // { token, user }, same as startTrialSubscription above.
+// POST /subscriptions/portal-session -- Stripe's hosted Customer Portal
+// ("Manage billing" in Settings, see app.js's openBillingPortal): updating
+// the card and cancelling happen on Stripe's own page, which sends the
+// browser back to returnUrl afterward. Returns { url } to redirect to.
+async function createBillingPortalSession(returnUrl) {
+  return apiFetch('/subscriptions/portal-session', { method: 'POST', body: { returnUrl } });
+}
+
 async function cancelSubscription() {
   return apiFetch('/subscriptions/cancel', { method: 'POST' });
 }

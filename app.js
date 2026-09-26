@@ -1,6 +1,7 @@
 // uid()/AUTH_TOKEN_KEY/codeError/apiFetch/decodeToken/describeSubscription/
 // startTrialSubscription/createCheckoutSession/getCheckoutSessionStatus/
-// cancelSubscription/scheduleAccountDeletion/cancelScheduledAccountDeletion
+// createBillingPortalSession/cancelSubscription/scheduleAccountDeletion/
+// cancelScheduledAccountDeletion
 // all live in auth.js now (loaded before this file -- see index.html)
 // since landing.html/checkout.html need them too and can't load this whole
 // SPA script just for them.
@@ -295,6 +296,9 @@ const I18N = {
     'settings.billingMonthly': 'monthly',
     'settings.billingAnnual': 'annually',
     'settings.cancelSubscription': 'Cancel subscription',
+    'settings.manageBilling': 'Manage billing…',
+    'settings.manageBillingUnavailable': 'Billing management is temporarily unavailable. Please try again later.',
+    'settings.manageBillingFailed': "Couldn't open billing management. Please try again.",
     'settings.scheduledDeletionNotice': 'This account will be deleted upon subscription expiration.',
     'settings.cancelScheduledDeletion': 'Cancel scheduled deletion',
     'settings.password': 'Password',
@@ -663,6 +667,9 @@ const I18N = {
     'settings.billingMonthly': 'mjesečno',
     'settings.billingAnnual': 'godišnje',
     'settings.cancelSubscription': 'Otkaži pretplatu',
+    'settings.manageBilling': 'Upravljaj plaćanjem…',
+    'settings.manageBillingUnavailable': 'Upravljanje plaćanjem trenutno nije dostupno. Pokušajte ponovno kasnije.',
+    'settings.manageBillingFailed': 'Upravljanje plaćanjem nije se moglo otvoriti. Pokušajte ponovno.',
     'settings.scheduledDeletionNotice': 'Ovaj račun će biti izbrisan po isteku pretplate.',
     'settings.cancelScheduledDeletion': 'Otkaži zakazano brisanje',
     'settings.password': 'Lozinka',
@@ -7217,6 +7224,7 @@ const settingsAvatarFileInput = document.getElementById('settings-avatar-file-in
 const settingsSubscriptionStatusEl = document.getElementById('settings-subscription-status');
 const settingsSubscribeBtn = document.getElementById('settings-subscribe-btn');
 const settingsCancelSubscriptionBtn = document.getElementById('settings-cancel-subscription-btn');
+const settingsManageBillingBtn = document.getElementById('settings-manage-billing-btn');
 const settingsScheduledDeletionNoticeEl = document.getElementById('settings-scheduled-deletion-notice');
 const settingsCancelScheduledDeletionBtn = document.getElementById('settings-cancel-scheduled-deletion-btn');
 
@@ -7289,6 +7297,9 @@ function renderSettingsSubscriptionSection() {
   }
   settingsSubscribeBtn.classList.toggle('hidden', active);
   settingsCancelSubscriptionBtn.classList.toggle('hidden', !(plan === 'pro' && active && !subscription.cancelAtPeriodEnd));
+  // Stripe's portal (card, cancelling -- or un-cancelling, which only it
+  // offers) -- for any live Pro plan, i.e. one paid through Stripe.
+  settingsManageBillingBtn.classList.toggle('hidden', !(plan === 'pro' && active));
   // See scheduleAccountDeletion in auth.js -- only meaningful while the
   // subscription it's tied to is still active (once it lapses, getMe()
   // deletes the account for real on the next login, so there's nothing left
@@ -7397,6 +7408,23 @@ document.getElementById('settings-save').onclick = () => {
 
 settingsSubscribeBtn.onclick = () => subscribeCurrentUserToTrial();
 settingsCancelSubscriptionBtn.onclick = () => cancelCurrentUserSubscription();
+settingsManageBillingBtn.onclick = () => openBillingPortal();
+
+// Leaves for Stripe's hosted Customer Portal (see createBillingPortalSession
+// in auth.js), which comes back to this page -- a fresh load, so whatever
+// changed there (e.g. cancelling, mirrored onto the account by the backend's
+// Stripe webhook) is picked up by boot()'s own getMe().
+async function openBillingPortal() {
+  settingsManageBillingBtn.disabled = true;
+  try {
+    const { url } = await createBillingPortalSession(new URL('index.html', location.href).href);
+    location.href = url;
+  } catch (err) {
+    settingsManageBillingBtn.disabled = false;
+    console.error('Opening the billing portal failed:', err);
+    showInfoModal(t(err.code === 'PAYMENTS_UNAVAILABLE' ? 'settings.manageBillingUnavailable' : 'settings.manageBillingFailed'));
+  }
+}
 settingsCancelScheduledDeletionBtn.onclick = () => cancelCurrentUserScheduledDeletion();
 
 // ---------------------------------------------------------------------------
