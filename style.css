@@ -1492,136 +1492,138 @@ main {
 }
 /* LIGHT THEME + BACKGROUND -- same mechanism as the dark+background matrix
    above (backdrop-filter blur/saturate/brightness/sepia, fully restated per
-   combination for the same transition-interpolation reason), but every
-   brightness value is reflected around 100% (compressed ~0.7x) so more
-   prominent states read as DARKER instead of brighter, matching normal
-   light-UI convention: dark's brightness(120%) -> light's brightness(86%),
-   160%->58%, 75%->118%, 110%->93%. blur/saturate/sepia/background-color/
-   background-image are unchanged from the dark+background table -- only
-   the brightness axis flips direction. */
+   combination for the same transition-interpolation reason). Differences
+   from dark: today's rows and other days' rows swap looks -- today's are
+   the light, desaturated ones (brightness 118%, saturate 50%), other days'
+   the darker, saturated ones (86%, 150%) -- and a selected row is always
+   BRIGHTER than its unselected state (today 150%, other days 110%), same
+   direction as dark theme, so it stands out against a bright photo and its
+   own side borders (see .todo-item.selected below) stay visible.
+   blur/sepia/background-color/background-image are unchanged from the
+   dark+background table. */
 html[data-theme="light"] .todo-item:not(.not-today):not(.completed):not(.focused):not(.selected) {
-  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
-  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
 }
 html[data-theme="light"] .todo-item:not(.not-today):not(.completed):not(.focused).selected {
-  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
-  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
+  backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(0%);
 }
 html[data-theme="light"] .todo-item:not(.not-today):not(.completed).focused:not(.selected) {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
-  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
 }
 html[data-theme="light"] .todo-item:not(.not-today):not(.completed).focused.selected {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
-  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(0%);
+  backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(0%);
 }
 html[data-theme="light"] .todo-item:not(.not-today).completed:not(.focused):not(.selected) {
-  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
-  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
 }
 html[data-theme="light"] .todo-item:not(.not-today).completed:not(.focused).selected {
-  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
-  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
+  backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(45%);
 }
 html[data-theme="light"] .todo-item:not(.not-today).completed.focused:not(.selected) {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
-  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
 }
 html[data-theme="light"] .todo-item:not(.not-today).completed.focused.selected {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
-  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(58%) sepia(45%);
+  backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(150%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused):not(.selected):not(.dismissed) {
-  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
-  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused).selected:not(.dismissed) {
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed).focused:not(.selected):not(.dismissed) {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
-  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed).focused.selected:not(.dismissed) {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today.completed:not(.focused):not(.selected):not(.dismissed) {
-  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
-  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today.completed:not(.focused).selected:not(.dismissed) {
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today.completed.focused:not(.selected):not(.dismissed) {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
-  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today.completed.focused.selected:not(.dismissed) {
   background-color: rgba(50, 80, 255, 0.25);
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused):not(.selected).dismissed {
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
-  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed):not(.focused).selected.dismissed {
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed).focused:not(.selected).dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
-  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(118%) sepia(0%);
+  backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
+  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(86%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today:not(.completed).focused.selected.dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(0%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(0%);
 }
 html[data-theme="light"] .todo-item.not-today.completed:not(.focused):not(.selected).dismissed {
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
-  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today.completed:not(.focused).selected.dismissed {
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today.completed.focused:not(.selected).dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
-  -webkit-backdrop-filter: blur(2px) saturate(50%) brightness(118%) sepia(45%);
+  backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%) brightness(86%) sepia(45%);
 }
 html[data-theme="light"] .todo-item.not-today.completed.focused.selected.dismissed {
   background-color: rgba(50, 80, 255, 0.25);
   background-image:
     repeating-linear-gradient(-45deg, var(--hover-tint) 0 8px, transparent 8px 16px);
-  backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
-  -webkit-backdrop-filter: blur(1px) saturate(80%) brightness(93%) sepia(45%);
+  backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
+  -webkit-backdrop-filter: blur(1px) saturate(180%) brightness(110%) sepia(45%);
 }
 /* A slight, uniform brightness lift on top of whichever of the 24 states
    above currently applies -- filter (not backdrop-filter), so it layers on
@@ -1631,6 +1633,22 @@ html[data-theme="light"] .todo-item.not-today.completed.focused.selected.dismiss
 .todo-item:hover { filter: brightness(1.2); }
 /* Inverted, like the rest of the light+background matrix above. */
 html[data-theme="light"] .todo-item:hover { filter: brightness(0.85); }
+
+/* A selected row's side edges: lit on the left, shaded on the right. Every
+   row reserves the 1px (transparent) so selecting one doesn't nudge its
+   content sideways. */
+.todo-item {
+  border-left: 1px solid transparent;
+  border-right: 1px solid transparent;
+}
+.todo-item.selected {
+  border-left-color: #fff;
+  border-right-color: #808080;
+}
+html[data-theme="light"] .todo-item.selected {
+  border-left-color: #808080;
+  border-right-color: #000;
+}
 
 /* ---------------------------------------------------------------------
    NO BACKGROUND -- Settings has no photo set (body.has-background absent,
@@ -1666,25 +1684,26 @@ body:not(.has-background) .todo-item.not-today:hover { background-color: rgba(25
 body:not(.has-background) .todo-item.not-today.selected:hover { background-color: rgba(255, 255, 255, 0.09); }
 body:not(.has-background) .todo-item.focused:hover { background-color: rgba(50, 80, 255, 0.32); }
 
-/* Light + no background: same alpha scale as above (prominence is encoded
-   in the alpha, not the hue), but black-based instead of white-based so
-   more prominent = darker, same inversion as light+background. The extra
+/* Light + no background: plain rows get a faint black tint (today's lighter
+   than other days', same swap as light+background above), while a selected
+   row gets a white one -- brighter than the page, so it stands out and its
+   side borders stay visible, same as light+background. The extra
    `body:not(.has-background)` ancestor here makes every one of these more
    specific than its light+background equivalent above, so it wins whenever
    there's genuinely no photo -- no source-order dependency either way. */
 html[data-theme="light"] body:not(.has-background) .todo-item {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(0, 0, 0, 0.02);
 }
-html[data-theme="light"] body:not(.has-background) .todo-item.selected { background-color: rgba(0, 0, 0, 0.12); }
-html[data-theme="light"] body:not(.has-background) .todo-item.not-today { background-color: rgba(0, 0, 0, 0.02); }
-html[data-theme="light"] body:not(.has-background) .todo-item.not-today.selected { background-color: rgba(0, 0, 0, 0.045); }
+html[data-theme="light"] body:not(.has-background) .todo-item.selected { background-color: rgba(255, 255, 255, 0.9); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today { background-color: rgba(0, 0, 0, 0.05); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today.selected { background-color: rgba(255, 255, 255, 0.6); }
 html[data-theme="light"] body:not(.has-background) .todo-item.focused { background-color: rgba(50, 80, 255, 0.18); }
-html[data-theme="light"] body:not(.has-background) .todo-item:hover { background-color: rgba(0, 0, 0, 0.08); }
-html[data-theme="light"] body:not(.has-background) .todo-item.selected:hover { background-color: rgba(0, 0, 0, 0.16); }
-html[data-theme="light"] body:not(.has-background) .todo-item.not-today:hover { background-color: rgba(0, 0, 0, 0.035); }
-html[data-theme="light"] body:not(.has-background) .todo-item.not-today.selected:hover { background-color: rgba(0, 0, 0, 0.065); }
+html[data-theme="light"] body:not(.has-background) .todo-item:hover { background-color: rgba(0, 0, 0, 0.035); }
+html[data-theme="light"] body:not(.has-background) .todo-item.selected:hover { background-color: rgba(255, 255, 255, 1); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today:hover { background-color: rgba(0, 0, 0, 0.08); }
+html[data-theme="light"] body:not(.has-background) .todo-item.not-today.selected:hover { background-color: rgba(255, 255, 255, 0.75); }
 html[data-theme="light"] body:not(.has-background) .todo-item.focused:hover { background-color: rgba(50, 80, 255, 0.24); }
 /* --------------------------------------------------------------------- */
 
