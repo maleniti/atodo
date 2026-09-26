@@ -1,0 +1,98 @@
+# Generates the A-To-Do icon SVG (512x512).
+CHECK = "M 118 262 L 212 352 L 398 150"
+HILITE = "M 128 272 L 212 352 L 388 161"
+
+def icon_defs(p="", rx=112):
+    # p: id prefix, so the icon can be embedded more than once in one SVG
+    return f"""
+  <linearGradient id="{p}sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#0a1729"/>
+    <stop offset="1" stop-color="#1c3d61"/>
+  </linearGradient>
+  <radialGradient id="{p}glow" cx="0.6" cy="0.38" r="0.5">
+    <stop offset="0" stop-color="#6fa8dc" stop-opacity="0.35"/>
+    <stop offset="1" stop-color="#6fa8dc" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="{p}back" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#34597f"/>
+    <stop offset="1" stop-color="#1d3a5a"/>
+  </linearGradient>
+  <linearGradient id="{p}peak" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#4f82ad"/>
+    <stop offset="0.55" stop-color="#2d5680"/>
+    <stop offset="1" stop-color="#173252"/>
+  </linearGradient>
+  <linearGradient id="{p}shade" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#0b1a2c" stop-opacity="0"/>
+    <stop offset="1" stop-color="#0b1a2c" stop-opacity="0.45"/>
+  </linearGradient>
+  <linearGradient id="{p}snow" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff"/>
+    <stop offset="1" stop-color="#cfe2f5"/>
+  </linearGradient>
+  <!-- The check's body: the timer's green up to just past the corner, bright glass after -->
+  <linearGradient id="{p}body" gradientUnits="userSpaceOnUse" x1="118" y1="0" x2="398" y2="0">
+    <stop offset="0" stop-color="#5ae62e" stop-opacity="0.4"/>
+    <stop offset="0.42" stop-color="#39c814" stop-opacity="0.42"/>
+    <stop offset="0.42" stop-color="#f6fbff" stop-opacity="0.93"/>
+    <stop offset="1" stop-color="#e3f0fc" stop-opacity="0.93"/>
+  </linearGradient>
+  <linearGradient id="{p}shadow" gradientUnits="userSpaceOnUse" x1="118" y1="0" x2="398" y2="0">
+    <stop offset="0" stop-color="#020a14" stop-opacity="0.18"/>
+    <stop offset="0.42" stop-color="#020a14" stop-opacity="0.18"/>
+    <stop offset="0.5" stop-color="#020a14" stop-opacity="0.55"/>
+    <stop offset="1" stop-color="#020a14" stop-opacity="0.55"/>
+  </linearGradient>
+  <linearGradient id="{p}lower" gradientUnits="userSpaceOnUse" x1="118" y1="0" x2="398" y2="0">
+    <stop offset="0.42" stop-color="#0b2a4a" stop-opacity="0"/>
+    <stop offset="0.42" stop-color="#0b2a4a" stop-opacity="0.18"/>
+  </linearGradient>
+  <mask id="{p}rim" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+    <path d="{CHECK}" fill="none" stroke="#fff" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="{CHECK}" fill="none" stroke="#000" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+  </mask>
+  <mask id="{p}inside" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+    <path d="{CHECK}" fill="none" stroke="#fff" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+  </mask>
+  <filter id="{p}blur" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="9"/>
+  </filter>
+  <clipPath id="{p}tile"><rect width="512" height="512" rx="{rx}"/></clipPath>"""
+
+def icon_body(p="", rx=112):
+    return f"""
+  <g clip-path="url(#{p}tile)">
+    <rect width="512" height="512" fill="url(#{p}sky)"/>
+    <rect width="512" height="512" fill="url(#{p}glow)"/>
+    <!-- distant range -->
+    <path d="M0 318 L64 270 L120 300 L170 262 L340 238 L400 206 L512 282 V512 H0 Z" fill="url(#{p}back)" opacity="0.75"/>
+    <!-- the mountain -->
+    <path d="M-20 512 L232 112 L520 470 V512 Z" fill="url(#{p}peak)"/>
+    <path d="M232 112 L520 470 V512 H268 L262 300 Z" fill="url(#{p}shade)"/>
+    <path d="M232 112 L197 168 L214 162 L226 180 L240 160 L256 174 L266 154 Z" fill="url(#{p}snow)"/>
+    <!-- foreground ridge -->
+    <path d="M0 452 Q 130 408 262 446 T 512 436 V512 H0 Z" fill="#0c2036"/>
+
+    <!-- glass check mark -->
+    <path d="{CHECK}" transform="translate(0 12)" fill="none" stroke="url(#{p}shadow)" stroke-width="58" stroke-linecap="round" stroke-linejoin="round" filter="url(#{p}blur)"/>
+    <path d="{CHECK}" fill="none" stroke="url(#{p}body)" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+    <g mask="url(#{p}inside)">
+      <path d="{HILITE}" transform="translate(0 -16)" fill="none" stroke="#ffffff" stroke-opacity="0.7" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="{HILITE}" transform="translate(0 18)" fill="none" stroke="url(#{p}lower)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <rect width="512" height="512" fill="#ffffff" fill-opacity="0.55" mask="url(#{p}rim)"/>
+  </g>
+""" + (f'''
+  <rect x="1.5" y="1.5" width="509" height="509" rx="{rx - 1.5}" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="3"/>''' if rx else "")
+
+def icon_svg(rx=112):
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>A-To-Do</title>
+  <defs>{icon_defs(rx=rx)}
+  </defs>{icon_body(rx=rx)}
+</svg>
+"""
+
+if __name__ == "__main__":
+    open("icon.svg", "w").write(icon_svg())
+    open("icon-square.svg", "w").write(icon_svg(rx=0))
