@@ -276,6 +276,9 @@ const I18N = {
     'settings.languageEnglish': 'English',
     'settings.languageCroatian': 'Hrvatski (Croatian)',
     'settings.theme': 'Theme',
+    'settings.weekStart': 'First day of the week',
+    'settings.weekStartMonday': 'Monday',
+    'settings.weekStartSunday': 'Sunday',
     'settings.themeDark': 'Dark',
     'settings.themeLight': 'Light',
     'settings.avatar': 'Avatar',
@@ -618,6 +621,9 @@ const I18N = {
     'settings.languageEnglish': 'English (engleski)',
     'settings.languageCroatian': 'Hrvatski',
     'settings.theme': 'Tema',
+    'settings.weekStart': 'Prvi dan u tjednu',
+    'settings.weekStartMonday': 'Ponedjeljak',
+    'settings.weekStartSunday': 'Nedjelja',
     'settings.themeDark': 'Tamna',
     'settings.themeLight': 'Svijetla',
     'settings.avatar': 'Avatar',
@@ -1670,7 +1676,7 @@ async function verifyEmailToken(token) {
 // 'en') always sticks instead of being silently re-detected on every load.
 // theme has no such detection step -- 'dark' is just a real, always-valid
 // default (see applyTheme/currentUserTheme below).
-const DEFAULT_USER_PROFILE = { nickname: '', avatar: null, timeFormat: '24', background: null, language: null, theme: 'dark' };
+const DEFAULT_USER_PROFILE = { nickname: '', avatar: null, timeFormat: '24', background: null, language: null, theme: 'dark', weekStart: null };
 
 // PATCH /users/me -- fire-and-forget from the caller's perspective, same as
 // saveTasks below: nothing here awaits the request finishing, and a failure
@@ -1740,6 +1746,16 @@ let currentUserTimeFormat = '24'; // '12' | '24' -- see formatTimeOfDay/formatDa
 let currentUserBackground = null; // same shape as the profile's background field, or null -- see applyBackground
 let currentUserLanguage = 'en'; // 'en' | 'hr' -- see the i18n section up top (t()/currentLocaleTag())
 let currentUserTheme = 'dark'; // 'dark' | 'light' -- see applyTheme below
+// 0 (Sunday) .. 6, or null if never chosen -- see effectiveWeekStart.
+let currentUserWeekStart = null;
+
+// The first day of the week calendars and weekday lists start on: the
+// user's own choice (Settings), else each language's usual convention --
+// Monday for Croatian, Sunday for English.
+function effectiveWeekStart() {
+  if (currentUserWeekStart != null) return currentUserWeekStart;
+  return currentUserLanguage === 'hr' ? 1 : 0;
+}
 // Same shape as getMe()'s subscription field (null | { id, plan, ... }) --
 // see describeSubscription/isSubscriptionActive. Refreshed after boot()/
 // login resolve a token and again after subscribeCurrentUserToTrial() mints
@@ -1846,6 +1862,7 @@ function currentUserProfileSnapshot() {
     background: currentUserBackground,
     language: currentUserLanguage,
     theme: currentUserTheme,
+    weekStart: currentUserWeekStart,
   };
 }
 
@@ -3029,8 +3046,14 @@ function getFrequencyOptions() {
   ];
 }
 
+// Starting from the user's first day of the week (see effectiveWeekStart).
+function orderedByWeekStart(options) {
+  const start = effectiveWeekStart();
+  return options.slice().sort((a, b) => ((Number(a.value) - start + 7) % 7) - ((Number(b.value) - start + 7) % 7));
+}
+
 function getWeekdayCheckboxOptions() {
-  return [
+  return orderedByWeekStart([
     { value: '1', label: t('taskForm.weekdayMon') },
     { value: '2', label: t('taskForm.weekdayTue') },
     { value: '3', label: t('taskForm.weekdayWed') },
@@ -3038,11 +3061,11 @@ function getWeekdayCheckboxOptions() {
     { value: '5', label: t('taskForm.weekdayFri') },
     { value: '6', label: t('taskForm.weekdaySat') },
     { value: '0', label: t('taskForm.weekdaySun') },
-  ];
+  ]);
 }
 
 function getWeekdaySelectOptions() {
-  return [
+  return orderedByWeekStart([
     { value: '0', label: t('taskForm.sunday') },
     { value: '1', label: t('taskForm.monday') },
     { value: '2', label: t('taskForm.tuesday') },
@@ -3050,7 +3073,7 @@ function getWeekdaySelectOptions() {
     { value: '4', label: t('taskForm.thursday') },
     { value: '5', label: t('taskForm.friday') },
     { value: '6', label: t('taskForm.saturday') },
-  ];
+  ]);
 }
 
 function getMonthlyModeOptions() {
@@ -5566,9 +5589,7 @@ function showDatePickerModal({ title, hint, minISO, maxISO = null, initialISO = 
   return new Promise((resolve) => {
     let selected = initialISO;
     let monthKey = monthKeyOf(startMonthISO || initialISO || minISO);
-    // Monday-first for Croatian, Sunday-first for English -- each locale's own
-    // usual convention.
-    const weekStart = currentUserLanguage === 'hr' ? 1 : 0;
+    const weekStart = effectiveWeekStart();
 
     function render() {
       datePickerMonthEl.textContent = formatMonthLabel(monthKey);
@@ -7137,9 +7158,7 @@ document.getElementById('user-menu-logout').onclick = (e) => {
 
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsNicknameInput = document.getElementById('settings-nickname-input');
-const settingsTimeFormatSelect = document.getElementById('settings-time-format-select');
 const settingsLanguageSelect = document.getElementById('settings-language-select');
-const settingsThemeSelect = document.getElementById('settings-theme-select');
 const settingsAvatarPreviewImg = document.getElementById('settings-avatar-preview-img');
 const settingsAvatarPreviewInitials = document.getElementById('settings-avatar-preview-initials');
 const settingsAvatarFileInput = document.getElementById('settings-avatar-file-input');
@@ -7225,11 +7244,57 @@ function renderSettingsSubscriptionSection() {
   settingsScheduledDeletionNoticeEl.classList.toggle('hidden', !(active && subscription.scheduledDeletion));
 }
 
+// Settings' toggle buttons -- unlike the fields that wait for Save, each
+// applies and saves the moment it's clicked, so the effect is visible right
+// away (Cancel doesn't undo them). `current` reads the live value, `apply`
+// sets it and re-renders whatever shows it.
+const SETTINGS_TOGGLES = [
+  {
+    el: document.getElementById('settings-time-format-toggle'),
+    current: () => currentUserTimeFormat,
+    apply: (value) => {
+      currentUserTimeFormat = value;
+      renderTodo();
+      renderSidePanel();
+      renderSettingsSubscriptionSection(); // its expiry date/time, right here in the open modal
+    },
+  },
+  {
+    el: document.getElementById('settings-week-start-toggle'),
+    current: () => String(effectiveWeekStart()),
+    apply: (value) => {
+      currentUserWeekStart = Number(value);
+    },
+  },
+  {
+    el: document.getElementById('settings-theme-toggle'),
+    current: () => currentUserTheme,
+    apply: (value) => applyTheme(value),
+  },
+];
+
+function renderSettingsToggles() {
+  for (const toggle of SETTINGS_TOGGLES) {
+    const value = toggle.current();
+    for (const btn of toggle.el.querySelectorAll('button')) btn.classList.toggle('active', btn.dataset.value === value);
+  }
+}
+
+for (const toggle of SETTINGS_TOGGLES) {
+  for (const btn of toggle.el.querySelectorAll('button')) {
+    btn.onclick = () => {
+      if (btn.dataset.value === toggle.current()) return;
+      toggle.apply(btn.dataset.value);
+      saveUserProfile(currentUserProfileSnapshot());
+      renderSettingsToggles();
+    };
+  }
+}
+
 function openSettingsModal() {
   settingsNicknameInput.value = currentUserNickname || '';
-  settingsTimeFormatSelect.value = currentUserTimeFormat;
   settingsLanguageSelect.value = currentUserLanguage;
-  settingsThemeSelect.value = currentUserTheme;
+  renderSettingsToggles();
   settingsPendingAvatar = undefined;
   renderSettingsAvatarPreview();
   renderSettingsBackgroundPreview();
@@ -7261,21 +7326,19 @@ document.getElementById('settings-close').onclick = closeSettingsModal;
 document.getElementById('settings-save').onclick = () => {
   const nickname = settingsNicknameInput.value.trim();
   const avatar = settingsPendingAvatar === undefined ? currentUserAvatar : settingsPendingAvatar;
-  const timeFormat = settingsTimeFormatSelect.value;
   const language = settingsLanguageSelect.value;
-  const theme = settingsThemeSelect.value;
   currentUserNickname = nickname;
   currentUserAvatar = avatar;
-  currentUserTimeFormat = timeFormat;
-  saveUserProfile({ ...currentUserProfileSnapshot(), language, theme });
+  saveUserProfile({ ...currentUserProfileSnapshot(), language });
   renderUserAvatar();
   // applyLanguage saves currentUserLanguage and re-renders everything
   // renderAppTitle/renderTodo/renderSidePanel below would have anyway (every
   // currently-rendered due time/comment-and-log timestamp was drawn with the
-  // old timeFormat/language baked into its text), so it's called instead of
-  // them, not alongside them.
+  // old language baked into its text), so it's called instead of them, not
+  // alongside them. Time format, theme and first day of the week aren't
+  // here: their toggles already applied and saved themselves (see
+  // SETTINGS_TOGGLES).
   applyLanguage(language);
-  applyTheme(theme);
   closeSettingsModal();
 };
 
@@ -7447,6 +7510,7 @@ settingsImportDataFileInput.onchange = async () => {
   currentUserBackground = profile.background;
   currentUserLanguage = profile.language || 'en';
   currentUserTheme = profile.theme || 'dark';
+  currentUserWeekStart = profile.weekStart ?? null;
 
   activeTaskId = data.activeTaskId || null;
   activeOccurrenceDate = activeTaskId ? data.activeOccurrenceDate || null : null;
@@ -7880,6 +7944,7 @@ function applyUserSession(user) {
   currentUserBackground = user.background;
   currentUserLanguage = user.language || 'en';
   currentUserTheme = user.theme || 'dark';
+  currentUserWeekStart = user.weekStart ?? null;
   currentUserSubscription = user.subscription;
   activeTaskId = user.activeTaskId;
   activeOccurrenceDate = user.activeTaskId ? user.activeOccurrenceDate : null;

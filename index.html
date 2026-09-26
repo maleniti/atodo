@@ -294,12 +294,21 @@
         <label for="settings-nickname-input" data-i18n="settings.nickname">Nickname</label>
         <input id="settings-nickname-input" class="modal-input" type="text" placeholder="e.g. Nikola" data-i18n-placeholder="settings.nicknamePlaceholder">
       </div>
+      <!-- Toggles apply (and save) immediately, unlike the fields that wait
+           for Save -- see initSettingsToggle in app.js. -->
       <div class="modal-field">
-        <label for="settings-time-format-select" data-i18n="settings.timeFormat">Time format</label>
-        <select id="settings-time-format-select" class="modal-input">
-          <option value="24" data-i18n="settings.timeFormat24">24-hour (e.g. 18:00)</option>
-          <option value="12" data-i18n="settings.timeFormat12">12-hour (e.g. 6:00 PM)</option>
-        </select>
+        <label data-i18n="settings.timeFormat">Time format</label>
+        <div id="settings-time-format-toggle" class="settings-toggle">
+          <button type="button" data-value="24" data-i18n="settings.timeFormat24">24-hour (e.g. 18:00)</button>
+          <button type="button" data-value="12" data-i18n="settings.timeFormat12">12-hour (e.g. 6:00 PM)</button>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label data-i18n="settings.weekStart">First day of the week</label>
+        <div id="settings-week-start-toggle" class="settings-toggle">
+          <button type="button" data-value="1" data-i18n="settings.weekStartMonday">Monday</button>
+          <button type="button" data-value="0" data-i18n="settings.weekStartSunday">Sunday</button>
+        </div>
       </div>
       <div class="modal-field">
         <label for="settings-language-select" data-i18n="settings.language">Language</label>
@@ -309,11 +318,11 @@
         </select>
       </div>
       <div class="modal-field">
-        <label for="settings-theme-select" data-i18n="settings.theme">Theme</label>
-        <select id="settings-theme-select" class="modal-input">
-          <option value="dark" data-i18n="settings.themeDark">Dark</option>
-          <option value="light" data-i18n="settings.themeLight">Light</option>
-        </select>
+        <label data-i18n="settings.theme">Theme</label>
+        <div id="settings-theme-toggle" class="settings-toggle">
+          <button type="button" data-value="dark" data-i18n="settings.themeDark">Dark</button>
+          <button type="button" data-value="light" data-i18n="settings.themeLight">Light</button>
+        </div>
       </div>
       <div class="modal-field">
         <label data-i18n="settings.avatar">Avatar</label>

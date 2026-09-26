@@ -738,6 +738,34 @@ main {
 
 .delete-account-modal { width: 360px; }
 .delete-account-modal .menu-btn-small { margin-bottom: 4px; }
+/* Settings' segmented toggles (time format, first day of week, theme) --
+   see SETTINGS_TOGGLES in app.js. */
+.settings-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--input-bg);
+}
+.settings-toggle button {
+  flex: 1;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--text-label);
+  font-size: 12px;
+  cursor: pointer;
+  text-shadow: inherit;
+}
+.settings-toggle button:hover { color: var(--text-primary); }
+.settings-toggle button.active {
+  background: var(--accent);
+  color: var(--accent-on);
+  text-shadow: none;
+}
+
 .settings-avatar-preview {
   width: 56px;
   height: 56px;
