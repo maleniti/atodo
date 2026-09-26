@@ -104,8 +104,11 @@ async function runCheckout() {
     const cancelUrl = `${location.origin}/cancel.html?plan=${encodeURIComponent(plan)}`;
     const { checkoutUrl } = await createCheckoutSession(plan, successUrl, cancelUrl);
     location.href = checkoutUrl;
-  } catch {
-    location.href = `cancel.html?plan=${encodeURIComponent(plan)}`;
+  } catch (err) {
+    // The cancel page explains these two specifically (see cancel.js);
+    // anything else is just "no charge made".
+    const reason = { PAYMENTS_UNAVAILABLE: 'unavailable', ALREADY_SUBSCRIBED: 'subscribed' }[err && err.code];
+    location.href = `cancel.html?plan=${encodeURIComponent(plan)}${reason ? `&reason=${reason}` : ''}`;
   }
 }
 
