@@ -4770,9 +4770,12 @@ function buildTodoItemRow(item, isToday) {
   // A task that's part of a mixed series (see isMixedSeries) is shown as
   // "[series name]: [task name]" so it reads as belonging to that group;
   // a single task or same-taskId recurring fragments just show their own
-  // name, as before.
+  // name, as before. So does a task whose name is the series' own name (e.g.
+  // the task a series was named after) -- "Higijena: Higijena" would just
+  // repeat itself.
   const seriesLabelInfo = seriesRowLabelInfo(item.task.seriesId);
-  name.textContent = seriesLabelInfo.mixed ? `${seriesLabelInfo.name}: ${effectiveTask.name}` : effectiveTask.name;
+  const sameAsSeriesName = seriesLabelInfo.name.trim().toLocaleLowerCase() === effectiveTask.name.trim().toLocaleLowerCase();
+  name.textContent = seriesLabelInfo.mixed && !sameAsSeriesName ? `${seriesLabelInfo.name}: ${effectiveTask.name}` : effectiveTask.name;
   text.appendChild(name);
 
   // Always rendered, even when empty -- so every row reserves the same
