@@ -175,25 +175,22 @@
       </div>
       <div id="side-panel-content" class="side-panel-content hidden">
         <div class="side-panel-header">
-          <div id="side-panel-title" class="side-panel-title hidden"></div>
           <div class="side-panel-header-actions">
             <div id="side-panel-scope-toggle" class="side-panel-scope-toggle">
               <div class="side-panel-scope-toggle-thumb"></div>
               <button type="button" class="side-panel-scope-opt" data-scope="occurrence" title="Just this occurrence" data-i18n="sidePanel.occurrence" data-i18n-title="sidePanel.occurrenceTitle">Occurrence</button>
-              <button type="button" class="side-panel-scope-opt" data-scope="task" title="Every fragment of this task" data-i18n="sidePanel.task" data-i18n-title="sidePanel.taskTitle">Task</button>
+              <button type="button" class="side-panel-scope-opt" data-scope="task" title="This task, every occurrence" data-i18n="sidePanel.task" data-i18n-title="sidePanel.taskTitle">Task</button>
               <button type="button" class="side-panel-scope-opt" data-scope="series" title="Every task in this series" data-i18n="sidePanel.series" data-i18n-title="sidePanel.seriesTitle">Series</button>
             </div>
             <button id="side-panel-edit-toggle-btn" class="menu-btn-small"></button>
-            <!-- Narrow screens only (see style.css) -- the panel is a
-                 full-screen drawer there, so it needs an explicit close
-                 control rather than relying on deselecting the task (which
-                 the drawer itself can visually cover, making Escape/re-
-                 clicking the row the only other way to reach it). -->
-            <button type="button" id="side-panel-close-btn" class="side-panel-close-btn" title="Close" data-i18n-title="common.close">
-              <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
           </div>
+          <!-- Deselects the task, bringing the agenda back (and, on narrow
+               screens, closing the full-screen drawer this panel is there). -->
+          <button type="button" id="side-panel-close-btn" class="side-panel-close-btn" title="Close" data-i18n-title="common.close">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
         </div>
+        <div id="side-panel-title" class="side-panel-title hidden"></div>
         <div id="side-panel-task-summaries" class="side-panel-task-summaries"></div>
         <div id="side-panel-occurrence-actions" class="side-panel-occurrence-actions hidden"></div>
         <textarea id="side-panel-comment-input" class="modal-input side-panel-comment-input" placeholder="Add a note about this task&hellip;" data-i18n-placeholder="sidePanel.commentPlaceholder"></textarea>

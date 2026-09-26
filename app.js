@@ -5888,8 +5888,17 @@ function buildTodayAgendaItems() {
 // to-do row for that occurrence (showTodoContextMenu). Unlike a row, it
 // doesn't also select the task: selecting swaps the agenda out for the
 // task's notes (see renderSidePanel), which would yank away what was just
-// right-clicked.
+// right-clicked. Double-click is the deliberate way to do that: it selects
+// the task, same as clicking its to-do row (whose row it also scrolls into
+// view, if the current list view shows it), and the side panel's close
+// button brings the agenda back.
 function attachAgendaContextMenu(el, item) {
+  el.ondblclick = (e) => {
+    e.preventDefault();
+    selectTaskForSidePanel(item.task, item.occurrenceDate);
+    const row = [...document.querySelectorAll('.todo-item')].find((r) => r.__task === item.task && r.__occurrenceDate === item.occurrenceDate);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  };
   el.oncontextmenu = (e) => {
     e.preventDefault();
     const menuItem = {
@@ -6040,6 +6049,11 @@ function attachAgendaBlockDrag(el, item) {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
       el.classList.remove('dragging');
+      // A press that never moved (e.g. half of a double-click, see
+      // attachAgendaContextMenu) changed nothing and left no live-drag
+      // styles behind -- skip the re-render, which would otherwise replace
+      // this element between the two clicks and swallow the double-click.
+      if (latestDueMinutes === originalDueMinutes) return;
       rescheduleAgendaItem(item.task, item.occurrenceDate, agendaMinutesToTime(latestDueMinutes));
     }
 
@@ -6050,10 +6064,11 @@ function attachAgendaBlockDrag(el, item) {
 
 // Applies a drag-reschedule's dropped due time to the task itself -- like
 // any other change to its data, that's every occurrence's due time (see
-// applyGeneralInfoInPlace). Called unconditionally on drop so renderTodo()
-// always runs -- see attachAgendaBlockDrag's own comment on why that's what
-// discards the live-drag inline styles, dropped-back-to-the-same-time
-// included.
+// applyGeneralInfoInPlace). Called on every drop that ends on a different
+// time, so renderTodo() always runs then -- see attachAgendaBlockDrag's own
+// comment on why that's what discards the live-drag inline styles. A drop
+// back on the original time needs neither: its live styles are the
+// original ones.
 function rescheduleAgendaItem(task, occurrenceDate, newDueTime) {
   if (task.dueTime !== newDueTime) {
     applyGeneralInfoInPlace(task, {

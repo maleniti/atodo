@@ -184,7 +184,6 @@ main {
    wins on specificity over .modal-close-btn's own display: flex, regardless
    of which happens to come first in the file. */
 .agenda-toggle-btn,
-.side-panel-close-btn,
 .modal-close-btn.agenda-close-btn {
   display: none;
 }
@@ -362,12 +361,8 @@ main {
 .side-panel-header-actions {
   display: flex;
   flex: none;
+  align-items: center;
   gap: 6px;
-  /* Keeps the buttons pinned right even when .side-panel-title is hidden
-     (a non-mixed-series task -- see renderSidePanel) and would otherwise
-     leave them as the header's only flex item, which .space-between
-     collapses to the start instead of the end. */
-  margin-left: auto;
 }
 
 #side-panel-edit-toggle-btn.active {
@@ -419,6 +414,7 @@ main {
 .side-panel-scope-opt.active { color: var(--text-primary); }
 
 .side-panel-title {
+  margin-bottom: 8px;
   font-size: 15px;
   font-weight: 600;
   color: var(--text-heading);
@@ -1053,13 +1049,14 @@ main {
 }
 .agenda-toggle-btn:hover { background: rgba(255, 255, 255, 0.14); color: var(--text-primary); }
 
-/* Same round icon-button look as .agenda-toggle-btn, sitting inline among
-   .side-panel-header-actions' other controls (not position: absolute like
+/* Same round icon-button look as .agenda-toggle-btn, at the right end of
+   .side-panel-header's row (not position: absolute like
    .modal-close-btn/#agenda-close-btn -- there's already a natural flex row
-   here to join instead of overlaying). Display itself is set elsewhere
-   (none by default, flex on narrow screens only, see the max-width: 1000px
-   query below). */
+   here to join instead of overlaying). Always shown: deselecting the task
+   brings the agenda back. */
 .side-panel-close-btn {
+  display: flex;
+  margin-left: auto;
   width: 22px;
   height: 22px;
   flex: none;
@@ -2751,7 +2748,6 @@ option {
   /* .modal-close-btn.agenda-close-btn again (see the default-hidden rule,
      above in the file) -- needs to match its specificity to actually win. */
   .agenda-toggle-btn,
-  .side-panel-close-btn,
   .modal-close-btn.agenda-close-btn { display: flex; }
 }
 
