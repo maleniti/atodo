@@ -35,8 +35,9 @@ const I18N = {
     'login.invalidCredentials': 'Incorrect email or password.',
     'login.networkError': 'Could not reach the server. Check your connection and try again.',
     'login.notVerified': "That email hasn't been verified yet – check your inbox for the verification link.",
-    'login.accountExpired': "This account was automatically deleted after 12 months of inactivity, along with all its data. You're welcome to create a new one.",
-    'login.accountDeletedScheduled': "This account was deleted, as scheduled, once its subscription ended, along with all its data. You're welcome to create a new one.",
+    'login.accountExpired': 'This account was automatically deleted after 12 months of inactivity, along with all its data. Log in again to reopen it, empty.',
+    'login.accountDeletedScheduled': 'This account was deleted, as scheduled, once its subscription ended, along with all its data. Log in again to reopen it, empty.',
+    'login.accountRestored': 'Welcome back! This account had been deleted, so it has been reopened empty – its earlier tasks, notes and settings are gone for good.',
     'login.verifiedSuccess': 'Email verified – you can now log in as {email}.',
     'login.verifyExpired': 'That verification link has expired. Please register again.',
     'login.verifyInvalid': 'That verification link is invalid or has already been used.',
@@ -345,7 +346,7 @@ const I18N = {
 
     'deleteAccount.title': 'Delete account',
     'deleteAccount.warning':
-      "This permanently deletes your account and every task, note, and setting tied to it – immediately, with no way to undo it. Download a copy first if you want to keep it.",
+      "This permanently deletes every task, note, and setting in your account – immediately, with no way to get them back. Download a copy first if you want to keep it. Only your email, password and whether you've had a free trial are kept, for 12 months: logging in again during that time reopens the account, empty.",
     'deleteAccount.subscriberNotice':
       "You have an active Pro subscription. Deleting immediately forfeits the rest of your paid period with no refund, and cuts off access right away. You can instead schedule deletion for when your subscription ends – it'll be cancelled now, but you'll keep full access until then.",
     'deleteAccount.confirm': 'Delete my account permanently',
@@ -354,6 +355,8 @@ const I18N = {
 
     'subscribe.title': 'Upgrade to A-To-Do Pro',
     'subscribe.cta': 'Start free trial…',
+    'subscribe.ctaPaid': 'Subscribe…',
+    'subscribe.priceHintPaid': 'Just 2 EUR/month, or 20 EUR/year.',
     'subscribe.headerCta': 'Subscribe',
     'subscribe.maybeLater': 'Maybe later',
     'subscribe.benefitTasks': 'Unlimited tasks, recurring or not',
@@ -406,8 +409,9 @@ const I18N = {
     'login.invalidCredentials': 'Netočan e-mail ili lozinka.',
     'login.networkError': 'Nije moguće spojiti se na poslužitelj. Provjerite vezu i pokušajte ponovno.',
     'login.notVerified': 'Taj e-mail još nije potvrđen – provjerite poštanski sandučić za poveznicu za potvrdu.',
-    'login.accountExpired': 'Ovaj račun je automatski izbrisan nakon 12 mjeseci neaktivnosti, zajedno sa svim podacima. Slobodno otvorite novi.',
-    'login.accountDeletedScheduled': 'Ovaj račun je izbrisan, kako je zakazano, po isteku pretplate, zajedno sa svim podacima. Slobodno otvorite novi.',
+    'login.accountExpired': 'Ovaj račun je automatski izbrisan nakon 12 mjeseci neaktivnosti, zajedno sa svim podacima. Prijavite se ponovno kako biste ga ponovno otvorili, prazan.',
+    'login.accountDeletedScheduled': 'Ovaj račun je izbrisan, kako je zakazano, po isteku pretplate, zajedno sa svim podacima. Prijavite se ponovno kako biste ga ponovno otvorili, prazan.',
+    'login.accountRestored': 'Dobro došli natrag! Ovaj račun bio je izbrisan pa je ponovno otvoren prazan – njegovi raniji zadaci, bilješke i postavke nepovratno su izbrisani.',
     'login.verifiedSuccess': 'E-mail potvrđen – sada se možete prijaviti kao {email}.',
     'login.verifyExpired': 'Ta poveznica za potvrdu je istekla. Molimo registrirajte se ponovno.',
     'login.verifyInvalid': 'Ta poveznica za potvrdu nije valjana ili je već iskorištena.',
@@ -716,7 +720,7 @@ const I18N = {
 
     'deleteAccount.title': 'Izbriši račun',
     'deleteAccount.warning':
-      'Ovime se trajno briše vaš račun te svaki zadatak, bilješka i postavka vezana uz njega – odmah, bez mogućnosti poništenja. Preuzmite kopiju prije brisanja ako je želite zadržati.',
+      'Ovime se trajno briše svaki zadatak, bilješka i postavka na vašem računu – odmah, bez mogućnosti vraćanja. Preuzmite kopiju prije brisanja ako je želite zadržati. Čuvaju se samo vaša e-mail adresa, lozinka i podatak jeste li već imali besplatno probno razdoblje, 12 mjeseci: ponovna prijava u tom razdoblju ponovno otvara račun, prazan.',
     'deleteAccount.subscriberNotice':
       'Imate aktivnu Pro pretplatu. Trenutačno brisanje znači gubitak preostalog plaćenog razdoblja bez povrata novca, te odmah gubite pristup. Umjesto toga možete zakazati brisanje za trenutak isteka pretplate – pretplata će se odmah otkazati, ali pristup ćete imati do tada.',
     'deleteAccount.confirm': 'Trajno izbriši moj račun',
@@ -725,6 +729,8 @@ const I18N = {
 
     'subscribe.title': 'Nadogradite na A-To-Do Pro',
     'subscribe.cta': 'Isprobajte besplatno…',
+    'subscribe.ctaPaid': 'Pretplati se…',
+    'subscribe.priceHintPaid': 'Samo 2 EUR mjesečno ili 20 EUR godišnje.',
     'subscribe.headerCta': 'Pretplati se',
     'subscribe.maybeLater': 'Možda kasnije',
     'subscribe.benefitTasks': 'Neograničen broj zadataka, ponavljajućih ili ne',
@@ -1820,6 +1826,13 @@ function effectiveWeekStart() {
 // login resolve a token and again after subscribeCurrentUserToTrial() mints
 // a fresh one, same as the profile fields above.
 let currentUserSubscription = null;
+// Whether this account may still start a free trial (the User's own
+// trialAvailable, decided server-side: never had a plan, and not
+// re-registered within a year of deleting an account that had one -- see
+// api-spec.yaml's POST /subscriptions/trial). Anyone else is offered
+// "Subscribe…" instead, leading to landing.html's pricing (goToPricing).
+// Refreshed alongside currentUserSubscription.
+let currentUserTrialAvailable = false;
 
 // Applies a (possibly new) language everywhere it matters -- called on
 // startup and whenever Settings' Save button changes it. No page reload
@@ -3056,9 +3069,22 @@ function ensureSubscriptionPromptTask() {
 // task, and the render. startTrialSubscription's response already carries
 // the updated user, so no separate getMe() round trip is needed.
 async function subscribeCurrentUserToTrial() {
-  const { token, user } = await startTrialSubscription();
+  let result;
+  try {
+    result = await startTrialSubscription();
+  } catch (err) {
+    // This page's idea of the account was stale (e.g. a trial started in
+    // another tab) -- a paid subscription is what's left to offer.
+    if (err.code === 'TRIAL_UNAVAILABLE') {
+      goToPricing();
+      return;
+    }
+    throw err;
+  }
+  const { token, user } = result;
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   currentUserSubscription = user.subscription;
+  currentUserTrialAvailable = !!user.trialAvailable;
   ensureSubscriptionPromptTask();
   saveTasks();
   renderTodo();
@@ -3075,6 +3101,7 @@ async function cancelCurrentUserSubscription() {
   const { token, user } = await cancelSubscription();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   currentUserSubscription = user.subscription;
+  currentUserTrialAvailable = !!user.trialAvailable;
   renderSettingsSubscriptionSection();
   renderSubscribeHeaderButton();
 }
@@ -3086,6 +3113,7 @@ async function cancelCurrentUserScheduledDeletion() {
   const { token, user } = await cancelScheduledAccountDeletion();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   currentUserSubscription = user.subscription;
+  currentUserTrialAvailable = !!user.trialAvailable;
   renderSettingsSubscriptionSection();
 }
 
@@ -7141,13 +7169,31 @@ const userAvatarInitials = document.getElementById('user-avatar-initials');
 const userMenuDropdown = document.getElementById('user-menu-dropdown');
 const appHeaderSubscribeBtn = document.getElementById('app-header-subscribe-btn');
 
-// Shown for a free (never subscribed) or trial (active or lapsed) account --
-// hidden once there's an actual Pro subscription, since there's nothing left
-// to upsell. Links straight to landing.html's pricing section rather than
+// Shown for every account without a live Pro subscription -- free, on a
+// trial (active or lapsed), or whose Pro subscription has ended -- hidden
+// while there is one, since there's nothing left to upsell. Links straight to landing.html's pricing section rather than
 // opening the in-app trial paywall -- choosing monthly/yearly billing now
 // happens there (see checkout.html).
 function renderSubscribeHeaderButton() {
-  appHeaderSubscribeBtn.classList.toggle('hidden', describeSubscription(currentUserSubscription).plan === 'pro');
+  const { plan, active } = describeSubscription(currentUserSubscription);
+  appHeaderSubscribeBtn.classList.toggle('hidden', plan === 'pro' && active);
+}
+
+// landing.html's plans, in the app's current language -- where anyone who
+// can't (or can no longer) start a free trial subscribes instead (see
+// currentUserTrialAvailable).
+function goToPricing() {
+  location.href = `landing.html?lang=${encodeURIComponent(currentUserLanguage)}#pricing`;
+}
+
+// The "start a trial" buttons (Settings' and the paywall's) double as
+// "Subscribe…" for an account that has already had a trial or a
+// subscription -- only the label (and what a click does, see their
+// handlers) changes. Swapping data-i18n rather than just the text keeps a
+// later language change (applyStaticTranslations) on the right label.
+function setI18nKey(el, key) {
+  el.dataset.i18n = key;
+  el.textContent = t(key);
 }
 
 // Up to the first two words' initials (e.g. "Nikola Novak" -> "NN", "Nikola"
@@ -7296,6 +7342,7 @@ function renderSettingsSubscriptionSection() {
         : t('settings.subscriptionPro', { interval: intervalLabel, date: formatDateTime(subscription.expiresAt) });
   }
   settingsSubscribeBtn.classList.toggle('hidden', active);
+  setI18nKey(settingsSubscribeBtn, currentUserTrialAvailable ? 'subscribe.cta' : 'subscribe.ctaPaid');
   settingsCancelSubscriptionBtn.classList.toggle('hidden', !(plan === 'pro' && active && !subscription.cancelAtPeriodEnd));
   // Stripe's portal (card, cancelling -- or un-cancelling, which only it
   // offers) -- for any live Pro plan, i.e. one paid through Stripe.
@@ -7406,7 +7453,7 @@ document.getElementById('settings-save').onclick = () => {
   closeSettingsModal();
 };
 
-settingsSubscribeBtn.onclick = () => subscribeCurrentUserToTrial();
+settingsSubscribeBtn.onclick = () => (currentUserTrialAvailable ? subscribeCurrentUserToTrial() : goToPricing());
 settingsCancelSubscriptionBtn.onclick = () => cancelCurrentUserSubscription();
 settingsManageBillingBtn.onclick = () => openBillingPortal();
 
@@ -7439,12 +7486,17 @@ settingsCancelScheduledDeletionBtn.onclick = () => cancelCurrentUserScheduledDel
 
 const subscribeOverlay = document.getElementById('subscribe-overlay');
 const subscribeReasonEl = document.getElementById('subscribe-reason');
+const subscribePriceHintEl = document.getElementById('subscribe-price-hint');
+const subscribeStartTrialBtn = document.getElementById('subscribe-start-trial');
 let subscribeModalResolve = null;
 
 function showSubscribeModal(reasonText) {
   return new Promise((resolve) => {
     subscribeModalResolve = resolve;
     subscribeReasonEl.textContent = reasonText;
+    const trial = currentUserTrialAvailable;
+    setI18nKey(subscribeStartTrialBtn, trial ? 'subscribe.cta' : 'subscribe.ctaPaid');
+    setI18nKey(subscribePriceHintEl, trial ? 'subscribe.priceHint' : 'subscribe.priceHintPaid');
     subscribeOverlay.classList.remove('hidden');
   });
 }
@@ -7459,7 +7511,12 @@ function closeSubscribeModal(accepted) {
 
 document.getElementById('subscribe-close').onclick = () => closeSubscribeModal(false);
 document.getElementById('subscribe-cancel').onclick = () => closeSubscribeModal(false);
-document.getElementById('subscribe-start-trial').onclick = async () => {
+subscribeStartTrialBtn.onclick = async () => {
+  if (!currentUserTrialAvailable) {
+    closeSubscribeModal(false);
+    goToPricing();
+    return;
+  }
   await subscribeCurrentUserToTrial();
   closeSubscribeModal(true);
 };
@@ -7930,6 +7987,7 @@ async function scheduleCurrentUserAccountDeletion() {
   const { token, user } = await scheduleAccountDeletion();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   currentUserSubscription = user.subscription;
+  currentUserTrialAvailable = !!user.trialAvailable;
   closeDeleteAccountModal();
   renderSettingsSubscriptionSection();
   renderSubscribeHeaderButton();
@@ -8215,6 +8273,7 @@ function applyUserSession(user) {
   currentUserTheme = user.theme || 'dark';
   currentUserWeekStart = user.weekStart ?? null;
   currentUserSubscription = user.subscription;
+  currentUserTrialAvailable = !!user.trialAvailable;
   activeTaskId = user.activeTaskId;
   activeOccurrenceDate = user.activeTaskId ? user.activeOccurrenceDate : null;
   todoViewMode = TODO_VIEW_MODES.includes(user.todoViewMode) ? user.todoViewMode : 'pending';
@@ -8404,9 +8463,9 @@ document.getElementById('login-form').onsubmit = async (e) => {
   clearAuthMessage(loginMessageEl);
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  let token, user;
+  let token, user, restored;
   try {
-    ({ token } = await login(email, password));
+    ({ token, restored } = await login(email, password));
     // Always resolved right after login() -- see getMe's own comment on why
     // the inactivity/existence check lives there instead of in login()
     // itself, and why that's safe to rely on here.
@@ -8430,6 +8489,10 @@ document.getElementById('login-form').onsubmit = async (e) => {
   loginScreenEl.classList.add('hidden');
   appMainEl.classList.remove('hidden');
   await startApp(user.language == null);
+  // Logging in to a deleted (closed) account reopens it empty -- see
+  // api-spec.yaml's POST /auth/login -- which would otherwise just look
+  // like every task vanished.
+  if (restored) showInfoModal(t('login.accountRestored'), 'success');
 };
 
 document.getElementById('show-register-link').onclick = (e) => {

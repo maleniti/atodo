@@ -8,7 +8,7 @@ const TERMS_I18N = {
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
     'terms.pageTitle': 'Terms of Service',
-    'terms.updated': 'Last updated: 18 September 2026',
+    'terms.updated': 'Last updated: 26 September 2026',
     'terms.intro':
       '<p>These Terms of Service ("Terms") govern your use of the A-To-Do to-do list application (the "Service"), operated by [Legal entity name] ("we", "us"). By creating an account or otherwise using the Service, you agree to these Terms.</p>',
     'terms.s1':
@@ -24,7 +24,7 @@ const TERMS_I18N = {
     'terms.s6':
       "<h2>6. Acceptable use</h2><p>Please don't use the Service to store or transmit anything unlawful, to attempt to disrupt or gain unauthorized access to the Service, or to violate anyone else's rights.</p>",
     'terms.s7':
-      '<h2>7. Deleting your account</h2><p>You can permanently delete your account and all associated data at any time from Settings; this takes effect immediately and can\'t be undone. If you have an active paid subscription, deleting immediately forfeits the remainder of your paid period with no refund; you can instead schedule deletion for when your subscription ends, keeping full access until then (this also cancels the subscription). Accounts that go unused for 12 consecutive months are also deleted automatically -- see our <a href="privacy.html">Privacy Policy</a> for details.</p>',
+      '<h2>7. Deleting your account</h2><p>You can delete your account and all associated data at any time from Settings; this takes effect immediately and the data can\'t be restored. For 12 months afterwards we keep only your email address, password and whether you\'ve had a free trial or subscription: logging in again during that time reopens the account, empty, without a new free trial. If you have an active paid subscription, deleting immediately forfeits the remainder of your paid period with no refund; you can instead schedule deletion for when your subscription ends, keeping full access until then (this also cancels the subscription). Accounts that go unused for 12 consecutive months are also deleted automatically -- see our <a href="privacy.html">Privacy Policy</a> for details.</p>',
     'terms.s8':
       '<h2>8. Termination</h2><p>We may suspend or terminate your access to the Service if you violate these Terms. You may stop using the Service, and delete your account, at any time.</p>',
     'terms.s9':
@@ -43,7 +43,7 @@ const TERMS_I18N = {
     'nav.privacy': 'Pravila privatnosti',
     'nav.terms': 'Uvjeti korištenja',
     'terms.pageTitle': 'Uvjeti korištenja',
-    'terms.updated': 'Zadnje ažurirano: 18. rujna 2026.',
+    'terms.updated': 'Zadnje ažurirano: 26. rujna 2026.',
     'terms.intro':
       '<p>Ovi Uvjeti korištenja ("Uvjeti") uređuju vaše korištenje aplikacije za popis obveza A-To-Do ("Usluga"), koju operativno vodi [Naziv pravnog subjekta] ("mi"). Otvaranjem računa ili korištenjem Usluge na drugi način, prihvaćate ove Uvjete.</p>',
     'terms.s1':
@@ -59,7 +59,7 @@ const TERMS_I18N = {
     'terms.s6':
       '<h2>6. Prihvatljivo korištenje</h2><p>Molimo ne koristite Uslugu za pohranu ili prijenos nezakonitog sadržaja, za pokušaj narušavanja rada ili neovlaštenog pristupa Usluzi, ili za povredu prava drugih osoba.</p>',
     'terms.s7':
-      '<h2>7. Brisanje vašeg računa</h2><p>Svoj račun i sve povezane podatke možete trajno izbrisati u bilo kojem trenutku putem Postavki; to stupa na snagu odmah i ne može se poništiti. Ako imate aktivnu plaćenu pretplatu, trenutačno brisanje znači gubitak preostalog plaćenog razdoblja bez povrata novca; umjesto toga možete zakazati brisanje za trenutak isteka pretplate, čime pristup zadržavate do tada (ovime se pretplata i otkazuje). Računi koji se ne koriste 12 mjeseci zaredom također se automatski brišu -- pogledajte naša <a href="privacy.html">Pravila privatnosti</a> za detalje.</p>',
+      '<h2>7. Brisanje vašeg računa</h2><p>Svoj račun i sve povezane podatke možete izbrisati u bilo kojem trenutku putem Postavki; to stupa na snagu odmah i podaci se ne mogu vratiti. Sljedećih 12 mjeseci čuvamo samo vašu e-mail adresu, lozinku i podatak jeste li imali besplatno probno razdoblje ili pretplatu: ponovna prijava u tom razdoblju ponovno otvara račun, prazan, bez novog besplatnog probnog razdoblja. Ako imate aktivnu plaćenu pretplatu, trenutačno brisanje znači gubitak preostalog plaćenog razdoblja bez povrata novca; umjesto toga možete zakazati brisanje za trenutak isteka pretplate, čime pristup zadržavate do tada (ovime se pretplata i otkazuje). Računi koji se ne koriste 12 mjeseci zaredom također se automatski brišu -- pogledajte naša <a href="privacy.html">Pravila privatnosti</a> za detalje.</p>',
     'terms.s8':
       '<h2>8. Prestanak</h2><p>Vaš pristup Usluzi možemo suspendirati ili prekinuti ako prekršite ove Uvjete. Korištenje Usluge, i brisanje svog računa, možete prekinuti u bilo kojem trenutku.</p>',
     'terms.s9':

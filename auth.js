@@ -105,7 +105,8 @@ function describeSubscription(subscription) {
 }
 
 // POST /subscriptions/trial -- starts a 14-day Pro trial for the current
-// account. Returns both the fresh token the response carries (see
+// account -- only while the User's trialAvailable is true (409
+// TRIAL_UNAVAILABLE otherwise, see api-spec.yaml). Returns both the fresh token the response carries (see
 // api-spec.yaml -- every subscription-mutating endpoint re-issues one,
 // since the subscription claim it embeds just changed) and the updated
 // user, so the caller doesn't need a separate getMe() round trip just to
