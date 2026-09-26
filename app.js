@@ -160,6 +160,10 @@ const I18N = {
     'taskEditor.occurrencesHint': 'Changes here are saved right away.',
     'taskEditor.deleteTask': 'Delete task',
     'taskEditor.next': 'next',
+    'taskEditor.findOccurrence': 'Find occurrence…',
+    'taskEditor.findOccurrenceTitle': 'Find an upcoming occurrence',
+    'taskEditor.findOccurrenceHint': 'Only the dates this task recurs on can be picked.',
+    'taskEditor.noUpcomingOccurrences': 'This task has no upcoming occurrences.',
     'taskEditor.occurrenceDetails': 'Details',
     'taskEditor.occurrenceDetailsPlaceholder': 'Anything specific to this occurrence…',
     'taskEditor.noOccurrences': 'No occurrences yet.',
@@ -498,6 +502,10 @@ const I18N = {
     'taskEditor.occurrencesHint': 'Promjene ovdje spremaju se odmah.',
     'taskEditor.deleteTask': 'Izbriši zadatak',
     'taskEditor.next': 'sljedeća',
+    'taskEditor.findOccurrence': 'Pronađi pojavu…',
+    'taskEditor.findOccurrenceTitle': 'Pronađi nadolazeću pojavu',
+    'taskEditor.findOccurrenceHint': 'Mogu se odabrati samo datumi na koje se ovaj zadatak ponavlja.',
+    'taskEditor.noUpcomingOccurrences': 'Ovaj zadatak nema nadolazećih pojava.',
     'taskEditor.occurrenceDetails': 'Pojedinosti',
     'taskEditor.occurrenceDetailsPlaceholder': 'Nešto specifično za ovu pojavu…',
     'taskEditor.noOccurrences': 'Još nema pojava.',
@@ -3522,7 +3530,13 @@ function patternDiffers(task, { dueDate, frequency, endDate, recurUntilCompleted
 // next cycle already exists as its live row by then), then every past one.
 // A recurUntilCompleted occurrence is listed once, at its own date, however
 // far its chain has been carried.
-function listTaskOccurrences(task) {
+//
+// extraDates (e.g. upcoming ones picked with "Find occurrence…") are listed
+// as well, as are any recorded rows the rules above didn't reach (a manual
+// occurrence further ahead, or an upcoming one someone's already added
+// notes/details to) -- rows always count as occurrences, so none may go
+// missing from this list.
+function listTaskOccurrences(task, extraDates = []) {
   const todayISO = Recurrence.dateToISO(new Date());
   const entries = [];
   if (task.recurUntilCompleted) {
@@ -3545,12 +3559,14 @@ function listTaskOccurrences(task) {
       }
     }
   }
-  // Manual occurrences further ahead than the next one are listed too --
-  // otherwise one just added from this tab would vanish from it.
   const listed = new Set(entries.map((e) => e.date));
-  for (const o of occurrences) {
-    if (o.taskId === task.taskId && o.manual && !listed.has(o.occurrenceDate)) entries.push({ date: o.occurrenceDate });
-  }
+  const addUnlisted = (date) => {
+    if (listed.has(date)) return;
+    listed.add(date);
+    entries.push({ date });
+  };
+  for (const o of occurrences) if (o.taskId === task.taskId) addUnlisted(o.occurrenceDate);
+  for (const date of extraDates) addUnlisted(date);
   return entries.sort((x, y) => y.date.localeCompare(x.date));
 }
 
@@ -3567,6 +3583,10 @@ function occurrenceStatusLabel(task, date) {
 function renderOccurrencesTab(pane, task, initialDate) {
   let selectedDate = initialDate;
   let editingComment = null;
+  // Upcoming pattern dates picked with "Find occurrence…" -- listed for as
+  // long as the editor stays open, without saving anything: a row only gets
+  // created once something is actually recorded on one (a note, details).
+  const foundDates = [];
 
   function refreshEverywhere() {
     saveTasks();
@@ -3577,7 +3597,7 @@ function renderOccurrencesTab(pane, task, initialDate) {
   function render() {
     pane.innerHTML = '';
     prependEditorHint(pane, 'taskEditor.occurrencesHint');
-    const entries = listTaskOccurrences(task);
+    const entries = listTaskOccurrences(task, foundDates);
     if (!entries.some((e) => e.date === selectedDate)) selectedDate = entries.length ? (entries.find((e) => e.next) || entries[0]).date : null;
 
     const list = document.createElement('div');
@@ -3632,6 +3652,28 @@ function renderOccurrencesTab(pane, task, initialDate) {
       render();
     };
     pane.appendChild(addOccurrenceBtn);
+    // Plain recurring tasks only: a recurUntilCompleted task's future cycles
+    // don't exist until the current one is done, and a one-off has no
+    // pattern to find dates in.
+    if (!task.recurUntilCompleted && task.frequency.type !== 'once') {
+      const findOccurrenceBtn = document.createElement('button');
+      findOccurrenceBtn.type = 'button';
+      findOccurrenceBtn.className = 'menu-btn-small task-occ-add-occurrence';
+      findOccurrenceBtn.textContent = t('taskEditor.findOccurrence');
+      findOccurrenceBtn.onclick = async () => {
+        const found = await promptFindOccurrence(task);
+        if (!found) return;
+        if (!foundDates.includes(found)) foundDates.push(found);
+        selectedDate = found;
+        editingComment = null;
+        render();
+      };
+      const buttons = document.createElement('div');
+      buttons.className = 'task-occ-buttons';
+      addOccurrenceBtn.replaceWith(buttons);
+      buttons.appendChild(addOccurrenceBtn);
+      buttons.appendChild(findOccurrenceBtn);
+    }
 
     if (selectedDate) pane.appendChild(buildOccurrenceDetail());
     const selectedEl = list.querySelector('.task-occ-item.selected');
@@ -5503,7 +5545,10 @@ async function rescheduleOccurrencePrompt(task, occurrence) {
 // inclusive (maxISO null = unbounded); rangeStartISO, if given, tints every
 // date from it up to (not including) the one being picked, previewing the
 // span the choice covers; summary(dateISO) is the line shown under the grid
-// once a date is picked.
+// once a date is picked. isSelectable(dateISO), if given, further limits which
+// dates in range can be picked -- those that can are highlighted -- and
+// startMonthISO picks which month the grid opens on (default: initialISO's,
+// else minISO's).
 // ---------------------------------------------------------------------------
 
 const datePickerOverlay = document.getElementById('date-picker-overlay');
@@ -5517,10 +5562,10 @@ const datePickerNextBtn = document.getElementById('date-picker-next');
 const datePickerOkBtn = document.getElementById('date-picker-ok');
 const datePickerCancelBtn = document.getElementById('date-picker-cancel');
 
-function showDatePickerModal({ title, hint, minISO, maxISO = null, initialISO = null, rangeStartISO = null, summary }) {
+function showDatePickerModal({ title, hint, minISO, maxISO = null, initialISO = null, rangeStartISO = null, summary, isSelectable = null, startMonthISO = null }) {
   return new Promise((resolve) => {
     let selected = initialISO;
-    let monthKey = monthKeyOf(initialISO || minISO);
+    let monthKey = monthKeyOf(startMonthISO || initialISO || minISO);
     // Monday-first for Croatian, Sunday-first for English -- each locale's own
     // usual convention.
     const weekStart = currentUserLanguage === 'hr' ? 1 : 0;
@@ -5544,13 +5589,16 @@ function showDatePickerModal({ title, hint, minISO, maxISO = null, initialISO = 
       for (let d = 1; d <= Recurrence.daysInMonth(y, m - 1); d++) {
         const iso = `${monthKey}-${String(d).padStart(2, '0')}`;
         const btn = document.createElement('button');
+        const inRange = iso >= minISO && (!maxISO || iso <= maxISO);
+        const selectable = inRange && (!isSelectable || isSelectable(iso));
         btn.className =
           'date-picker-day' +
+          (isSelectable && selectable ? ' selectable' : '') +
           (iso === todayISO ? ' today' : '') +
           (iso === selected ? ' selected' : '') +
           (rangeStartISO && selected && iso >= rangeStartISO && iso < selected ? ' in-range' : '');
         btn.textContent = String(d);
-        btn.disabled = iso < minISO || (!!maxISO && iso > maxISO);
+        btn.disabled = !selectable;
         btn.onclick = () => {
           selected = iso;
           render();
@@ -6550,6 +6598,27 @@ function renderTodoManageMonths() {
 // the added date, or null if nothing was added. Just a `manual` row (rows always count as occurrences,
 // see occursOnDate); the task's own data, time included, applies to it like
 // to any other occurrence.
+// Picks an upcoming date task's own pattern produces -- only those dates are
+// selectable (and highlighted) on the calendar, starting from tomorrow and
+// opening on the month of the first one. Returns the date, or null.
+async function promptFindOccurrence(task) {
+  const todayISO = Recurrence.dateToISO(new Date());
+  const minISO = Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), 1));
+  const first = nextOccurrenceAfterDate(task, todayISO);
+  if (!first) {
+    showInfoModal(t('taskEditor.noUpcomingOccurrences'));
+    return null;
+  }
+  return showDatePickerModal({
+    title: t('taskEditor.findOccurrenceTitle'),
+    hint: t('taskEditor.findOccurrenceHint'),
+    minISO,
+    maxISO: lastPossibleOccurrenceDate(task),
+    startMonthISO: first,
+    isSelectable: (d) => occursOnDate(task, d),
+  });
+}
+
 async function promptManualOccurrence(task) {
   if (isProtectedTask(task)) return null;
   const dateISO = await showDatePickerModal({

@@ -2260,6 +2260,7 @@ main,
 .task-occ-date { flex: 1; color: var(--text-primary); }
 .task-occ-status { color: var(--text-label); }
 .task-occ-add-occurrence { margin-bottom: 10px; }
+.task-occ-buttons { display: flex; gap: 6px; }
 .task-occ-detail .task-stats-heading { margin-top: 8px; }
 .task-occ-note {
   display: flex;
@@ -2369,6 +2370,9 @@ main,
 }
 .date-picker-day:hover:not(:disabled) { background: var(--hover-tint); }
 .date-picker-day:disabled { color: var(--text-muted); opacity: 0.45; cursor: default; }
+/* With an isSelectable filter (e.g. "Find occurrence…"), the pickable
+   dates stand out from the disabled rest. */
+.date-picker-day.selectable { color: var(--accent); font-weight: 700; background: var(--hover-tint); }
 .date-picker-day.today { box-shadow: inset 0 0 0 1px var(--border-hairline); font-weight: 700; }
 .date-picker-day.in-range { background: var(--hover-tint); color: var(--text-label); }
 .date-picker-day.selected,
