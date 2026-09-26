@@ -150,6 +150,7 @@ const I18N = {
     'timer.start': 'Start',
     'timer.set': 'Set',
     'taskForm.editTask': 'Edit task',
+    'taskEditor.title': 'Edit task – {name}',
     'taskEditor.tabDetails': 'Details',
     'taskEditor.tabPattern': 'Recurrence',
     'taskEditor.tabOccurrences': 'Occurrences',
@@ -223,8 +224,8 @@ const I18N = {
       "Recur until completed – never marked overdue or failed: if not done by its due time, it's rescheduled to the next day instead (same time), and the missed occurrence stays visible alongside the new one until either is checked off. A recurring task's next occurrence is then counted from whenever it's actually completed, not the original schedule.",
     'taskForm.endDateBeforeDue': "End date can't be before the due date.",
 
-    'manualOccurrence.title': 'Add manual occurrence',
-    'manualOccurrence.add': 'Add manual occurrence',
+    'manualOccurrence.title': 'Add an occurrence',
+    'manualOccurrence.add': 'Add occurrence…',
     'manualOccurrence.exists': 'This task already has an occurrence on that date.',
 
     'manage.title': 'To-do list',
@@ -484,6 +485,7 @@ const I18N = {
     'timer.start': 'Pokreni',
     'timer.set': 'Postavi',
     'taskForm.editTask': 'Uredi zadatak',
+    'taskEditor.title': 'Uredi zadatak – {name}',
     'taskEditor.tabDetails': 'Podaci',
     'taskEditor.tabPattern': 'Ponavljanje',
     'taskEditor.tabOccurrences': 'Pojave',
@@ -557,8 +559,8 @@ const I18N = {
       "Ponavljaj do dovršetka – nikad se ne označava kao zakašnjelo ili neuspješno: ako nije obavljeno do roka, premješta se na sljedeći dan (isto vrijeme), a propušteni rok ostaje vidljiv uz novi sve dok jedan od njih ne označite obavljenim. Sljedeća pojava ponavljajućeg zadatka tada se računa od trenutka kad je stvarno dovršen, a ne prema izvornom rasporedu.",
     'taskForm.endDateBeforeDue': 'Datum završetka ne može biti prije datuma dospijeća.',
 
-    'manualOccurrence.title': 'Dodaj ručnu pojavu',
-    'manualOccurrence.add': 'Dodaj ručnu pojavu',
+    'manualOccurrence.title': 'Dodaj pojavu',
+    'manualOccurrence.add': 'Dodaj pojavu…',
     'manualOccurrence.exists': 'Ovaj zadatak već ima pojavu na taj datum.',
 
     'manage.title': 'Popis zadataka',
@@ -3436,7 +3438,7 @@ async function openTaskEditor(task, { tab = 'details', occurrenceDate = null } =
     withTab(pattern.recurUntilCompleted, 'pattern'),
   ];
 
-  const result = await showFormModal(t('taskForm.editTask'), fields, {
+  const result = await showFormModal(t('taskEditor.title', { name: taskDisplayName(task) }), fields, {
     okLabel: t('common.save'),
     deleteLabel: t('taskEditor.deleteTask'),
     initialTab: tab,
@@ -3474,6 +3476,14 @@ async function openTaskEditor(task, { tab = 'details', occurrenceDate = null } =
   renderTodo();
   renderSidePanel();
   refreshTodoManageModal();
+}
+
+// "[series name]: [task name]" for a task in a mixed series, just its own
+// name otherwise -- same rule as its to-do row's label (see buildTodoItemRow).
+function taskDisplayName(task) {
+  if (!isMixedSeries(task.seriesId)) return task.name;
+  const seriesName = getSeriesName(task.seriesId);
+  return seriesName.trim().toLocaleLowerCase() === task.name.trim().toLocaleLowerCase() ? task.name : `${seriesName}: ${task.name}`;
 }
 
 function prependEditorHint(pane, key) {
@@ -3528,6 +3538,12 @@ function listTaskOccurrences(task) {
         if (following) entries.push({ date: following, next: true });
       }
     }
+  }
+  // Manual occurrences further ahead than the next one are listed too --
+  // otherwise one just added from this tab would vanish from it.
+  const listed = new Set(entries.map((e) => e.date));
+  for (const o of occurrences) {
+    if (o.taskId === task.taskId && o.manual && !listed.has(o.occurrenceDate)) entries.push({ date: o.occurrenceDate });
   }
   return entries.sort((x, y) => y.date.localeCompare(x.date));
 }
@@ -3597,6 +3613,19 @@ function renderOccurrencesTab(pane, task, initialDate) {
       list.appendChild(row);
     }
     pane.appendChild(list);
+
+    const addOccurrenceBtn = document.createElement('button');
+    addOccurrenceBtn.type = 'button';
+    addOccurrenceBtn.className = 'menu-btn-small task-occ-add-occurrence';
+    addOccurrenceBtn.textContent = t('manualOccurrence.add');
+    addOccurrenceBtn.onclick = async () => {
+      const added = await promptManualOccurrence(task);
+      if (!added) return;
+      selectedDate = added;
+      editingComment = null;
+      render();
+    };
+    pane.appendChild(addOccurrenceBtn);
 
     if (selectedDate) pane.appendChild(buildOccurrenceDetail());
     const selectedEl = list.querySelector('.task-occ-item.selected');
@@ -6474,27 +6503,29 @@ function renderTodoManageMonths() {
 
 // Gives `task` one extra occurrence on a date the user picks, whatever its
 // pattern says -- e.g. once more after its recurrence has ended, or a second
-// date for a one-off. Just a `manual` row (rows always count as occurrences,
+// date for a one-off. Reached from the task editor's Occurrences tab; returns
+// the added date, or null if nothing was added. Just a `manual` row (rows always count as occurrences,
 // see occursOnDate); the task's own data, time included, applies to it like
 // to any other occurrence.
 async function promptManualOccurrence(task) {
-  if (isProtectedTask(task)) return;
+  if (isProtectedTask(task)) return null;
   const dateISO = await showDatePickerModal({
     title: t('manualOccurrence.title'),
     hint: task.name,
     minISO: '2000-01-01',
     initialISO: Recurrence.dateToISO(new Date()),
   });
-  if (!dateISO) return;
+  if (!dateISO) return null;
   if (occursOnDate(task, dateISO)) {
     showInfoModal(t('manualOccurrence.exists'));
-    return;
+    return null;
   }
   occurrences.push(Occurrence.createOccurrence({ id: uid(), taskId: task.taskId, occurrenceDate: dateISO, manual: true }));
   logTaskEvent(task, 'Manual occurrence added', dateISO);
   saveTasks();
   renderTodo();
-  refreshTodoManageModal();
+  renderSidePanel();
+  return dateISO;
 }
 
 function buildSeriesMemberRow(task) {
@@ -6524,14 +6555,6 @@ function buildSeriesMemberRow(task) {
   info.appendChild(meta);
   row.appendChild(info);
 
-  // Adds one more occurrence of this task on a date the user picks (see
-  // promptManualOccurrence).
-  const addOccurrenceBtn = document.createElement('button');
-  addOccurrenceBtn.title = t('manualOccurrence.add');
-  addOccurrenceBtn.innerHTML =
-    '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm-8-8h2v2h2v2h-2v2h-2v-2H9v-2h2z"/></svg>';
-  addOccurrenceBtn.onclick = () => promptManualOccurrence(task);
-  row.appendChild(addOccurrenceBtn);
 
   // Overwrites just this one record's own name with the series' saved
   // name (see the "Save" button below) -- useful after "Save" has changed

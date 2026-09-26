@@ -1998,6 +1998,11 @@ html[data-theme="light"] .not-today > .todo-item-text {
    forms like the add/edit-task form, which can open on top of the to-do
    manager list (#todo-manage-overlay) -- always keep it topmost. */
 #modal-overlay { z-index: 31; }
+/* The date picker can open from inside a form (the task editor's
+   Occurrences tab) -- keep it above that. The info modal likewise, for a
+   notice raised from within either. */
+#date-picker-overlay { z-index: 32; }
+#info-overlay { z-index: 33; }
 
 /* Same transparent-background-plus-backdrop-filter technique as .side-panel
    (see its own comment) -- a modal sits directly over whatever the to-do
@@ -2233,7 +2238,7 @@ main,
 .task-occ-list {
   max-height: 190px;
   overflow-y: auto;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
   border: 1px solid var(--border-hairline);
   border-radius: 8px;
   padding: 2px;
@@ -2254,6 +2259,7 @@ main,
 .task-occ-item.next .task-occ-date { font-weight: 600; }
 .task-occ-date { flex: 1; color: var(--text-primary); }
 .task-occ-status { color: var(--text-label); }
+.task-occ-add-occurrence { margin-bottom: 10px; }
 .task-occ-detail .task-stats-heading { margin-top: 8px; }
 .task-occ-note {
   display: flex;
