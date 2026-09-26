@@ -290,6 +290,9 @@ main {
   font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
+  /* The band itself stays click-through (see above), but its label takes
+     right-clicks, for the same context menu as a to-do row. */
+  pointer-events: auto;
 }
 
 .agenda-block {
@@ -2208,6 +2211,81 @@ main,
 .todo-manage-item button.confirm:hover {
   background: #d93025;
   color: #fff;
+}
+
+/* Month-grid date picker (showDatePickerModal, app.js). Days outside the
+   allowed range are shown but disabled; the range from the right-clicked
+   occurrence up to the picked date is tinted (.in-range) as a preview of
+   what's being paused. */
+.date-picker-modal { width: 300px; }
+.date-picker-hint {
+  font-size: 12px;
+  color: var(--text-label);
+  margin: -6px 0 10px;
+}
+.date-picker-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.date-picker-month {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+.date-picker-nav-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.date-picker-nav-btn:hover:not(:disabled) { background: var(--hover-tint); }
+.date-picker-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.date-picker-weekday {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2px 0 4px;
+  text-transform: uppercase;
+}
+.date-picker-day {
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-shadow: inherit;
+}
+.date-picker-day:hover:not(:disabled) { background: var(--hover-tint); }
+.date-picker-day:disabled { color: var(--text-muted); opacity: 0.45; cursor: default; }
+.date-picker-day.today { box-shadow: inset 0 0 0 1px var(--border-hairline); font-weight: 700; }
+.date-picker-day.in-range { background: var(--hover-tint); color: var(--text-label); }
+.date-picker-day.selected,
+.date-picker-day.selected:hover {
+  background: var(--accent);
+  color: var(--accent-on);
+  text-shadow: none;
+}
+.date-picker-summary {
+  font-size: 12px;
+  color: var(--text-label);
+  min-height: 16px;
+  margin-bottom: 10px;
 }
 
 .task-stats-modal {

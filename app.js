@@ -115,6 +115,14 @@ const I18N = {
     'menu.show': 'Show',
     'menu.hide': 'Hide',
     'menu.editPattern': 'Edit recurrence pattern…',
+    'menu.pauseRecurrence': 'Pause recurrence until…',
+    'pause.title': 'Pause "{name}"',
+    'pause.hint': 'From {date}, until the date you pick -- recurrence starts again on that exact date.',
+    'pause.summary': 'Paused {from} – {to}, resumes {resume}.',
+    'pause.nothingAfter': "This task's recurrence ends before there's anything left to resume.",
+    'pause.unsupportedMixed': 'Pausing isn\'t available for a task that has been both "recur until completed" and a regular recurring task.',
+    'datePicker.prevMonth': 'Previous month',
+    'datePicker.nextMonth': 'Next month',
     'menu.taskStats': 'Task stats',
 
     'sidePanel.agendaHeading': "Today's agenda",
@@ -442,6 +450,14 @@ const I18N = {
     'menu.show': 'Prikaži',
     'menu.hide': 'Sakrij',
     'menu.editPattern': 'Uredi obrazac ponavljanja…',
+    'menu.pauseRecurrence': 'Pauziraj ponavljanje do…',
+    'pause.title': 'Pauziraj "{name}"',
+    'pause.hint': 'Od {date} do datuma koji odaberete -- ponavljanje se nastavlja točno na taj datum.',
+    'pause.summary': 'Pauzirano {from} – {to}, nastavlja se {resume}', // no trailing period: Croatian dates already end in one
+    'pause.nothingAfter': 'Ponavljanje ovog zadatka završava prije nego što bi se imalo što nastaviti.',
+    'pause.unsupportedMixed': 'Pauziranje nije dostupno za zadatak koji je bio i "ponavljaj do dovršetka" i obični ponavljajući zadatak.',
+    'datePicker.prevMonth': 'Prethodni mjesec',
+    'datePicker.nextMonth': 'Sljedeći mjesec',
     'menu.taskStats': 'Statistika zadatka',
 
     'sidePanel.agendaHeading': 'Današnji raspored',
@@ -2343,6 +2359,7 @@ function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
   if (!isProtectedTask(task) && task.frequency.type !== 'once') {
     addItem(2, t('menu.editPattern'), () => editTaskPattern(task, occurrenceDate));
   }
+  if (canPauseRecurrence(item)) addItem(2, t('menu.pauseRecurrence'), () => promptPauseRecurrence(task, occurrenceDate));
   addItem(3, t('menu.taskStats'), () => showTaskStatsModal(task));
 
   for (const group of groups) {
@@ -5449,6 +5466,296 @@ function deleteOccurrenceRecord(task, occurrenceDate) {
   renderSidePanel();
 }
 
+// ---------------------------------------------------------------------------
+// Month-grid date picker -- a real calendar rather than a plain
+// <input type="date">, whose own popup is native UI (and on Linux Chromium
+// not even a calendar, see showFormModal's own comment on native dialogs).
+// Resolves the picked 'YYYY-MM-DD', or null if cancelled. minISO/maxISO are
+// inclusive (maxISO null = unbounded); rangeStartISO, if given, tints every
+// date from it up to (not including) the one being picked, previewing the
+// span the choice covers; summary(dateISO) is the line shown under the grid
+// once a date is picked.
+// ---------------------------------------------------------------------------
+
+const datePickerOverlay = document.getElementById('date-picker-overlay');
+const datePickerTitleEl = document.getElementById('date-picker-title');
+const datePickerHintEl = document.getElementById('date-picker-hint');
+const datePickerMonthEl = document.getElementById('date-picker-month');
+const datePickerGridEl = document.getElementById('date-picker-grid');
+const datePickerSummaryEl = document.getElementById('date-picker-summary');
+const datePickerPrevBtn = document.getElementById('date-picker-prev');
+const datePickerNextBtn = document.getElementById('date-picker-next');
+const datePickerOkBtn = document.getElementById('date-picker-ok');
+const datePickerCancelBtn = document.getElementById('date-picker-cancel');
+
+function showDatePickerModal({ title, hint, minISO, maxISO = null, initialISO = null, rangeStartISO = null, summary }) {
+  return new Promise((resolve) => {
+    let selected = initialISO;
+    let monthKey = monthKeyOf(initialISO || minISO);
+    // Monday-first for Croatian, Sunday-first for English -- each locale's own
+    // usual convention.
+    const weekStart = currentUserLanguage === 'hr' ? 1 : 0;
+
+    function render() {
+      datePickerMonthEl.textContent = formatMonthLabel(monthKey);
+      datePickerPrevBtn.disabled = monthKey <= monthKeyOf(minISO);
+      datePickerNextBtn.disabled = !!maxISO && monthKey >= monthKeyOf(maxISO);
+      datePickerGridEl.innerHTML = '';
+      for (let i = 0; i < 7; i++) {
+        const head = document.createElement('div');
+        head.className = 'date-picker-weekday';
+        // 2023-01-01 was a Sunday -- any known Sunday works as the base.
+        head.textContent = new Date(2023, 0, 1 + ((weekStart + i) % 7)).toLocaleDateString(currentLocaleTag(), { weekday: 'short' });
+        datePickerGridEl.appendChild(head);
+      }
+      const [y, m] = monthKey.split('-').map(Number);
+      const leading = (new Date(y, m - 1, 1).getDay() - weekStart + 7) % 7;
+      for (let i = 0; i < leading; i++) datePickerGridEl.appendChild(document.createElement('div'));
+      const todayISO = Recurrence.dateToISO(new Date());
+      for (let d = 1; d <= Recurrence.daysInMonth(y, m - 1); d++) {
+        const iso = `${monthKey}-${String(d).padStart(2, '0')}`;
+        const btn = document.createElement('button');
+        btn.className =
+          'date-picker-day' +
+          (iso === todayISO ? ' today' : '') +
+          (iso === selected ? ' selected' : '') +
+          (rangeStartISO && selected && iso >= rangeStartISO && iso < selected ? ' in-range' : '');
+        btn.textContent = String(d);
+        btn.disabled = iso < minISO || (!!maxISO && iso > maxISO);
+        btn.onclick = () => {
+          selected = iso;
+          render();
+        };
+        btn.ondblclick = () => finish(iso);
+        datePickerGridEl.appendChild(btn);
+      }
+      datePickerOkBtn.disabled = !selected;
+      datePickerSummaryEl.textContent = selected && summary ? summary(selected) : '';
+    }
+
+    function finish(value) {
+      datePickerOverlay.classList.add('hidden');
+      document.removeEventListener('keydown', onKey);
+      resolve(value);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') finish(null);
+      else if (e.key === 'Enter' && selected) finish(selected);
+    }
+
+    datePickerTitleEl.textContent = title;
+    datePickerHintEl.textContent = hint || '';
+    datePickerPrevBtn.onclick = () => {
+      monthKey = addMonthsToKey(monthKey, -1);
+      render();
+    };
+    datePickerNextBtn.onclick = () => {
+      monthKey = addMonthsToKey(monthKey, 1);
+      render();
+    };
+    datePickerOkBtn.onclick = () => selected && finish(selected);
+    datePickerCancelBtn.onclick = () => finish(null);
+    document.addEventListener('keydown', onKey);
+    render();
+    datePickerOverlay.classList.remove('hidden');
+  });
+}
+
+function formatShortDate(dateISO) {
+  return new Date(dateISO + 'T00:00:00').toLocaleDateString(currentLocaleTag(), { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// ---------------------------------------------------------------------------
+// Pausing recurrence -- hides every occurrence from a right-clicked one
+// (inclusive) up to a picked date, resuming on exactly that date (even one
+// the pattern itself wouldn't land on) and continuing per the pattern from
+// there. Earlier occurrences are untouched. Nothing is deleted: Occurrence
+// rows inside the paused window stay in the data, just no longer belonging
+// to any fragment's range (see Occurrence.occurrenceBelongsToFragment), so
+// they simply stop showing.
+//
+// A plain recurring task is re-cut using the same fragment mechanics as a
+// "this and following" split, rather than by moving its pattern's start to
+// the picked date: several patterns are anchored on dueDate itself (every
+// N days counts from it, monthly-by-day takes its day of month from it, ...),
+// so re-anchoring there would quietly change the pattern. Instead:
+//  - the fragment owning the right-clicked occurrence is truncated to end
+//    right before it (or dropped, if it has no earlier occurrence left);
+//  - a one-off 'once' fragment (same idea as promptManualOccurrence's)
+//    covers the picked date, unless the pattern lands there anyway;
+//  - the pattern carries on unchanged from its own first date on/after the
+//    picked one (its phase preserved, since that's a date it already lands
+//    on -- same reasoning applySplitEdit's own fragments rely on).
+// Any later fragment of the same task starting inside the paused window
+// (from a "this and following" edit on a future occurrence, or a manual
+// occurrence) is dropped or moved up the same way, so nothing of it leaks
+// into the pause either; whichever fragment is in effect on the picked date
+// is the pattern that resumes.
+//
+// A recurUntilCompleted task has no pattern dates to cut -- just its one
+// live pending Occurrence (see findOccurrence), which simply moves to the
+// picked date, its carried-over chain cleared.
+// ---------------------------------------------------------------------------
+
+function canPauseRecurrence(item) {
+  const { task, occurrenceDate } = item;
+  if (isProtectedTask(task)) return false;
+  if (task.recurUntilCompleted) {
+    const occurrence = findOccurrence(task, occurrenceDate);
+    return !!occurrence && occurrence.status === 'pending';
+  }
+  return task.frequency.type !== 'once' && !item.completed && !item.failed;
+}
+
+// The latest date the task can still occur on at all, across every
+// recurring fragment of it -- null if any of them is open-ended.
+function lastPossibleOccurrenceDate(task) {
+  let last = '';
+  for (const f of tasks) {
+    if (f.taskId !== task.taskId || f.frequency.type === 'once') continue;
+    if (!f.endDate) return null;
+    if (f.endDate > last) last = f.endDate;
+  }
+  return last || task.endDate || null;
+}
+
+async function promptPauseRecurrence(task, occurrenceDate) {
+  if (isProtectedTask(task)) return;
+  const minISO = Recurrence.dateToISO(Recurrence.addDays(new Date(occurrenceDate + 'T00:00:00'), 1));
+  const maxISO = task.recurUntilCompleted ? task.endDate || null : lastPossibleOccurrenceDate(task);
+  if (maxISO && maxISO < minISO) {
+    showInfoModal(t('pause.nothingAfter'));
+    return;
+  }
+  const resumeISO = await showDatePickerModal({
+    title: t('pause.title', { name: task.name }),
+    hint: t('pause.hint', { date: formatShortDate(occurrenceDate) }),
+    minISO,
+    maxISO,
+    rangeStartISO: occurrenceDate,
+    summary: (d) =>
+      t('pause.summary', {
+        from: formatShortDate(occurrenceDate),
+        to: formatShortDate(Recurrence.dateToISO(Recurrence.addDays(new Date(d + 'T00:00:00'), -1))),
+        resume: formatShortDate(d),
+      }),
+  });
+  if (!resumeISO) return;
+
+  const applied = task.recurUntilCompleted
+    ? pauseRecurUntilCompletedOccurrence(task, occurrenceDate, resumeISO)
+    : pausePlainRecurrence(task, occurrenceDate, resumeISO);
+  if (!applied) return;
+  saveTasks();
+  renderTodo();
+  renderSidePanel();
+  refreshTodoManageModal();
+}
+
+// Drops any focus/selection sitting on a date that's about to stop existing
+// (inside the paused window) -- the active task's timer is checkpointed on
+// the way out, same as any other unfocus.
+function releaseOccurrenceDatesForPause(taskId, fromISO, beforeISO) {
+  const activeTask = tasks.find((t) => t.id === activeTaskId);
+  if (activeTask && activeTask.taskId === taskId && activeOccurrenceDate >= fromISO && activeOccurrenceDate < beforeISO) {
+    setActiveTaskId(null);
+  }
+  if (sidePanelTask && sidePanelTask.taskId === taskId && sidePanelOccurrenceDate >= fromISO && sidePanelOccurrenceDate < beforeISO) {
+    deselectSidePanelTask();
+  }
+}
+
+function pauseRecurUntilCompletedOccurrence(task, occurrenceDate, resumeISO) {
+  const occurrence = findOccurrence(task, occurrenceDate);
+  if (!occurrence || occurrence.status !== 'pending') return false;
+  const collision = occurrences.find((o) => o !== occurrence && o.taskId === task.taskId && o.occurrenceDate === resumeISO);
+  if (collision) {
+    showInfoModal(t('occurrencePanel.rescheduleCollision'));
+    return false;
+  }
+  releaseOccurrenceDatesForPause(task.taskId, occurrence.occurrenceDate, resumeISO);
+  occurrence.log.push({ message: `Recurrence paused until ${resumeISO}`, timestamp: Date.now() });
+  occurrence.occurrenceDate = resumeISO;
+  occurrence.pendingReschedules = [];
+  occurrence.dismissed = false;
+  return true;
+}
+
+function pausePlainRecurrence(owner, pauseFromISO, resumeISO) {
+  const fragments = tasks.filter((f) => f.taskId === owner.taskId);
+  if (fragments.some((f) => f.recurUntilCompleted)) {
+    // A task that's been recurUntilCompleted for part of its history and not
+    // for another -- rare enough, and ambiguous enough about what "resume"
+    // should mean, not to guess at.
+    showInfoModal(t('pause.unsupportedMixed'));
+    return false;
+  }
+  const covers = (f, d) => f.dueDate <= d && (!f.endDate || f.endDate >= d);
+  // The pattern in effect on the resume date: the owner itself, or a later
+  // recurring fragment starting inside the window. Fragments never overlap,
+  // so there's at most one.
+  const governing = fragments.find((f) => f.frequency.type !== 'once' && covers(f, resumeISO) && (f === owner || f.dueDate > pauseFromISO));
+  if (!governing) {
+    showInfoModal(t('pause.nothingAfter'));
+    return false;
+  }
+
+  releaseOccurrenceDatesForPause(owner.taskId, pauseFromISO, resumeISO);
+
+  // Computed before anything below changes the fragments they depend on.
+  const ownerPrev = previousOccurrenceBeforeDate(owner, pauseFromISO);
+  const governingEndDate = governing.endDate || null;
+  const resumeIsPatternDate = occursOnDate(governing, resumeISO);
+  const continueFrom = resumeIsPatternDate ? resumeISO : nextOccurrenceAfterDate(governing, resumeISO);
+
+  // Every Task-level note/log entry of a fragment that's dropped here is
+  // carried over onto whichever record survives (see `heir` below), not lost
+  // along with it.
+  const dropped = [];
+  const drop = (f) => {
+    if (!dropped.includes(f)) dropped.push(f);
+  };
+  // Anything else starting inside the window -- a later fragment wholly
+  // paused, or a manual one-off occurrence there -- goes entirely.
+  for (const f of fragments) {
+    if (f !== owner && f !== governing && f.dueDate >= pauseFromISO && f.dueDate < resumeISO) drop(f);
+  }
+
+  let continuation = null;
+  if (governing === owner) {
+    if (continueFrom) {
+      continuation = { ...owner, id: uid(), dueDate: continueFrom, endDate: governingEndDate, log: [], comments: [] };
+    }
+  } else if (continueFrom) {
+    governing.dueDate = continueFrom; // starts inside the window -- moved up to where it resumes
+    continuation = governing;
+  } else {
+    drop(governing);
+  }
+  if (ownerPrev) owner.endDate = ownerPrev;
+  else drop(owner); // nothing of it left before the pause
+
+  // A manual one-off already sitting on the resume date covers it just the
+  // same (it's outside the window, so the loop above left it alone).
+  const resumeAlreadyCovered = resumeIsPatternDate || fragments.some((f) => f.frequency.type === 'once' && f.dueDate === resumeISO);
+  const resumeFragment = resumeAlreadyCovered
+    ? null
+    : { ...governing, id: uid(), dueDate: resumeISO, endDate: null, frequency: { type: 'once', interval: 1 }, log: [], comments: [] };
+
+  const heir = continuation || resumeFragment || (ownerPrev ? owner : null);
+  for (const f of dropped) {
+    if (heir && f !== heir) {
+      heir.log = [...(heir.log || []), ...(f.log || [])];
+      heir.comments = [...(heir.comments || []), ...(f.comments || [])];
+    }
+  }
+  tasks = tasks.filter((f) => !dropped.includes(f));
+  if (resumeFragment) tasks.push(resumeFragment);
+  if (continuation && continuation !== governing) tasks.push(continuation);
+  if (heir) logTaskEvent(heir, `Recurrence paused until ${resumeISO}`, pauseFromISO);
+  return true;
+}
+
 function buildSidePanelEmptyRow(text) {
   const empty = document.createElement('div');
   empty.className = 'todo-manage-empty';
@@ -5564,9 +5871,33 @@ function buildTodayAgendaItems() {
       failed,
       color: resolveAgendaColor(effectiveTask, completed, failed),
       draggable: !isProtectedTask(task) && !isLockedByLimit,
+      isLockedByLimit,
+      // Same "Work on this now" eligibility as buildTodoItemRow's own -- the
+      // agenda only ever shows today, so the kind check there is implied.
+      canWorkOnNow: !effectiveTask.passive && !completed && !failed && !isLockedByLimit,
     });
   }
   return items;
+}
+
+// Right-click on anything on the agenda opens the very same menu as the
+// to-do row for that occurrence (showTodoContextMenu). Unlike a row, it
+// doesn't also select the task: selecting swaps the agenda out for the
+// task's notes (see renderSidePanel), which would yank away what was just
+// right-clicked.
+function attachAgendaContextMenu(el, item) {
+  el.oncontextmenu = (e) => {
+    e.preventDefault();
+    const menuItem = {
+      task: item.task,
+      occurrenceDate: item.occurrenceDate,
+      completed: item.completed,
+      failed: item.failed,
+      dismissed: false,
+      kind: 'today',
+    };
+    showTodoContextMenu(e, menuItem, item.canWorkOnNow, item.isLockedByLimit);
+  };
 }
 
 function buildAgendaAllDayPill(item) {
@@ -5575,6 +5906,7 @@ function buildAgendaAllDayPill(item) {
   pill.style.background = agendaHexToRgba(item.color, 0.85);
   pill.textContent = item.effectiveTask.name;
   pill.title = item.effectiveTask.name;
+  attachAgendaContextMenu(pill, item);
   return pill;
 }
 
@@ -5604,6 +5936,7 @@ function buildAgendaPassiveBand(item) {
   label.className = 'agenda-passive-band-label';
   label.style.color = item.color;
   label.textContent = item.effectiveTask.name;
+  attachAgendaContextMenu(label, item); // the band itself is click-through, see style.css
   band.appendChild(label);
   band.title = `${item.effectiveTask.name} · ${t('todo.due', { time: formatTimeOfDay(item.effectiveTask.dueTime) })}`;
   return band;
@@ -5778,6 +6111,7 @@ function buildAgendaBlock(block) {
 
   el.title = block.item.effectiveTask.name;
   if (block.item.draggable) attachAgendaBlockDrag(el, block.item);
+  attachAgendaContextMenu(el, block.item);
   return el;
 }
 

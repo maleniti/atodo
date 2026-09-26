@@ -281,6 +281,25 @@
     </div>
   </div>
 
+  <!-- Month-grid date picker -- see showDatePickerModal in app.js. -->
+  <div id="date-picker-overlay" class="modal-overlay hidden">
+    <div class="modal date-picker-modal">
+      <div class="modal-title" id="date-picker-title"></div>
+      <div id="date-picker-hint" class="date-picker-hint"></div>
+      <div class="date-picker-nav">
+        <button id="date-picker-prev" class="date-picker-nav-btn" title="Previous month" data-i18n-title="datePicker.prevMonth">&#8249;</button>
+        <span id="date-picker-month" class="date-picker-month"></span>
+        <button id="date-picker-next" class="date-picker-nav-btn" title="Next month" data-i18n-title="datePicker.nextMonth">&#8250;</button>
+      </div>
+      <div id="date-picker-grid" class="date-picker-grid"></div>
+      <div id="date-picker-summary" class="date-picker-summary"></div>
+      <div class="modal-actions">
+        <button id="date-picker-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
+        <button id="date-picker-ok" class="modal-ok" data-i18n="common.ok">OK</button>
+      </div>
+    </div>
+  </div>
+
   <div id="settings-overlay" class="modal-overlay hidden">
     <div class="modal settings-modal">
       <button id="settings-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
