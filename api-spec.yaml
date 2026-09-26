@@ -1016,6 +1016,10 @@ components:
           type: boolean
           description: True for an occurrence added on a date the task's own pattern doesn't otherwise produce -- "add one extra occurrence", or the resume date of a paused recurrence.
         overrides: { $ref: "#/components/schemas/OccurrenceOverrides" }
+        details:
+          type: string
+          nullable: true
+          description: Free-text details specific to this one occurrence -- unlike Task.details, which applies to all of a task's occurrences alike.
         comments:
           type: array
           items: { $ref: "#/components/schemas/Comment" }

@@ -58,6 +58,7 @@ function createOccurrence({ id, taskId, occurrenceDate, manual }) {
     dismissed: false,
     manual: !!manual,
     overrides: null,
+    details: null, // this occurrence's own details -- Task.details applies to all of them alike
     comments: [],
     log: [],
     focusedSeconds: 0,
@@ -126,6 +127,7 @@ function isBlankOccurrence(o) {
     !o.manual &&
     !o.timer &&
     !o.overrides &&
+    !(o.details && o.details.trim()) &&
     !(o.comments && o.comments.length) &&
     !(o.log && o.log.length) &&
     !(o.pendingReschedules && o.pendingReschedules.length) &&

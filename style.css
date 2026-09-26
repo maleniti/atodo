@@ -2272,6 +2272,7 @@ main,
 .task-occ-note-time { font-size: 10px; color: var(--text-muted); }
 .task-occ-note-text { font-size: 12px; color: var(--text-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-occ-note-input { flex: 1; min-height: 48px; }
+.task-occ-details-input { width: 100%; min-height: 48px; resize: vertical; box-sizing: border-box; margin-bottom: 4px; }
 .task-occ-add-note {
   display: flex;
   gap: 6px;

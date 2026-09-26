@@ -134,6 +134,7 @@ const I18N = {
     'sidePanel.commentPlaceholder': 'Add a note about this task…',
     'sidePanel.addNote': 'Add note',
     'sidePanel.notes': 'Notes',
+    'sidePanel.occurrenceDetails': 'This occurrence ({date})',
     'sidePanel.activity': 'Activity',
     'sidePanel.noNotes': 'No notes yet.',
     'sidePanel.noActivity': 'No activity yet.',
@@ -159,6 +160,8 @@ const I18N = {
     'taskEditor.occurrencesHint': 'Changes here are saved right away.',
     'taskEditor.deleteTask': 'Delete task',
     'taskEditor.next': 'next',
+    'taskEditor.occurrenceDetails': 'Details',
+    'taskEditor.occurrenceDetailsPlaceholder': 'Anything specific to this occurrence…',
     'taskEditor.noOccurrences': 'No occurrences yet.',
     'taskEditor.statusDone': 'Done',
     'taskEditor.statusFailed': 'Failed',
@@ -469,6 +472,7 @@ const I18N = {
     'sidePanel.commentPlaceholder': 'Dodajte bilješku o ovom zadatku…',
     'sidePanel.addNote': 'Dodaj bilješku',
     'sidePanel.notes': 'Bilješke',
+    'sidePanel.occurrenceDetails': 'Ova pojava ({date})',
     'sidePanel.activity': 'Aktivnost',
     'sidePanel.noNotes': 'Još nema bilješki.',
     'sidePanel.noActivity': 'Još nema aktivnosti.',
@@ -494,6 +498,8 @@ const I18N = {
     'taskEditor.occurrencesHint': 'Promjene ovdje spremaju se odmah.',
     'taskEditor.deleteTask': 'Izbriši zadatak',
     'taskEditor.next': 'sljedeća',
+    'taskEditor.occurrenceDetails': 'Pojedinosti',
+    'taskEditor.occurrenceDetailsPlaceholder': 'Nešto specifično za ovu pojavu…',
     'taskEditor.noOccurrences': 'Još nema pojava.',
     'taskEditor.statusDone': 'Obavljeno',
     'taskEditor.statusFailed': 'Neuspjelo',
@@ -3637,9 +3643,29 @@ function renderOccurrencesTab(pane, task, initialDate) {
     detail.className = 'task-occ-detail';
     const row = findOccurrence(task, selectedDate);
 
+    // This occurrence's own details (Task.details applies to all of them) --
+    // saved when the field loses focus, like everything else on this tab
+    // applying immediately rather than on the modal's Save.
+    const detailsHeading = document.createElement('div');
+    detailsHeading.className = 'task-stats-heading';
+    detailsHeading.textContent = `${t('taskEditor.occurrenceDetails')} · ${formatShortDate(selectedDate)}`;
+    detail.appendChild(detailsHeading);
+    const detailsInput = document.createElement('textarea');
+    detailsInput.className = 'modal-input task-occ-details-input';
+    detailsInput.placeholder = t('taskEditor.occurrenceDetailsPlaceholder');
+    detailsInput.value = (row && row.details) || '';
+    detailsInput.onchange = () => {
+      const value = detailsInput.value.trim() || null;
+      const current = findOccurrence(task, selectedDate);
+      if ((current ? current.details || null : null) === value) return;
+      (current || ensureOccurrence(task, selectedDate)).details = value;
+      refreshEverywhere();
+    };
+    detail.appendChild(detailsInput);
+
     const notesHeading = document.createElement('div');
     notesHeading.className = 'task-stats-heading';
-    notesHeading.textContent = `${t('sidePanel.notes')} · ${formatShortDate(selectedDate)}`;
+    notesHeading.textContent = t('sidePanel.notes');
     detail.appendChild(notesHeading);
 
     const comments = row ? row.comments || [] : [];
@@ -4019,6 +4045,7 @@ function reopenRecurUntilCompletedOccurrence(task, occurrence) {
     occurrence.timerSeconds = (occurrence.timerSeconds || 0) + (successor.timerSeconds || 0);
     if (!occurrence.timer) occurrence.timer = successor.timer;
     if (!occurrence.overrides) occurrence.overrides = successor.overrides;
+    if (successor.details) occurrence.details = occurrence.details ? `${occurrence.details}\n\n${successor.details}` : successor.details;
     const successorDates = [successor.occurrenceDate, ...(successor.pendingReschedules || [])];
     if (activeTaskId === task.id && successorDates.includes(activeOccurrenceDate)) {
       activeOccurrenceDate = Occurrence.effectiveDueDate(occurrence);
@@ -6232,6 +6259,22 @@ function renderSidePanel() {
     for (const t of sortedRecords) sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(t));
   } else {
     sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(sidePanelTask));
+  }
+  // The selected occurrence's own details, whatever the scope -- they're
+  // about this one date, on top of the task's own (shown just above).
+  const selectedOccurrenceRow = sidePanelOccurrenceDate != null ? findOccurrence(sidePanelTask, sidePanelOccurrenceDate) : null;
+  if (selectedOccurrenceRow && selectedOccurrenceRow.details) {
+    const occurrenceDetails = document.createElement('div');
+    occurrenceDetails.className = 'side-panel-task-summary side-panel-occurrence-details';
+    const label = document.createElement('div');
+    label.className = 'side-panel-task-summary-name';
+    label.textContent = t('sidePanel.occurrenceDetails', { date: formatShortDate(selectedOccurrenceRow.occurrenceDate) });
+    const text = document.createElement('div');
+    text.className = 'side-panel-task-summary-details';
+    text.textContent = selectedOccurrenceRow.details;
+    occurrenceDetails.appendChild(label);
+    occurrenceDetails.appendChild(text);
+    sidePanelSummariesEl.appendChild(occurrenceDetails);
   }
 
   // 'occurrence' scope shows only the one selected Occurrence's own

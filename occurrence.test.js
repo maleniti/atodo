@@ -27,6 +27,7 @@ assert.deepStrictEqual(fresh, {
   dismissed: false,
   manual: false,
   overrides: null,
+  details: null,
   comments: [],
   log: [],
   focusedSeconds: 0,
@@ -111,6 +112,8 @@ assert.strictEqual(O.isBlankOccurrence(blank), true, 'a freshly created row carr
 assert.strictEqual(O.isBlankOccurrence({ ...blank, dismissed: true }), true, 'dismissal alone is not content');
 assert.strictEqual(O.isBlankOccurrence({ ...blank, status: 'completed' }), false, 'an outcome is content');
 assert.strictEqual(O.isBlankOccurrence({ ...blank, comments: [{ text: 'x' }] }), false, 'a note is content');
+assert.strictEqual(O.isBlankOccurrence({ ...blank, details: 'bring towel' }), false, 'occurrence details are content');
+assert.strictEqual(O.isBlankOccurrence({ ...blank, details: '  ' }), true, 'whitespace-only details are not');
 assert.strictEqual(O.isBlankOccurrence({ ...blank, log: [{ message: 'Focused' }] }), false, 'activity is content');
 assert.strictEqual(O.isBlankOccurrence({ ...blank, manual: true }), false, 'a manually added occurrence is not the pattern\'s to drop');
 assert.strictEqual(O.isBlankOccurrence({ ...blank, pendingReschedules: ['2026-09-22'] }), false, 'a rescheduled row is not the pattern\'s to drop');
