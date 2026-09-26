@@ -1751,7 +1751,7 @@ html[data-theme="light"] body:not(.has-background) .todo-item.focused:hover { ba
 .todo-timer-bar {
   position: absolute;
   inset: 0;
-  background: rgba(57, 200, 20, 0.25);
+  background: rgba(57, 200, 20, 0.5);
 }
 
 .todo-item input[type="checkbox"] {
