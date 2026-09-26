@@ -7348,12 +7348,17 @@ const settingsImportDataFileInput = document.getElementById('settings-import-dat
 
 const USER_DATA_EXPORT_VERSION = 1;
 
+// Activity logs (Task.log/Occurrence.log) are left out -- they're this
+// account's own history of what happened when, not data to carry over.
+// Importing starts each task's activity afresh instead (see the import
+// handler below).
 function collectUserDataExport() {
+  const withoutLog = ({ log, ...rest }) => rest;
   return {
     version: USER_DATA_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
-    tasks,
-    occurrences,
+    tasks: tasks.map(withoutLog),
+    occurrences: occurrences.map(withoutLog),
     userProfile: currentUserProfileSnapshot(),
     activeTaskId,
     activeOccurrenceDate,
@@ -7411,6 +7416,11 @@ settingsImportDataFileInput.onchange = async () => {
   const limited = applyFreeTierLimitsToImportedTasks(normalizedTasks, importedOccurrences);
   tasks = limited.tasks;
   occurrences = limited.occurrences;
+  // Whatever activity the file carries (older exports included it) is
+  // dropped; each task's history here starts with just its import.
+  const importedAt = Date.now();
+  for (const task of tasks) task.log = [{ message: 'Imported', timestamp: importedAt, occurrenceDate: null }];
+  for (const occurrence of occurrences) occurrence.log = [];
   const totalNotesAfter = [...tasks, ...occurrences].reduce((sum, r) => sum + (r.comments ? r.comments.length : 0), 0);
   if (tasks.length < normalizedTasks.length || totalNotesAfter < totalNotesBefore) showInfoModal(t('data.importLimitedByFreePlan'));
 
