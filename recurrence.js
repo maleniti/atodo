@@ -154,6 +154,20 @@ function monthlyRecurrenceAnchorMonth(task) {
 //       shifted `offsetDays` (0-6) days `offsetDirection` ('before'/'after')
 //       -- deliberately allowed to land in the adjacent month.
 //
+// frequency.startsOn (optional, any type): the pattern produces nothing
+// before this date, while still anchored on dueDate for all the phase math
+// above (week/month interval counting, day-of-month, every-N-days). Set when
+// a task's pattern is changed or re-cut after it's already been running
+// (see app.js's rollPatternForward): every earlier date it produced is
+// saved as an Occurrence row by then, so the current pattern must only
+// cover what comes after -- without moving dueDate itself, which would
+// silently shift the phase of every anchored pattern.
+//
+// frequency.skipDates (optional, any type): individual dates the pattern
+// would land on but no longer produces -- an occurrence the user deleted
+// (see app.js's deleteOccurrence). Cheaper than re-cutting the pattern
+// around a single date.
+//
 // task.recurUntilCompleted short-circuits all of the above: its current
 // occurrence isn't at a date `frequency` computes, it's wherever
 // advanceRecurUntilCompletedChain (below) last pushed it, so occursOn just
@@ -168,6 +182,8 @@ function occursOn(task, dateISO) {
     return dateISO === task.dueDate || (task.pendingReschedules || []).includes(dateISO);
   }
   if (task.endDate && dateISO > task.endDate) return false;
+  if (task.frequency.startsOn && dateISO < task.frequency.startsOn) return false;
+  if (task.frequency.skipDates && task.frequency.skipDates.includes(dateISO)) return false;
   const diffDays = daysBetween(task.dueDate, dateISO);
   if (diffDays < 0) return false;
   const interval = Math.max(1, task.frequency.interval || 1);
@@ -283,12 +299,15 @@ const MAX_SCAN_DAYS = 3660;
 function mostRecentOccurrenceOnOrBefore(task, todayISO) {
   const searchISO = task.endDate && task.endDate < todayISO ? task.endDate : todayISO;
   if (daysBetween(task.dueDate, searchISO) < 0) return null;
-  if (task.frequency.type === 'once') return task.dueDate;
+  if (task.frequency.type === 'once') return occursOn(task, task.dueDate) ? task.dueDate : null; // occursOn: startsOn can rule it out
 
+  // Nothing before startsOn can match (see occursOn) -- stop there rather
+  // than scanning all the way back to dueDate for nothing.
+  const floorISO = task.frequency.startsOn && task.frequency.startsOn > task.dueDate ? task.frequency.startsOn : task.dueDate;
   let cursor = searchISO;
   for (let i = 0; i < MAX_SCAN_DAYS; i++) {
     if (occursOn(task, cursor)) return cursor;
-    if (cursor === task.dueDate) return null;
+    if (cursor <= floorISO) return null;
     cursor = dateToISO(addDays(new Date(cursor + 'T00:00:00'), -1));
   }
   return null;
@@ -304,7 +323,7 @@ function nextOccurrenceAfter(task, afterISO) {
   if (task.frequency.type === 'once') {
     // Its one occurrence is dueDate itself -- next if that's still ahead of
     // afterISO, otherwise there's nothing left.
-    return daysBetween(task.dueDate, afterISO) < 0 ? task.dueDate : null;
+    return daysBetween(task.dueDate, afterISO) < 0 && occursOn(task, task.dueDate) ? task.dueDate : null;
   }
 
   // Hasn't started yet -- scan starts AT dueDate itself (inclusive), not

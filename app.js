@@ -114,13 +114,11 @@ const I18N = {
     'menu.unfocus': 'Unfocus',
     'menu.show': 'Show',
     'menu.hide': 'Hide',
-    'menu.editPattern': 'Edit recurrence pattern…',
     'menu.pauseRecurrence': 'Pause recurrence until…',
     'pause.title': 'Pause "{name}"',
     'pause.hint': 'From {date}, until the date you pick -- recurrence starts again on that exact date.',
     'pause.summary': 'Paused {from} – {to}, resumes {resume}.',
     'pause.nothingAfter': "This task's recurrence ends before there's anything left to resume.",
-    'pause.unsupportedMixed': 'Pausing isn\'t available for a task that has been both "recur until completed" and a regular recurring task.',
     'datePicker.prevMonth': 'Previous month',
     'datePicker.nextMonth': 'Next month',
     'menu.taskStats': 'Task stats',
@@ -130,7 +128,7 @@ const I18N = {
     'sidePanel.occurrence': 'Occurrence',
     'sidePanel.occurrenceTitle': 'Just this occurrence',
     'sidePanel.task': 'Task',
-    'sidePanel.taskTitle': 'Every fragment of this task',
+    'sidePanel.taskTitle': 'This task, every occurrence',
     'sidePanel.series': 'Series',
     'sidePanel.seriesTitle': 'Every task in this series',
     'sidePanel.commentPlaceholder': 'Add a note about this task…',
@@ -151,10 +149,21 @@ const I18N = {
     'timer.continuePastZero': 'Continue counting down past zero instead of stopping',
     'timer.start': 'Start',
     'timer.set': 'Set',
-
-    'taskForm.editOccurrence': 'Edit this occurrence',
-    'taskForm.editFollowing': 'Edit this and following occurrences',
     'taskForm.editTask': 'Edit task',
+    'taskEditor.tabDetails': 'Details',
+    'taskEditor.tabPattern': 'Recurrence',
+    'taskEditor.tabOccurrences': 'Occurrences',
+    'taskEditor.detailsHint': 'Changes here apply to every occurrence of this task, past and future.',
+    'taskEditor.patternHint': 'Changes here apply from today on -- past occurrences stay as they were.',
+    'taskEditor.occurrencesHint': 'Changes here are saved right away.',
+    'taskEditor.deleteTask': 'Delete task',
+    'taskEditor.next': 'next',
+    'taskEditor.noOccurrences': 'No occurrences yet.',
+    'taskEditor.statusDone': 'Done',
+    'taskEditor.statusFailed': 'Failed',
+    'taskEditor.statusMissed': 'Not done',
+    'taskEditor.statusPending': 'Due today',
+    'taskEditor.statusUpcoming': 'Upcoming',
     'taskForm.addTask': 'Add task',
     'taskForm.name': 'Name',
     'taskForm.description': 'Description',
@@ -215,9 +224,8 @@ const I18N = {
     'taskForm.endDateBeforeDue': "End date can't be before the due date.",
 
     'manualOccurrence.title': 'Add manual occurrence',
-    'manualOccurrence.cantAdd': "Can't add a manual occurrence – this task already recurs indefinitely",
     'manualOccurrence.add': 'Add manual occurrence',
-    'manualOccurrence.endDateTooEarly': "Due date can't be earlier than the original recurrence's end date.",
+    'manualOccurrence.exists': 'This task already has an occurrence on that date.',
 
     'manage.title': 'To-do list',
     'manage.selectSeries': 'Select a series on the left to edit it.',
@@ -227,15 +235,6 @@ const I18N = {
     'manage.noTasksYet': 'No tasks yet.',
     'manage.resetName': 'Reset name to match series name',
     'manage.removeFromSeries': 'Remove from series',
-
-    'editScope.title': 'Edit recurring task',
-    'editScope.desc': 'This task repeats. What would you like to edit?',
-    'editScope.instance': 'Only this occurrence',
-    'editScope.following': 'This and following occurrences',
-    'editScope.all': 'All occurrences',
-
-    'patternEdit.titleInPlace': 'Edit recurrence pattern',
-    'patternEdit.titleFollowing': 'Edit recurrence pattern (this and following occurrences)',
 
     'occurrencePanel.editThisOccurrence': 'Edit this occurrence…',
     'occurrencePanel.reschedule': 'Reschedule…',
@@ -449,13 +448,11 @@ const I18N = {
     'menu.unfocus': 'Ukloni fokus',
     'menu.show': 'Prikaži',
     'menu.hide': 'Sakrij',
-    'menu.editPattern': 'Uredi obrazac ponavljanja…',
     'menu.pauseRecurrence': 'Pauziraj ponavljanje do…',
     'pause.title': 'Pauziraj "{name}"',
     'pause.hint': 'Od {date} do datuma koji odaberete -- ponavljanje se nastavlja točno na taj datum.',
     'pause.summary': 'Pauzirano {from} – {to}, nastavlja se {resume}', // no trailing period: Croatian dates already end in one
     'pause.nothingAfter': 'Ponavljanje ovog zadatka završava prije nego što bi se imalo što nastaviti.',
-    'pause.unsupportedMixed': 'Pauziranje nije dostupno za zadatak koji je bio i "ponavljaj do dovršetka" i obični ponavljajući zadatak.',
     'datePicker.prevMonth': 'Prethodni mjesec',
     'datePicker.nextMonth': 'Sljedeći mjesec',
     'menu.taskStats': 'Statistika zadatka',
@@ -465,7 +462,7 @@ const I18N = {
     'sidePanel.occurrence': 'Pojava',
     'sidePanel.occurrenceTitle': 'Samo ova pojava',
     'sidePanel.task': 'Zadatak',
-    'sidePanel.taskTitle': 'Svaki dio ovog zadatka',
+    'sidePanel.taskTitle': 'Ovaj zadatak, sve pojave',
     'sidePanel.series': 'Niz',
     'sidePanel.seriesTitle': 'Svaki zadatak u ovom nizu',
     'sidePanel.commentPlaceholder': 'Dodajte bilješku o ovom zadatku…',
@@ -486,10 +483,21 @@ const I18N = {
     'timer.continuePastZero': 'Nastavi odbrojavati ispod nule umjesto zaustavljanja',
     'timer.start': 'Pokreni',
     'timer.set': 'Postavi',
-
-    'taskForm.editOccurrence': 'Uredi ovu pojavu',
-    'taskForm.editFollowing': 'Uredi ovu i sljedeće pojave',
     'taskForm.editTask': 'Uredi zadatak',
+    'taskEditor.tabDetails': 'Podaci',
+    'taskEditor.tabPattern': 'Ponavljanje',
+    'taskEditor.tabOccurrences': 'Pojave',
+    'taskEditor.detailsHint': 'Promjene ovdje vrijede za sve pojave ovog zadatka, prošle i buduće.',
+    'taskEditor.patternHint': 'Promjene ovdje vrijede od danas nadalje -- prošle pojave ostaju kakve jesu.',
+    'taskEditor.occurrencesHint': 'Promjene ovdje spremaju se odmah.',
+    'taskEditor.deleteTask': 'Izbriši zadatak',
+    'taskEditor.next': 'sljedeća',
+    'taskEditor.noOccurrences': 'Još nema pojava.',
+    'taskEditor.statusDone': 'Obavljeno',
+    'taskEditor.statusFailed': 'Neuspjelo',
+    'taskEditor.statusMissed': 'Nije obavljeno',
+    'taskEditor.statusPending': 'Danas',
+    'taskEditor.statusUpcoming': 'Nadolazeće',
     'taskForm.addTask': 'Dodaj zadatak',
     'taskForm.name': 'Naziv',
     'taskForm.description': 'Opis',
@@ -550,9 +558,8 @@ const I18N = {
     'taskForm.endDateBeforeDue': 'Datum završetka ne može biti prije datuma dospijeća.',
 
     'manualOccurrence.title': 'Dodaj ručnu pojavu',
-    'manualOccurrence.cantAdd': 'Nije moguće dodati ručnu pojavu – ovaj se zadatak već ponavlja bez ograničenja',
     'manualOccurrence.add': 'Dodaj ručnu pojavu',
-    'manualOccurrence.endDateTooEarly': 'Datum dospijeća ne može biti raniji od datuma završetka izvornog ponavljanja.',
+    'manualOccurrence.exists': 'Ovaj zadatak već ima pojavu na taj datum.',
 
     'manage.title': 'Popis zadataka',
     'manage.selectSeries': 'Odaberite niz slijeva za njegovo uređivanje.',
@@ -562,15 +569,6 @@ const I18N = {
     'manage.noTasksYet': 'Još nema zadataka.',
     'manage.resetName': 'Vrati naziv na naziv niza',
     'manage.removeFromSeries': 'Ukloni iz niza',
-
-    'editScope.title': 'Uredi ponavljajući zadatak',
-    'editScope.desc': 'Ovaj se zadatak ponavlja. Što želite urediti?',
-    'editScope.instance': 'Samo ovu pojavu',
-    'editScope.following': 'Ovu i sljedeće pojave',
-    'editScope.all': 'Sve pojave',
-
-    'patternEdit.titleInPlace': 'Uredi obrazac ponavljanja',
-    'patternEdit.titleFollowing': 'Uredi obrazac ponavljanja (ova i sljedeće pojave)',
 
     'occurrencePanel.editThisOccurrence': 'Uredi ovu pojavu…',
     'occurrencePanel.reschedule': 'Promijeni datum…',
@@ -866,8 +864,7 @@ function addOccurrenceComment(task, occurrenceDate, text) {
 // mixed-series label/editor appear to rename itself. Freeze the current
 // (pre-rename) display name as the real seriesName the first time a rename
 // would otherwise change it, so it only changes again via the series
-// editor's own "Save". Shared by every general-info edit path (openTaskForm,
-// openTaskGeneralInfoForm) -- called with the OLD task record and the NEW
+// editor's own "Save". Called by openTaskEditor with the OLD task record and the NEW
 // (about-to-be-applied) name, before the actual rename happens.
 function freezeMixedSeriesNameIfRenaming(task, newName) {
   if (newName === task.name || !isMixedSeries(task.seriesId)) return;
@@ -879,12 +876,9 @@ function freezeMixedSeriesNameIfRenaming(task, newName) {
 }
 
 // Mutates `task`'s general/display fields in place -- name/description/
-// details/dueTime/allDay/appointment/passive, exactly the same whitelist
-// Occurrence.applyOverrides and applySplitEdit's 'instance' scope use (see
-// occurrence.js). Safe to apply in place regardless of a task's recorded
-// history: these fields are never schedule-determining, so changing them
-// can't retroactively alter which dates a task occurs on -- unlike
-// applyPatternInPlace below, this never needs to fork the series.
+// details/dueTime/allDay/appointment/passive. A task is one record, so these
+// apply to every one of its occurrences, past, present and future alike --
+// there's no per-occurrence or "from here on" variant of them.
 function applyGeneralInfoInPlace(task, { name, description, details, dueTime, allDay, appointment, passive }) {
   task.name = name;
   task.description = description;
@@ -896,53 +890,147 @@ function applyGeneralInfoInPlace(task, { name, description, details, dueTime, al
   logTaskEvent(task, 'Edited');
 }
 
-// Mutates `task`'s recurrence-pattern fields in place -- dueDate/frequency/
-// endDate/recurUntilCompleted. Only ever safe to call when there's no
-// history to protect (a brand-new task, or a recurUntilCompleted task, whose
-// live due date is governed entirely by its current pending Occurrence's own
-// pendingReschedules chain, never by these fields directly -- see
-// editTaskPattern's own dispatch for why forking is actually the unsafe
-// option there). Editing a plain recurring task's pattern with existing
-// history must go through forkTaskFragment instead, never this.
-//
-// logMessage defaults to a standalone pattern-edit entry, but openTaskForm's
-// existing-task branch (editing a 'once' task, where this always runs right
-// alongside applyGeneralInfoInPlace as one user action) passes null to skip
-// it -- that path's own single 'Edited' entry already covers it, and a
-// separate "Recurrence pattern edited" entry every time would be redundant.
-function applyPatternInPlace(task, { dueDate, frequency, endDate, recurUntilCompleted }, logMessage = 'Recurrence pattern edited') {
-  // Only when this edit is what actually turns recurUntilCompleted on (it
-  // was off before, or this is the first time it's ever been set) -- see
-  // firstRecurUntilCompletedDueDate's own comment for why an
-  // already-recurUntilCompleted task must NOT get this: its dueDate by then
-  // represents wherever its own reschedule chain has gotten to, not the
-  // original pattern, so re-snapping it here would silently discard that
-  // progress.
-  const startingRecurUntilCompleted = recurUntilCompleted && !task.recurUntilCompleted;
-  // Only when turning the flag off -- otherwise editing anything else about
-  // a task mid-chain would silently discard however far its current
-  // reschedule chain has already gotten. Preserves wherever the chain
-  // actually is (not the stale original dueDate) as the new plain anchor
-  // once it stops being recurUntilCompleted; the now orphaned Occurrence row
-  // itself is harmless leftover data -- an ordinary task only ever looks
-  // occurrences up by their real pattern-predicted date, so a row that
-  // doesn't happen to land on one is simply never found again.
-  const stoppingRecurUntilCompleted = !recurUntilCompleted && task.recurUntilCompleted;
-  const currentOccurrence = stoppingRecurUntilCompleted ? findOccurrence(task, null) : null;
-  task.dueDate = currentOccurrence
-    ? Occurrence.effectiveDueDate(currentOccurrence)
-    : startingRecurUntilCompleted
-      ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate, frequency, endDate }) || dueDate
-      : dueDate;
-  task.recurUntilCompleted = recurUntilCompleted;
+// ---------------------------------------------------------------------------
+// Task = its recorded past + its data + its CURRENT pattern. There's no
+// history of earlier patterns: before a plain task's pattern changes (or is
+// re-cut, e.g. by a pause), every date the old one produced up to that
+// point is saved as an ordinary Occurrence row (materializePatternOccurrences)
+// -- rows always count as occurrences whatever the pattern says (see
+// occursOnDate) -- and the new pattern is then bounded to start after them
+// with frequency.startsOn (see recurrence.js), leaving dueDate itself alone
+// as the pattern's phase anchor.
+// ---------------------------------------------------------------------------
+
+// Saves as a row every date task's current pattern produces before
+// beforeISO that doesn't have one yet. Plain recurring tasks only -- a
+// recurUntilCompleted task's past is rows already, and a one-off's single
+// date is moved rather than preserved when its date changes (see
+// applyPatternChange).
+function materializePatternOccurrences(task, beforeISO) {
+  if (task.recurUntilCompleted || task.frequency.type === 'once') return;
+  let cursor = task.frequency.startsOn && task.frequency.startsOn > task.dueDate ? task.frequency.startsOn : task.dueDate;
+  for (let i = 0; i < 3660 && cursor < beforeISO; i++) {
+    if (Recurrence.occursOn(task, cursor) && !Occurrence.isDateExcluded(occurrences, task.taskId, cursor) && !findOccurrence(task, cursor)) {
+      occurrences.push(Occurrence.createOccurrence({ id: uid(), taskId: task.taskId, occurrenceDate: cursor }));
+    }
+    cursor = Recurrence.dateToISO(Recurrence.addDays(new Date(cursor + 'T00:00:00'), 1));
+  }
+}
+
+// Freezes everything task's pattern has produced before cutoffISO as rows,
+// then bounds the pattern to start at cutoffISO. Past skipDates go with it --
+// nothing before cutoffISO is the pattern's to produce (or skip) anymore.
+function rollPatternForward(task, cutoffISO) {
+  materializePatternOccurrences(task, cutoffISO);
+  if (task.recurUntilCompleted || task.frequency.type === 'once' || cutoffISO <= task.dueDate) return;
+  const frequency = { ...task.frequency, startsOn: cutoffISO };
+  if (frequency.skipDates) {
+    frequency.skipDates = frequency.skipDates.filter((d) => d >= cutoffISO);
+    if (!frequency.skipDates.length) delete frequency.skipDates;
+  }
   task.frequency = frequency;
-  task.endDate = endDate;
+}
+
+// Removes every blank row (see Occurrence.isBlankOccurrence) of taskId on or
+// after fromISO (and before beforeISO, if given) -- rows the pattern itself
+// put there that carry nothing of their own, so they can go whenever the
+// pattern stops producing their dates.
+function dropBlankOccurrences(taskId, fromISO, beforeISO = null) {
+  occurrences = occurrences.filter(
+    (o) => !(o.taskId === taskId && o.occurrenceDate >= fromISO && (!beforeISO || o.occurrenceDate < beforeISO) && Occurrence.isBlankOccurrence(o))
+  );
+}
+
+// Applies an edited pattern (dueDate/frequency/endDate/recurUntilCompleted)
+// to future occurrences only: today onward follows the new pattern, while
+// everything before today stays exactly as it was (saved as rows first --
+// see the section comment above).
+//  - one-off -> one-off: just moving its date -- its one row (if any) moves
+//    with it, rather than leaving the old date behind as a second occurrence.
+//  - recurUntilCompleted -> recurUntilCompleted: the live occurrence and its
+//    chain are untouched; only how the next cycle is computed changes.
+//  - turning recurUntilCompleted off: the live occurrence's chain is
+//    cleared (on a plain task that field means something else -- dates
+//    vacated by a reschedule, see Occurrence.isDateExcluded), and the row
+//    itself dropped if nothing was ever recorded on it.
+//  - turning it on: the first live occurrence is seeded no earlier than
+//    today, on the first date the pattern lands on.
+function applyPatternChange(task, { dueDate, frequency, endDate, recurUntilCompleted }, logMessage = 'Recurrence pattern edited') {
+  const todayISO = Recurrence.dateToISO(new Date());
+  const wasRecurUntilCompleted = task.recurUntilCompleted;
+  const newFrequency = { ...frequency };
+  delete newFrequency.startsOn;
+  delete newFrequency.skipDates;
+
+  if (wasRecurUntilCompleted && recurUntilCompleted) {
+    Object.assign(task, { dueDate, frequency: newFrequency, endDate });
+    if (logMessage) logTaskEvent(task, logMessage);
+    return;
+  }
+
+  if (!wasRecurUntilCompleted && task.frequency.type === 'once' && newFrequency.type === 'once' && !recurUntilCompleted) {
+    const row = findOccurrence(task, task.dueDate);
+    if (row && dueDate !== task.dueDate && !findOccurrence(task, dueDate)) row.occurrenceDate = dueDate;
+    Object.assign(task, { dueDate, frequency: newFrequency, endDate: null });
+    if (logMessage) logTaskEvent(task, logMessage);
+    return;
+  }
+
+  if (wasRecurUntilCompleted) {
+    const live = findOccurrence(task, null);
+    if (live) {
+      live.pendingReschedules = [];
+      if (Occurrence.isBlankOccurrence(live)) occurrences.splice(occurrences.indexOf(live), 1);
+    }
+  } else {
+    materializePatternOccurrences(task, todayISO);
+  }
+  dropBlankOccurrences(task.taskId, todayISO);
+
+  if (recurUntilCompleted) {
+    const startISO = dueDate > todayISO ? dueDate : todayISO;
+    const firstDate = Recurrence.firstRecurUntilCompletedDueDate({ dueDate: startISO, frequency: newFrequency, endDate }) || startISO;
+    Object.assign(task, { dueDate: firstDate, frequency: newFrequency, endDate, recurUntilCompleted: true });
+    if (logMessage) logTaskEvent(task, logMessage);
+    ensureOccurrence(task, firstDate);
+    return;
+  }
+
+  // Whatever the pattern produced before today is rows by now -- bound the
+  // new one to today onward, unless it starts later anyway.
+  if (dueDate < todayISO && newFrequency.type !== 'once') newFrequency.startsOn = todayISO;
+  Object.assign(task, { dueDate, frequency: newFrequency, endDate: newFrequency.type === 'once' ? null : endDate, recurUntilCompleted: false });
   if (logMessage) logTaskEvent(task, logMessage);
-  // Seeds the first live Occurrence for a task newly becoming
-  // recurUntilCompleted -- an already-recurUntilCompleted task already has
-  // one (wherever its chain currently is), which stays exactly as valid
-  // under whatever else this edit just changed.
-  if (startingRecurUntilCompleted) ensureOccurrence(task, task.dueDate);
+}
+
+// Whether an occurrence can be deleted outright: anything but a
+// recurUntilCompleted task's live occurrence, which its whole chain hangs
+// off (see Occurrence.canManageOccurrenceDirectly).
+function canDeleteOccurrence(task, occurrenceDate) {
+  if (isProtectedTask(task)) return false;
+  const row = findOccurrence(task, occurrenceDate);
+  if (task.recurUntilCompleted) return !!row && Occurrence.canManageOccurrenceDirectly(task, row);
+  return !!row || occursOnDate(task, occurrenceDate);
+}
+
+// Deletes one occurrence of task: its row (notes, activity, measurements and
+// all) and, if the current pattern produces that date, the date itself from
+// the pattern (frequency.skipDates) -- otherwise it would simply reappear as
+// a fresh, untouched occurrence. Returns whether anything was deleted.
+function deleteOccurrence(task, occurrenceDate) {
+  if (!canDeleteOccurrence(task, occurrenceDate)) return false;
+  const row = findOccurrence(task, occurrenceDate);
+  const rowDate = row ? row.occurrenceDate : occurrenceDate;
+  if (row) {
+    if (activeTaskId === task.id && (activeOccurrenceDate === rowDate || activeOccurrenceDate === occurrenceDate)) setActiveTaskId(null);
+    occurrences.splice(occurrences.indexOf(row), 1);
+  }
+  if (!task.recurUntilCompleted && Recurrence.occursOn(task, rowDate)) {
+    task.frequency = { ...task.frequency, skipDates: [...(task.frequency.skipDates || []), rowDate].sort() };
+  }
+  if (sidePanelTask === task && (sidePanelOccurrenceDate === rowDate || sidePanelOccurrenceDate === occurrenceDate)) deselectSidePanelTask();
+  logTaskEvent(task, 'Occurrence deleted', rowDate);
+  return true;
 }
 
 // window.prompt() has no native implementation on Linux (Chromium doesn't
@@ -1042,10 +1130,47 @@ function attachTimeSegmentInput(input, firstDigitRule, onAdvance, normalizeValue
 // instead), MODAL_DELETE_RESULT if opts.deleteLabel is set and its two-click
 // arm/confirm is completed, or null on Cancel/Escape. opts.okLabel/
 // cancelLabel/secondaryLabel override/add button text.
+//
+// opts.tabs ([{ key, label, render? }]) splits the form into tabs: each
+// field (or a grouped row's first field) names its tab with `tab` (default:
+// the first one), and a tab with `render(pane)` gets custom content drawn
+// into its pane instead -- e.g. openTaskEditor's occurrence list, whose own
+// actions apply immediately rather than on OK. opts.initialTab picks which
+// tab opens first.
 function showFormModal(title, fields, opts = {}) {
   return new Promise((resolve) => {
     modalTitle.textContent = title;
     modalFields.innerHTML = '';
+
+    let tabPanes = null;
+    let activeTabKey = null;
+    const tabButtons = new Map();
+    function activateTab(key) {
+      activeTabKey = key;
+      for (const [k, pane] of tabPanes) pane.classList.toggle('hidden', k !== key);
+      for (const [k, btn] of tabButtons) btn.classList.toggle('active', k === key);
+    }
+    if (opts.tabs) {
+      tabPanes = new Map();
+      const bar = document.createElement('div');
+      bar.className = 'modal-tabs';
+      for (const tab of opts.tabs) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'modal-tab';
+        btn.textContent = tab.label;
+        btn.onclick = () => activateTab(tab.key);
+        bar.appendChild(btn);
+        tabButtons.set(tab.key, btn);
+      }
+      modalFields.appendChild(bar);
+      for (const tab of opts.tabs) {
+        const pane = document.createElement('div');
+        pane.className = 'modal-tab-pane';
+        modalFields.appendChild(pane);
+        tabPanes.set(tab.key, pane);
+      }
+    }
     modalOk.textContent = opts.okLabel || t('common.ok');
     modalCancel.textContent = opts.cancelLabel || t('common.cancel');
 
@@ -1347,7 +1472,12 @@ function showFormModal(title, fields, opts = {}) {
         });
       }
 
-      modalFields.appendChild(wrap);
+      const tabKey = (Array.isArray(entry) ? entry[0].tab : entry.tab) || (opts.tabs && opts.tabs[0].key);
+      (tabPanes ? tabPanes.get(tabKey) : modalFields).appendChild(wrap);
+    }
+    if (opts.tabs) {
+      for (const tab of opts.tabs) if (tab.render) tab.render(tabPanes.get(tab.key));
+      activateTab(opts.initialTab || opts.tabs[0].key);
     }
 
     // Fields with a `showIf(values)` predicate (e.g. a monthly-only option
@@ -1392,7 +1522,9 @@ function showFormModal(title, fields, opts = {}) {
     }
 
     modalOverlay.classList.remove('hidden');
-    interactiveEls[0].focus(); // select-all-on-focus (except textareas) is handled generically by sharedInputBehavior.js
+    // select-all-on-focus (except textareas) is handled generically by sharedInputBehavior.js
+    const firstFocusable = tabPanes ? interactiveEls.find((el) => tabPanes.get(activeTabKey).contains(el)) : interactiveEls[0];
+    if (firstFocusable) firstFocusable.focus();
     updateVisibility();
 
     function finish(result) {
@@ -1414,7 +1546,12 @@ function showFormModal(title, fields, opts = {}) {
         const value = f.getValue();
         const visible = !f.hideTarget.classList.contains('modal-field-hidden');
         const enabled = !f.disableTarget.classList.contains('modal-field-disabled');
-        if (visible && enabled && f.required && (f.isArray ? value.length === 0 : !value)) return;
+        if (visible && enabled && f.required && (f.isArray ? value.length === 0 : !value)) {
+          // Don't fail silently on a tab that isn't showing.
+          const pane = tabPanes && f.wrap.closest('.modal-tab-pane');
+          if (pane) activateTab([...tabPanes].find(([, p]) => p === pane)[0]);
+          return;
+        }
         result[f.name] = value;
       }
       if (secondary) result[MODAL_SECONDARY_RESULT] = true;
@@ -1721,6 +1858,91 @@ function normalizeLoadedTasks(loadedTasks) {
   return loadedTasks;
 }
 
+// One-time migration from the old "fragments" model -- a recurring task
+// split by a "this and following" edit (or a pause, or a manual extra
+// occurrence) used to be several Task records sharing one taskId, each
+// owning its own date range -- to one record per task holding only its
+// current pattern (see applyPatternChange's section comment). Per taskId:
+//  - the latest-starting recurring record (or the latest one, if none
+//    recurs) is kept as THE task: its data and pattern are the current ones;
+//  - every date any other record's pattern produced is saved as a row first
+//    (a one-off record's date as a `manual` row, since it's off the kept
+//    pattern), so none of that history is lost; their task-level notes and
+//    activity move onto the kept record;
+//  - a blank row (see Occurrence.isBlankOccurrence) no record covered -- a
+//    paused span -- is dropped: fragments used to hide those, and rows now
+//    always show;
+//  - a row from a recurUntilCompleted record's range gets its chain cleared
+//    if the kept record isn't recurUntilCompleted (on a plain task that
+//    field lists vacated dates instead, see Occurrence.isDateExcluded).
+// Also drops every Occurrence.overrides ("this occurrence only" edits):
+// task data now applies to all of a task's occurrences alike.
+//
+// Pure over the arrays it's given (load and import both run it); returns
+// whether anything changed, and a map from every dropped record's id to the
+// kept one's, for activeTaskId.
+function migrateToSingleRecordTasks(taskList, occurrenceList) {
+  let changed = false;
+  const idMap = {};
+  for (const o of occurrenceList) {
+    if (o.overrides) {
+      o.overrides = null;
+      changed = true;
+    }
+  }
+  const groups = new Map();
+  for (const t of taskList) {
+    if (!groups.has(t.taskId)) groups.set(t.taskId, []);
+    groups.get(t.taskId).push(t);
+  }
+  const dropped = new Set();
+  const nextDay = (d) => Recurrence.dateToISO(Recurrence.addDays(new Date(d + 'T00:00:00'), 1));
+  const hasRow = (taskId, d) => occurrenceList.some((o) => o.taskId === taskId && o.occurrenceDate === d);
+  for (const [taskId, group] of groups) {
+    if (group.length < 2) continue;
+    changed = true;
+    const byStart = group.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const recurring = byStart.filter((f) => f.frequency.type !== 'once');
+    const kept = (recurring.length ? recurring : byStart)[(recurring.length ? recurring : byStart).length - 1];
+    const covers = (f, d) => (f.frequency.type === 'once' ? d === f.dueDate : f.dueDate <= d && (!f.endDate || f.endDate >= d));
+
+    for (const f of byStart) {
+      if (f === kept) continue;
+      if (f.frequency.type === 'once') {
+        if (!hasRow(taskId, f.dueDate)) occurrenceList.push(Occurrence.createOccurrence({ id: uid(), taskId, occurrenceDate: f.dueDate, manual: true }));
+      } else if (!f.recurUntilCompleted) {
+        const lastISO = f.endDate && f.endDate < kept.dueDate ? f.endDate : Recurrence.dateToISO(Recurrence.addDays(new Date(kept.dueDate + 'T00:00:00'), -1));
+        let cursor = f.dueDate;
+        for (let i = 0; i < 3660 && cursor <= lastISO; i++) {
+          if (Recurrence.occursOn(f, cursor) && !Occurrence.isDateExcluded(occurrenceList, taskId, cursor) && !hasRow(taskId, cursor)) {
+            occurrenceList.push(Occurrence.createOccurrence({ id: uid(), taskId, occurrenceDate: cursor }));
+          }
+          cursor = nextDay(cursor);
+        }
+      }
+      kept.log = [...(f.log || []), ...(kept.log || [])];
+      kept.comments = [...(f.comments || []), ...(kept.comments || [])];
+      if (f.createdAt < kept.createdAt) kept.createdAt = f.createdAt;
+      if (!kept.seriesName && f.seriesName) kept.seriesName = f.seriesName;
+      idMap[f.id] = kept.id;
+      dropped.add(f);
+    }
+
+    for (let i = occurrenceList.length - 1; i >= 0; i--) {
+      const o = occurrenceList[i];
+      if (o.taskId !== taskId) continue;
+      const owner = byStart.find((f) => covers(f, o.occurrenceDate));
+      if (!owner && Occurrence.isBlankOccurrence(o)) {
+        occurrenceList.splice(i, 1);
+        continue;
+      }
+      if (owner && owner.recurUntilCompleted && !kept.recurUntilCompleted && o.pendingReschedules && o.pendingReschedules.length) o.pendingReschedules = [];
+    }
+  }
+  const keptTasks = dropped.size ? taskList.filter((t) => !dropped.has(t)) : taskList;
+  return { tasks: keptTasks, occurrences: occurrenceList, changed, idMap };
+}
+
 // GET /tasks -- the current account's entire task list and occurrence
 // history, scoped server-side by the bearer token (see api-spec.yaml), not
 // by anything passed here. Awaited exactly once, inside startApp(), before
@@ -1761,24 +1983,22 @@ let occurrences = [];
 // automatic unfocus right after are both logged against that date AFTER its
 // status has already changed. Without this, both would mint a stray new
 // 'pending' row there instead. Chains only ever move forward, so no two
-// occurrences' chains within one fragment overlap.
+// occurrences' chains overlap.
 // occurrenceDate == null means "just the current pending one, whichever
 // date it's at" (see occurrenceScanShape and friends) -- skips the exact
 // match entirely, since there's no date to match.
 //
-// The pending lookup only considers rows belonging to this fragment (see
-// Occurrence.occurrenceBelongsToFragment) -- a taskId whose history predates
-// its recurUntilCompleted fragment can still carry a stale plain-task
-// 'pending' row from back then, which must never be mistaken for the live
-// chain. If several still qualify, the latest-starting one wins: a stale
-// row always predates the live chain, and once mistaken for it would get
-// advanced (advanceRecurUntilCompletedTasks) right into this fragment's own
-// range, qualifying by effectiveDueDate from then on.
+// A task that was a plain recurring one before becoming recurUntilCompleted
+// can still carry 'pending' rows from back then -- past occurrences that
+// were simply never done, not live chains. If several 'pending' rows exist,
+// the latest-starting one is the live chain: a stale one always predates
+// it, and once mistaken for it would get advanced
+// (advanceRecurUntilCompletedTasks) right past the real one.
 function findOccurrence(task, occurrenceDate) {
   if (!task.recurUntilCompleted) return Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
   let pending = null;
   for (const o of occurrences) {
-    if (o.taskId !== task.taskId || o.status !== 'pending' || !Occurrence.occurrenceBelongsToFragment(task, o)) continue;
+    if (o.taskId !== task.taskId || o.status !== 'pending') continue;
     if (!pending || o.occurrenceDate > pending.occurrenceDate) pending = o;
   }
   if (occurrenceDate == null) return pending;
@@ -1790,8 +2010,7 @@ function findOccurrence(task, occurrenceDate) {
       (o) =>
         o.taskId === task.taskId &&
         o.status !== 'pending' &&
-        (o.pendingReschedules || []).includes(occurrenceDate) &&
-        Occurrence.occurrenceBelongsToFragment(task, o)
+        (o.pendingReschedules || []).includes(occurrenceDate)
     ) || null
   );
 }
@@ -2356,9 +2575,6 @@ function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
   }
 
   if (!isProtectedTask(task)) addItem(2, t('common.edit'), () => editTaskOccurrence(task, occurrenceDate));
-  if (!isProtectedTask(task) && task.frequency.type !== 'once') {
-    addItem(2, t('menu.editPattern'), () => editTaskPattern(task, occurrenceDate));
-  }
   if (canPauseRecurrence(item)) addItem(2, t('menu.pauseRecurrence'), () => promptPauseRecurrence(task, occurrenceDate));
   addItem(3, t('menu.taskStats'), () => showTaskStatsModal(task));
 
@@ -2533,14 +2749,10 @@ function describeTaskSchedule(task) {
 // deleted) can still be completed or noted on -- see unlockedTaskIds. An
 // active subscription (see isSubscriptionActive) lifts every limit here.
 //
-// "Task" throughout this section means task.taskId, not task.id -- editing a
-// recurring task ("this occurrence" / "this and following", see
-// applySplitEdit) creates new task.id records for the SAME logical task, so
-// counting by task.id would let ordinary editing silently eat into someone's
-// quota. A taskId counts as "recurring" if any of its still-existing
-// fragments has frequency.type !== 'once' -- see applySplitEdit's own
-// comment for why a single taskId can span a mix of 'once' and recurring
-// fragments at once.
+// "Task" throughout this section means task.taskId. Every task is a single
+// record now (see migrateToSingleRecordTasks), so that's also one task.id --
+// but counting by taskId stays the safe choice either way. A taskId counts
+// as "recurring" if its record has frequency.type !== 'once'.
 // ---------------------------------------------------------------------------
 
 const FREE_TASK_LIMITS = { once: 10, recurring: 5 };
@@ -2573,10 +2785,8 @@ function distinctRealTaskIds() {
   return ids;
 }
 
-// The earliest createdAt among a taskId's surviving fragments -- they're all
-// carried forward from the same original value (see applySplitEdit/
-// applySplitDelete/promptManualOccurrence), so any one would do; Math.min is
-// just cheap insurance against them ever drifting apart.
+// A taskId's createdAt -- one record per task, so just that record's own
+// (migrateToSingleRecordTasks kept the earliest of any merged records').
 function taskIdCreatedAt(taskId) {
   let earliest = Infinity;
   for (const t of tasks) {
@@ -2611,8 +2821,7 @@ function canCompleteOrNoteTask(task) {
 }
 
 // Gates creating a genuinely NEW task (a fresh taskId) -- not editing one,
-// and not a split/manual-occurrence fragment of an existing one, neither of
-// which mint a new taskId (see the section comment above).
+// or adding an occurrence to one, neither of which mint a new taskId.
 function canCreateTaskOfKind(isRecurring) {
   if (isSubscriptionActive()) return true;
   const limit = isRecurring ? FREE_TASK_LIMITS.recurring : FREE_TASK_LIMITS.once;
@@ -2877,466 +3086,34 @@ const isWeeklyFrequencyType = (v) => v.repeats.length > 0 && v.frequencyType ===
 const isMonthlyFrequencyType = (v) => v.repeats.length > 0 && v.frequencyType === 'months';
 const isMultiWeekdayMonthlyMode = (monthlyMode) => monthlyMode === 'multi-weekday' || monthlyMode === 'multi-weekday-offset';
 
-// `initialDueDate` only applies to a brand-new task (no existingTask) --
-// used by each to-do day header's own "+" button so the form opens
-// pre-filled with that day's date instead of always defaulting to today.
-// Only ever reached for a brand-new task, or for editing an existing 'once'
-// task -- every recurring-task edit goes through openTaskGeneralInfoForm/
-// openPatternEditForm instead (see editTaskOccurrence/editTaskPattern),
-// since a 'once' task has no series/pattern history to protect and so
-// doesn't need the general-vs-pattern split at all: it's always safe to edit
-// both together, in place, in one form.
-async function openTaskForm(existingTask, initialDueDate, seriesOptions = {}) {
-  if (existingTask && isProtectedTask(existingTask)) return; // can't be edited or deleted (its own Delete button lives inside this same form) -- see the section comment above isProtectedTask
-  const formTitle = existingTask ? t('taskForm.editTask') : t('taskForm.addTask');
-  const formDueDate = existingTask ? existingTask.dueDate : initialDueDate || Recurrence.dateToISO(new Date());
-  const result = await showFormModal(
-    formTitle,
-    [
-      { name: 'name', label: t('taskForm.name'), value: existingTask ? existingTask.name : seriesOptions.nameDefault || '' },
-      {
-        // Single-line like Name, not a textarea like Details -- the to-do
-        // list shows this truncated to one line too (see .todo-item-desc),
-        // so a multi-line value could never be seen in full there anyway.
-        name: 'description',
-        label: t('taskForm.description'),
-        value: existingTask ? existingTask.description : '',
-        required: false,
-      },
-      {
-        name: 'details',
-        label: t('taskForm.details'),
-        type: 'textarea',
-        value: existingTask ? existingTask.details : '',
-        required: false,
-      },
-      {
-        name: 'dueDate',
-        label: t('taskForm.dueDate'),
-        type: 'date',
-        value: formDueDate,
-      },
-      {
-        name: 'allDay',
-        label: '',
-        type: 'checkboxes',
-        value: existingTask && existingTask.allDay ? ['allDay'] : [],
-        options: [{ value: 'allDay', label: t('taskForm.allDay') }],
-        required: false,
-      },
-      {
-        name: 'dueTime',
-        label: t('taskForm.dueTime'),
-        type: 'time',
-        value: existingTask ? existingTask.dueTime || '18:00' : '18:00',
-        showIf: (v) => v.allDay.length === 0,
-      },
-      [
-        {
-          name: 'repeats',
-          type: 'checkboxes',
-          value: existingTask && existingTask.frequency.type !== 'once' ? ['repeats'] : [],
-          options: [{ value: 'repeats', label: t('taskForm.repeatsEvery') }],
-          required: false,
-        },
-        {
-          name: 'interval',
-          type: 'number',
-          value: existingTask ? String(existingTask.frequency.interval || 1) : '1',
-          min: 1,
-          required: false,
-          inlineWidth: '64px',
-          disableIf: (v) => v.repeats.length === 0,
-        },
-        {
-          name: 'frequencyType',
-          type: 'select',
-          value: existingTask && existingTask.frequency.type !== 'once' ? existingTask.frequency.type : 'days',
-          options: getFrequencyOptions(),
-          inlineWidth: '100px',
-          disableIf: (v) => v.repeats.length === 0,
-        },
-      ],
-      {
-        name: 'weekdays',
-        label: t('taskForm.alsoRecurOn'),
-        type: 'checkboxes',
-        value: existingTask && existingTask.frequency.weekdays ? existingTask.frequency.weekdays.map(String) : [],
-        options: getWeekdayCheckboxOptions(),
-        gridColumns: 4,
-        required: false,
-        showIf: (v) => isWeeklyFrequencyType(v),
-      },
-      {
-        name: 'monthlyMode',
-        label: t('taskForm.monthlyPattern'),
-        type: 'select',
-        value: existingTask ? existingTask.frequency.dayMode || 'day' : 'day',
-        options: getMonthlyModeOptions(),
-        showIf: (v) => isMonthlyFrequencyType(v),
-      },
-      {
-        name: 'monthlyOffset',
-        label: t('taskForm.monthlyOffsetLabel'),
-        value: existingTask && existingTask.frequency.offset != null ? String(existingTask.frequency.offset) : '0',
-        required: false,
-        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'before-last',
-      },
-      {
-        name: 'monthlyWeekday',
-        label: t('taskForm.dayOfWeek'),
-        type: 'select',
-        value: existingTask && existingTask.frequency.weekday != null ? String(existingTask.frequency.weekday) : '1',
-        options: getWeekdaySelectOptions(),
-        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
-      },
-      {
-        name: 'monthlyOrdinal',
-        label: t('taskForm.whichOccurrence'),
-        type: 'select',
-        value: existingTask && existingTask.frequency.ordinal != null ? String(existingTask.frequency.ordinal) : '1',
-        options: getOrdinalOptions(),
-        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
-      },
-      {
-        name: 'multiWeekdayDays',
-        label: t('taskForm.selectedDays'),
-        type: 'checkboxes',
-        value:
-          existingTask && existingTask.frequency.weekdays && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
-            ? existingTask.frequency.weekdays.map(String)
-            : [],
-        options: getWeekdayCheckboxOptions(),
-        gridColumns: 4,
-        showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
-      },
-      // Merged into one row -- "[N] days [Before/After] [N]<suffix>
-      // occurrence" -- rather than three stacked label+control blocks, which
-      // otherwise pushed the modal taller than the screen once
-      // 'multi-weekday-offset' was selected. The ordinal suffix ("st"/"nd"/
-      // "rd"/"th") is a `static` text field recomputed live from the ordinal
-      // input's own current value (see showFormModal's staticEls handling).
-      // The offset fields' showIf hides just their own item within the row
-      // (not the whole row -- see hideTarget), so plain 'multi-weekday' mode
-      // still shows only the ordinal + "occurrence" part.
-      [
-        {
-          name: 'multiWeekdayOffsetDays',
-          type: 'number',
-          value:
-            existingTask && existingTask.frequency.offsetDays != null && existingTask.frequency.dayMode === 'multi-weekday-offset'
-              ? String(existingTask.frequency.offsetDays)
-              : '0',
-          min: 0,
-          max: 6,
-          inlineWidth: '56px',
-          showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
-        },
-        {
-          type: 'static',
-          text: () => t('taskForm.daysInline'),
-          showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
-        },
-        {
-          name: 'multiWeekdayOffsetDirection',
-          type: 'select',
-          value:
-            existingTask && existingTask.frequency.offsetDirection && existingTask.frequency.dayMode === 'multi-weekday-offset'
-              ? existingTask.frequency.offsetDirection
-              : 'before',
-          options: getBeforeAfterOptions(),
-          inlineWidth: '90px',
-          showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-weekday-offset',
-        },
-        {
-          name: 'multiWeekdayOrdinal',
-          type: 'number',
-          value:
-            existingTask && existingTask.frequency.ordinal != null && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
-              ? String(existingTask.frequency.ordinal)
-              : '1',
-          min: 1,
-          max: 5,
-          inlineWidth: '56px',
-          showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
-        },
-        {
-          type: 'static',
-          // Croatian ordinals are just "N." (no letter suffix like English's
-          // "1st"/"2nd"/"3rd") -- the number itself already shown by the
-          // input right before this, so this only ever supplies the trailing
-          // punctuation/word, not the ordinal itself, in either language.
-          text: (v) =>
-            currentUserLanguage === 'hr'
-              ? t('taskForm.occurrenceHr')
-              : `${ordinalSuffix(parseInt(v.multiWeekdayOrdinal, 10) || 1)} ${t('taskForm.occurrenceWord')}`,
-          tightGap: true,
-          showIf: (v) => isMonthlyFrequencyType(v) && isMultiWeekdayMonthlyMode(v.monthlyMode),
-        },
-      ],
-      {
-        name: 'multiDayDays',
-        label: t('taskForm.multiDayDays'),
-        type: 'checkboxes',
-        value:
-          existingTask && existingTask.frequency.days && existingTask.frequency.dayMode === 'multi-day'
-            ? existingTask.frequency.days.map(String)
-            : [],
-        options: MONTH_DAY_CHECKBOX_OPTIONS,
-        showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-day',
-      },
-      {
-        name: 'endDate',
-        label: t('taskForm.endDate'),
-        type: 'date',
-        value: existingTask && existingTask.endDate ? existingTask.endDate : '',
-        required: false,
-        showIf: (v) => v.repeats.length > 0,
-      },
-      {
-        name: 'appointment',
-        label: '',
-        type: 'checkboxes',
-        value: existingTask && existingTask.appointment ? ['appointment'] : [],
-        options: [{ value: 'appointment', label: t('taskForm.appointmentDesc') }],
-        required: false,
-      },
-      {
-        name: 'passive',
-        label: '',
-        type: 'checkboxes',
-        value: existingTask && existingTask.passive ? ['passive'] : [],
-        options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
-        required: false,
-      },
-      {
-        name: 'recurUntilCompleted',
-        label: '',
-        type: 'checkboxes',
-        value: existingTask && existingTask.recurUntilCompleted ? ['recurUntilCompleted'] : [],
-        options: [{ value: 'recurUntilCompleted', label: t('taskForm.recurUntilCompletedDesc') }],
-        required: false,
-      },
-    ],
-    { okLabel: existingTask ? t('common.save') : t('common.add'), deleteLabel: existingTask ? t('common.delete') : undefined }
-  );
-
-  if (result === MODAL_DELETE_RESULT) {
-    deleteTask(existingTask.id);
-    return;
-  }
-  if (!result) return;
-
-  const endDate = result.endDate || null;
-  if (endDate && endDate < result.dueDate) {
-    showInfoModal(t('taskForm.endDateBeforeDue'));
-    return;
-  }
-
-  const allDay = result.allDay.length > 0;
-  const dueTime = allDay ? null : result.dueTime;
-  const appointment = result.appointment.length > 0;
-  const passive = result.passive.length > 0;
-  const recurUntilCompleted = result.recurUntilCompleted.length > 0;
-  const frequency = result.repeats.length > 0 ? decodeFrequency(result.frequencyType, result.interval, result) : { type: 'once', interval: 1 };
-
-  if (existingTask) {
-    freezeMixedSeriesNameIfRenaming(existingTask, result.name);
-    applyGeneralInfoInPlace(existingTask, { name: result.name, description: result.description, details: result.details, dueTime, allDay, appointment, passive });
-    // null: this once-task edit's own 'Edited' entry above already covers
-    // it -- see applyPatternInPlace's own comment on logMessage.
-    applyPatternInPlace(existingTask, { dueDate: result.dueDate, frequency, endDate, recurUntilCompleted }, null);
-  } else {
-    const isRecurring = frequency.type !== 'once';
-    if (!(await ensureCanCreateTaskOfKind(isRecurring))) return;
-    // A brand-new recurUntilCompleted task's raw, user-picked due date isn't
-    // necessarily a date `frequency` itself lands on (e.g. "1st Monday of
-    // the month" with some other weekday picked in the date field) -- snap
-    // it forward to the first date the pattern actually produces, same as
-    // firstRecurUntilCompletedDueDate's own comment explains. A plain
-    // (non-recurUntilCompleted) task doesn't need this: occursOn recomputes
-    // each candidate date's own pattern date fresh, so an "off" dueDate
-    // self-corrects at display time regardless -- only recurUntilCompleted's
-    // literal chain-membership check (see occursOn) actually needs dueDate
-    // itself to already be correct. || result.dueDate: same null-guard as
-    // nextRecurUntilCompletedDueDate's own call site, in case the pattern's
-    // first occurrence would actually fall after endDate itself.
-    const dueDate = recurUntilCompleted
-      ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: result.dueDate, frequency, endDate }) || result.dueDate
-      : result.dueDate;
-    const newTask = {
-      id: uid(),
-      taskId: uid(),
-      seriesId: seriesOptions.forcedSeriesId || uid(),
-      name: result.name,
-      description: result.description,
-      details: result.details,
-      dueDate,
-      dueTime,
-      allDay,
-      appointment,
-      passive,
-      recurUntilCompleted,
-      endDate,
-      frequency,
-      createdAt: Date.now(),
-      log: [],
-      comments: [],
-    };
-    // Joining an existing series -- carry its saved name over so
-    // getSeriesName can find it on this record too, not just whichever
-    // member happened to have it before. Only if the series has actually
-    // been explicitly named (some member carries seriesName): getSeriesName's
-    // fallback to the earliest member's own name is a display-time default,
-    // not something that should get permanently frozen onto a new record.
-    if (seriesOptions.forcedSeriesId) {
-      const namedMember = tasksInSeries(seriesOptions.forcedSeriesId).find((t) => t.seriesName);
-      if (namedMember) newTask.seriesName = namedMember.seriesName;
-    }
-    tasks.push(newTask);
-    if (recurUntilCompleted) ensureOccurrence(newTask, dueDate);
-  }
-  saveTasks();
-  renderTodo();
-  refreshTodoManageModal();
-}
-
-// General-info-only counterpart to openTaskForm, for a recurring task's
-// name/description/details/dueTime/allDay/appointment/passive -- exactly
-// applyGeneralInfoInPlace's field set (occurrence.js's own override
-// whitelist). No due-date field at all: retargeting the fork point is a
-// pattern-edit-only concern now (see openPatternEditForm) -- this form's
-// split point is always exactly `occurrenceDate`, whatever scope is chosen.
-// scope is always a real choice from showEditScopeChoice ('instance' /
-// 'following' / 'all'), never null -- callers resolve that before calling in.
-//
-// 'instance'/'following' get a delete button -- the only remaining UI path
-// to applySplitDelete's "delete just this occurrence" / "delete this and
-// following" (deleting the whole task/series slice this way is otherwise
-// unreachable now that this form has taken over from openTaskForm for every
-// recurring edit). 'all' doesn't: deleting the entire task is a Manage
-// Tasks/series-editor action (see its own row's delete button), not a
-// general-info-edit one.
-async function openTaskGeneralInfoForm(existingTask, { occurrenceDate, scope }) {
-  if (isProtectedTask(existingTask)) return;
-  const formTitle = scope === 'instance' ? t('taskForm.editOccurrence') : scope === 'following' ? t('taskForm.editFollowing') : t('taskForm.editTask');
-  const result = await showFormModal(formTitle, [
-    { name: 'name', label: t('taskForm.name'), value: existingTask.name },
-    {
-      name: 'description',
-      label: t('taskForm.description'),
-      value: existingTask.description,
-      required: false,
-    },
-    {
-      name: 'details',
-      label: t('taskForm.details'),
-      type: 'textarea',
-      value: existingTask.details,
-      required: false,
-    },
-    {
-      name: 'allDay',
-      label: '',
-      type: 'checkboxes',
-      value: existingTask.allDay ? ['allDay'] : [],
-      options: [{ value: 'allDay', label: t('taskForm.allDay') }],
-      required: false,
-    },
-    {
-      name: 'dueTime',
-      label: t('taskForm.dueTime'),
-      type: 'time',
-      value: existingTask.dueTime || '18:00',
-      showIf: (v) => v.allDay.length === 0,
-    },
-    {
-      name: 'appointment',
-      label: '',
-      type: 'checkboxes',
-      value: existingTask.appointment ? ['appointment'] : [],
-      options: [{ value: 'appointment', label: t('taskForm.appointmentDesc') }],
-      required: false,
-    },
-    {
-      name: 'passive',
-      label: '',
-      type: 'checkboxes',
-      value: existingTask.passive ? ['passive'] : [],
-      options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
-      required: false,
-    },
-  ], { okLabel: t('common.save'), deleteLabel: scope !== 'all' ? t('common.delete') : undefined });
-
-  if (result === MODAL_DELETE_RESULT) {
-    applySplitDelete(existingTask, occurrenceDate, scope);
-    saveTasks();
-    renderTodo();
-    refreshTodoManageModal();
-    return;
-  }
-  if (!result) return;
-
-  const allDay = result.allDay.length > 0;
-  const dueTime = allDay ? null : result.dueTime;
-  const appointment = result.appointment.length > 0;
-  const passive = result.passive.length > 0;
-  const fields = { name: result.name, description: result.description, details: result.details, dueTime, allDay, appointment, passive };
-
-  freezeMixedSeriesNameIfRenaming(existingTask, result.name);
-  if (scope === 'all') {
-    applyGeneralInfoInPlace(existingTask, fields);
-  } else {
-    // Pattern fields are explicitly carried through unedited from
-    // existingTask -- this form never touches them, so a 'following' fork
-    // always inherits the exact original pattern (only its general fields
-    // differ going forward).
-    applySplitEdit(
-      existingTask,
-      { originalOccurrenceDate: occurrenceDate, newOccurrenceDate: occurrenceDate, scope },
-      { ...fields, recurUntilCompleted: existingTask.recurUntilCompleted, frequency: existingTask.frequency, endDate: existingTask.endDate }
-    );
-  }
-  saveTasks();
-  renderTodo();
-  refreshTodoManageModal();
-}
-
-// Recurrence-pattern-only counterpart to openTaskForm, for a recurring
-// task's dueDate/frequency/endDate/recurUntilCompleted. Never 'instance'-
-// scoped (occurrence.js's own applyOverrides comment already forbids
-// per-occurrence pattern overrides), and never offered an 'all'-style
-// in-place-with-history option either -- see editTaskPattern, the only
-// caller, for how opts is decided:
-//  - { inPlace: true }: mutates existingTask's pattern fields directly,
-//    only ever safe to call when there's no history to protect (see
-//    applyPatternInPlace).
-//  - { occurrenceDate, scope: 'following' }: forks a new Task fragment
-//    carrying the edited pattern forward from occurrenceDate, exactly like
-//    a general-info 'following' edit but with the pattern fields (not the
-//    general ones) actually changing.
-async function openPatternEditForm(existingTask, opts) {
-  if (isProtectedTask(existingTask)) return;
-  const formTitle = opts.inPlace ? t('patternEdit.titleInPlace') : t('patternEdit.titleFollowing');
-  const result = await showFormModal(formTitle, [
-    {
-      name: 'dueDate',
-      label: t('taskForm.dueDate'),
-      type: 'date',
-      value: opts.inPlace ? existingTask.dueDate : opts.occurrenceDate,
-    },
+// `initialDueDate` is used by each to-do day header's own "+" button so the
+// add form opens pre-filled with that day's date instead of always
+// defaulting to today.
+// The recurrence-pattern fields shared by openTaskForm (a new task) and
+// openTaskEditor's Recurrence tab -- `task` supplies the initial values (a
+// never-saved default shape for a new task), dueDateValue the due date field's.
+// Returned as three pieces since the add form interleaves them with its other
+// fields; see decodePatternResult for reading them back.
+function patternFieldSpecs(task, dueDateValue) {
+  const dueDate = {
+    name: 'dueDate',
+    label: t('taskForm.dueDate'),
+    type: 'date',
+    value: dueDateValue,
+  };
+  const repeat = [
     [
       {
         name: 'repeats',
         type: 'checkboxes',
-        value: existingTask.frequency.type !== 'once' ? ['repeats'] : [],
+        value: task.frequency.type !== 'once' ? ['repeats'] : [],
         options: [{ value: 'repeats', label: t('taskForm.repeatsEvery') }],
         required: false,
       },
       {
         name: 'interval',
         type: 'number',
-        value: String(existingTask.frequency.interval || 1),
+        value: String(task.frequency.interval || 1),
         min: 1,
         required: false,
         inlineWidth: '64px',
@@ -3345,7 +3122,7 @@ async function openPatternEditForm(existingTask, opts) {
       {
         name: 'frequencyType',
         type: 'select',
-        value: existingTask.frequency.type !== 'once' ? existingTask.frequency.type : 'days',
+        value: task.frequency.type !== 'once' ? task.frequency.type : 'days',
         options: getFrequencyOptions(),
         inlineWidth: '100px',
         disableIf: (v) => v.repeats.length === 0,
@@ -3355,7 +3132,7 @@ async function openPatternEditForm(existingTask, opts) {
       name: 'weekdays',
       label: t('taskForm.alsoRecurOn'),
       type: 'checkboxes',
-      value: existingTask.frequency.weekdays ? existingTask.frequency.weekdays.map(String) : [],
+      value: task.frequency.weekdays ? task.frequency.weekdays.map(String) : [],
       options: getWeekdayCheckboxOptions(),
       gridColumns: 4,
       required: false,
@@ -3365,14 +3142,14 @@ async function openPatternEditForm(existingTask, opts) {
       name: 'monthlyMode',
       label: t('taskForm.monthlyPattern'),
       type: 'select',
-      value: existingTask.frequency.dayMode || 'day',
+      value: task.frequency.dayMode || 'day',
       options: getMonthlyModeOptions(),
       showIf: (v) => isMonthlyFrequencyType(v),
     },
     {
       name: 'monthlyOffset',
       label: t('taskForm.monthlyOffsetLabel'),
-      value: existingTask.frequency.offset != null ? String(existingTask.frequency.offset) : '0',
+      value: task.frequency.offset != null ? String(task.frequency.offset) : '0',
       required: false,
       showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'before-last',
     },
@@ -3380,7 +3157,7 @@ async function openPatternEditForm(existingTask, opts) {
       name: 'monthlyWeekday',
       label: t('taskForm.dayOfWeek'),
       type: 'select',
-      value: existingTask.frequency.weekday != null ? String(existingTask.frequency.weekday) : '1',
+      value: task.frequency.weekday != null ? String(task.frequency.weekday) : '1',
       options: getWeekdaySelectOptions(),
       showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
     },
@@ -3388,7 +3165,7 @@ async function openPatternEditForm(existingTask, opts) {
       name: 'monthlyOrdinal',
       label: t('taskForm.whichOccurrence'),
       type: 'select',
-      value: existingTask.frequency.ordinal != null ? String(existingTask.frequency.ordinal) : '1',
+      value: task.frequency.ordinal != null ? String(task.frequency.ordinal) : '1',
       options: getOrdinalOptions(),
       showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'weekday',
     },
@@ -3397,8 +3174,8 @@ async function openPatternEditForm(existingTask, opts) {
       label: t('taskForm.selectedDays'),
       type: 'checkboxes',
       value:
-        existingTask.frequency.weekdays && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
-          ? existingTask.frequency.weekdays.map(String)
+        task.frequency.weekdays && isMultiWeekdayMonthlyMode(task.frequency.dayMode)
+          ? task.frequency.weekdays.map(String)
           : [],
       options: getWeekdayCheckboxOptions(),
       gridColumns: 4,
@@ -3409,8 +3186,8 @@ async function openPatternEditForm(existingTask, opts) {
         name: 'multiWeekdayOffsetDays',
         type: 'number',
         value:
-          existingTask.frequency.offsetDays != null && existingTask.frequency.dayMode === 'multi-weekday-offset'
-            ? String(existingTask.frequency.offsetDays)
+          task.frequency.offsetDays != null && task.frequency.dayMode === 'multi-weekday-offset'
+            ? String(task.frequency.offsetDays)
             : '0',
         min: 0,
         max: 6,
@@ -3426,8 +3203,8 @@ async function openPatternEditForm(existingTask, opts) {
         name: 'multiWeekdayOffsetDirection',
         type: 'select',
         value:
-          existingTask.frequency.offsetDirection && existingTask.frequency.dayMode === 'multi-weekday-offset'
-            ? existingTask.frequency.offsetDirection
+          task.frequency.offsetDirection && task.frequency.dayMode === 'multi-weekday-offset'
+            ? task.frequency.offsetDirection
             : 'before',
         options: getBeforeAfterOptions(),
         inlineWidth: '90px',
@@ -3437,8 +3214,8 @@ async function openPatternEditForm(existingTask, opts) {
         name: 'multiWeekdayOrdinal',
         type: 'number',
         value:
-          existingTask.frequency.ordinal != null && isMultiWeekdayMonthlyMode(existingTask.frequency.dayMode)
-            ? String(existingTask.frequency.ordinal)
+          task.frequency.ordinal != null && isMultiWeekdayMonthlyMode(task.frequency.dayMode)
+            ? String(task.frequency.ordinal)
             : '1',
         min: 1,
         max: 5,
@@ -3459,7 +3236,7 @@ async function openPatternEditForm(existingTask, opts) {
       name: 'multiDayDays',
       label: t('taskForm.multiDayDays'),
       type: 'checkboxes',
-      value: existingTask.frequency.days && existingTask.frequency.dayMode === 'multi-day' ? existingTask.frequency.days.map(String) : [],
+      value: task.frequency.days && task.frequency.dayMode === 'multi-day' ? task.frequency.days.map(String) : [],
       options: MONTH_DAY_CHECKBOX_OPTIONS,
       showIf: (v) => isMonthlyFrequencyType(v) && v.monthlyMode === 'multi-day',
     },
@@ -3467,229 +3244,486 @@ async function openPatternEditForm(existingTask, opts) {
       name: 'endDate',
       label: t('taskForm.endDate'),
       type: 'date',
-      value: existingTask.endDate || '',
+      value: task.endDate || '',
       required: false,
       showIf: (v) => v.repeats.length > 0,
     },
-    {
-      name: 'recurUntilCompleted',
-      label: '',
-      type: 'checkboxes',
-      value: existingTask.recurUntilCompleted ? ['recurUntilCompleted'] : [],
-      options: [{ value: 'recurUntilCompleted', label: t('taskForm.recurUntilCompletedDesc') }],
-      required: false,
-    },
-  ]);
-  if (!result) return;
+  ];
+  const recurUntilCompleted = {
+    name: 'recurUntilCompleted',
+    label: '',
+    type: 'checkboxes',
+    value: task.recurUntilCompleted ? ['recurUntilCompleted'] : [],
+    options: [{ value: 'recurUntilCompleted', label: t('taskForm.recurUntilCompletedDesc') }],
+    required: false,
+  };
+  return { dueDate, repeat, recurUntilCompleted };
+}
 
+// Reads patternFieldSpecs' fields back out of a showFormModal result --
+// null (after telling the user why) if the end date comes before the due
+// date.
+function decodePatternResult(result) {
   const endDate = result.endDate || null;
   if (endDate && endDate < result.dueDate) {
     showInfoModal(t('taskForm.endDateBeforeDue'));
-    return;
+    return null;
   }
-  const recurUntilCompleted = result.recurUntilCompleted.length > 0;
   const frequency = result.repeats.length > 0 ? decodeFrequency(result.frequencyType, result.interval, result) : { type: 'once', interval: 1 };
+  return { dueDate: result.dueDate, frequency, endDate, recurUntilCompleted: result.recurUntilCompleted.length > 0 };
+}
 
-  if (opts.inPlace) {
-    applyPatternInPlace(existingTask, { dueDate: result.dueDate, frequency, endDate, recurUntilCompleted });
-  } else {
-    forkTaskFragment(existingTask, result.dueDate, {
-      name: existingTask.name,
-      description: existingTask.description,
-      details: existingTask.details,
-      dueTime: existingTask.dueTime,
-      allDay: existingTask.allDay,
-      appointment: existingTask.appointment,
-      passive: existingTask.passive,
-      frequency,
-      endDate,
-      recurUntilCompleted,
-    });
+// The "add task" form. Editing an existing task is openTaskEditor's job.
+async function openTaskForm(_unused, initialDueDate, seriesOptions = {}) {
+  const pattern = patternFieldSpecs(
+    { frequency: { type: 'once', interval: 1 }, endDate: null, recurUntilCompleted: false },
+    initialDueDate || Recurrence.dateToISO(new Date())
+  );
+  const result = await showFormModal(
+    t('taskForm.addTask'),
+    [
+      { name: 'name', label: t('taskForm.name'), value: seriesOptions.nameDefault || '' },
+      // Single-line like Name, not a textarea like Details -- the to-do list
+      // shows this truncated to one line too (see .todo-item-desc), so a
+      // multi-line value could never be seen in full there anyway.
+      { name: 'description', label: t('taskForm.description'), value: '', required: false },
+      { name: 'details', label: t('taskForm.details'), type: 'textarea', value: '', required: false },
+      pattern.dueDate,
+      {
+        name: 'allDay',
+        label: '',
+        type: 'checkboxes',
+        value: [],
+        options: [{ value: 'allDay', label: t('taskForm.allDay') }],
+        required: false,
+      },
+      { name: 'dueTime', label: t('taskForm.dueTime'), type: 'time', value: '18:00', showIf: (v) => v.allDay.length === 0 },
+      ...pattern.repeat,
+      {
+        name: 'appointment',
+        label: '',
+        type: 'checkboxes',
+        value: [],
+        options: [{ value: 'appointment', label: t('taskForm.appointmentDesc') }],
+        required: false,
+      },
+      {
+        name: 'passive',
+        label: '',
+        type: 'checkboxes',
+        value: [],
+        options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
+        required: false,
+      },
+      pattern.recurUntilCompleted,
+    ],
+    { okLabel: t('common.add') }
+  );
+  if (!result) return;
+  const decoded = decodePatternResult(result);
+  if (!decoded) return;
+  const { frequency, endDate, recurUntilCompleted } = decoded;
+  const allDay = result.allDay.length > 0;
+
+  if (!(await ensureCanCreateTaskOfKind(frequency.type !== 'once'))) return;
+  // A brand-new recurUntilCompleted task's raw, user-picked due date isn't
+  // necessarily a date `frequency` itself lands on (e.g. "1st Monday of the
+  // month" with some other weekday picked in the date field) -- snap it
+  // forward to the first date the pattern actually produces, same as
+  // firstRecurUntilCompletedDueDate's own comment explains. || dueDate: in
+  // case the pattern's first occurrence would fall after endDate itself.
+  const dueDate = recurUntilCompleted
+    ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: decoded.dueDate, frequency, endDate }) || decoded.dueDate
+    : decoded.dueDate;
+  const newTask = {
+    id: uid(),
+    taskId: uid(),
+    seriesId: seriesOptions.forcedSeriesId || uid(),
+    name: result.name,
+    description: result.description,
+    details: result.details,
+    dueDate,
+    dueTime: allDay ? null : result.dueTime,
+    allDay,
+    appointment: result.appointment.length > 0,
+    passive: result.passive.length > 0,
+    recurUntilCompleted,
+    endDate,
+    frequency,
+    createdAt: Date.now(),
+    log: [],
+    comments: [],
+  };
+  // Joining an existing series -- carry its saved name over so
+  // getSeriesName can find it on this record too, not just whichever member
+  // happened to have it before. Only if the series has actually been
+  // explicitly named (some member carries seriesName): getSeriesName's
+  // fallback to the earliest member's own name is a display-time default,
+  // not something that should get permanently frozen onto a new record.
+  if (seriesOptions.forcedSeriesId) {
+    const namedMember = tasksInSeries(seriesOptions.forcedSeriesId).find((t) => t.seriesName);
+    if (namedMember) newTask.seriesName = namedMember.seriesName;
   }
+  tasks.push(newTask);
+  if (recurUntilCompleted) ensureOccurrence(newTask, dueDate);
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
 }
 
-// Splits a recurring task's series around newOccurrenceDate -- the split
-// point, which is normally the occurrence that was double-clicked
-// (originalOccurrenceDate) but becomes wherever the user retargeted the
-// "Due date" field to in the edit form, if they changed it (following scope
-// only -- see below). scope:
-//  - 'instance': no split at all anymore -- the rest of the pattern is
-//    completely untouched. This is purely a per-occurrence override
-//    (Occurrence.overrides) on the EXISTING task, keyed at its own pattern
-//    slot (originalOccurrenceDate); the task's own history needs nothing
-//    copied anywhere, since every already-recorded Occurrence already
-//    belongs to the right taskId regardless of which Task record currently
-//    owns the pattern. Unlike before, an 'instance' edit can no longer also
-//    move this occurrence to a different calendar date -- an Occurrence
-//    row's date is its own identity -- only its other fields (name/
-//    description/details/dueTime/allDay/appointment/passive).
-//  - 'following': the historical portion ends right before this occurrence
-//    (or is dropped entirely if this was the series' very first occurrence
-//    -- nothing historical to keep), and a single new task with the EDITED
-//    settings takes over starting at newOccurrenceDate. Keeps the ORIGINAL
-//    task's taskId -- still the same logical task, however many records its
-//    pattern's history now spans (see the "task" side of the series/task
-//    distinction in the manage-tasks modal and the side panel's per-task
-//    aggregation) -- so every already-recorded Occurrence stays correctly
-//    associated without anything needing to be copied forward.
-function applySplitEdit(originalTask, { originalOccurrenceDate, newOccurrenceDate, scope }, edited) {
-  if (isProtectedTask(originalTask)) return;
+// ---------------------------------------------------------------------------
+// Editing a task -- one modal, three tabs, no "which occurrences?" choice:
+//  - Details: name/description/details/time/flags. The task is one record,
+//    so these apply to every occurrence, past and future alike
+//    (applyGeneralInfoInPlace).
+//  - Recurrence: the pattern, applied from today on only; everything before
+//    stays as it was (applyPatternChange).
+//  - Occurrences: every past occurrence plus the next one (and the one
+//    after it, if the next is already done) -- select one to see and edit
+//    its notes (its activity is read-only), or delete it. These apply
+//    immediately, not on Save.
+// Details and Recurrence are saved together by the modal's own Save button;
+// Delete removes the whole task.
+// ---------------------------------------------------------------------------
 
-  if (scope === 'instance') {
-    const occurrence = ensureOccurrence(originalTask, originalOccurrenceDate);
-    occurrence.overrides = {
-      name: edited.name,
-      description: edited.description,
-      details: edited.details,
-      dueTime: edited.dueTime,
-      allDay: edited.allDay,
-      appointment: edited.appointment,
-      passive: edited.passive,
-    };
-    occurrence.log.push({ message: 'Recurrence edited (only this occurrence)', timestamp: Date.now(), occurrenceDate: null });
+async function openTaskEditor(task, { tab = 'details', occurrenceDate = null } = {}) {
+  if (isProtectedTask(task)) return;
+  const pattern = patternFieldSpecs(task, task.dueDate);
+  const withTab = (entry, tabKey) => {
+    (Array.isArray(entry) ? entry[0] : entry).tab = tabKey;
+    return entry;
+  };
+  const fields = [
+    withTab({ name: 'name', label: t('taskForm.name'), value: task.name }, 'details'),
+    withTab({ name: 'description', label: t('taskForm.description'), value: task.description, required: false }, 'details'),
+    withTab({ name: 'details', label: t('taskForm.details'), type: 'textarea', value: task.details, required: false }, 'details'),
+    withTab(
+      {
+        name: 'allDay',
+        label: '',
+        type: 'checkboxes',
+        value: task.allDay ? ['allDay'] : [],
+        options: [{ value: 'allDay', label: t('taskForm.allDay') }],
+        required: false,
+      },
+      'details'
+    ),
+    withTab({ name: 'dueTime', label: t('taskForm.dueTime'), type: 'time', value: task.dueTime || '18:00', showIf: (v) => v.allDay.length === 0 }, 'details'),
+    withTab(
+      {
+        name: 'appointment',
+        label: '',
+        type: 'checkboxes',
+        value: task.appointment ? ['appointment'] : [],
+        options: [{ value: 'appointment', label: t('taskForm.appointmentDesc') }],
+        required: false,
+      },
+      'details'
+    ),
+    withTab(
+      {
+        name: 'passive',
+        label: '',
+        type: 'checkboxes',
+        value: task.passive ? ['passive'] : [],
+        options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
+        required: false,
+      },
+      'details'
+    ),
+    withTab(pattern.dueDate, 'pattern'),
+    ...pattern.repeat.map((entry) => withTab(entry, 'pattern')),
+    withTab(pattern.recurUntilCompleted, 'pattern'),
+  ];
+
+  const result = await showFormModal(t('taskForm.editTask'), fields, {
+    okLabel: t('common.save'),
+    deleteLabel: t('taskEditor.deleteTask'),
+    initialTab: tab,
+    tabs: [
+      { key: 'details', label: t('taskEditor.tabDetails'), render: (pane) => prependEditorHint(pane, 'taskEditor.detailsHint') },
+      { key: 'pattern', label: t('taskEditor.tabPattern'), render: (pane) => prependEditorHint(pane, 'taskEditor.patternHint') },
+      { key: 'occurrences', label: t('taskEditor.tabOccurrences'), render: (pane) => renderOccurrencesTab(pane, task, occurrenceDate) },
+    ],
+  });
+
+  if (result === MODAL_DELETE_RESULT) {
+    deleteTask(task.id);
     return;
   }
+  if (!result) return;
+  const decoded = decodePatternResult(result);
+  if (!decoded) return;
 
-  return forkTaskFragment(originalTask, newOccurrenceDate, edited);
-}
-
-// The "this and following" mechanics shared by applySplitEdit and
-// openPatternEditForm: truncates/removes the historical portion of
-// originalTask up to (not including) newOccurrenceDate, then pushes a brand
-// new Task record (same taskId/seriesId) carrying `fields` -- the COMPLETE
-// field set for the new fragment, general and pattern alike -- forward from
-// there. Already-recorded Occurrence rows need no copying, since they're
-// keyed by taskId, not any one Task record's own id, and so stay correctly
-// associated regardless of how many fragments the pattern's history now
-// spans.
-function forkTaskFragment(originalTask, newOccurrenceDate, fields) {
-  const originalTaskId = originalTask.taskId;
-  const prevDate = previousOccurrenceBeforeDate(originalTask, newOccurrenceDate);
-
-  if (prevDate) {
-    originalTask.endDate = prevDate; // truncate the historical portion to end right before this occurrence
-    // Once split off, the historical portion can never advance past this
-    // fixed end date -- if its last occurrence were left incomplete, it
-    // would show as a perpetually "carried over" overdue item with no
-    // future occurrence to ever replace it. Dismiss whatever's already in
-    // the past; anything on/after today hasn't happened yet.
-    markOccurrencesDismissedBefore(originalTask, Recurrence.dateToISO(new Date()));
-  } else {
-    tasks = tasks.filter((t) => t.id !== originalTask.id); // this was the series' very first occurrence -- nothing historical to keep
-  }
-
-  // This fragment starts a brand-new occurrence chain from here on (same as
-  // a freshly-created task, not an incremental edit of one already in
-  // progress) -- if it's (becoming) recurUntilCompleted, its dueDate needs
-  // the same snap-to-the-pattern's-actual-first-occurrence treatment a new
-  // task gets (see the no-existingTask branch of openTaskForm's submit
-  // handler and firstRecurUntilCompletedDueDate's own comment), since
-  // newOccurrenceDate is just whatever the split point ended up being and
-  // isn't guaranteed to itself be a date `fields.frequency` lands on --
-  // most obviously when this same edit also changes the frequency to
-  // something the split point doesn't match.
-  const fragmentDueDate = fields.recurUntilCompleted
-    ? Recurrence.firstRecurUntilCompletedDueDate({ dueDate: newOccurrenceDate, frequency: fields.frequency, endDate: fields.endDate }) ||
-      newOccurrenceDate
-    : newOccurrenceDate;
-  const editedFragment = {
-    id: uid(),
-    taskId: originalTaskId,
-    seriesId: originalTask.seriesId,
-    seriesName: originalTask.seriesName,
-    name: fields.name,
-    description: fields.description,
-    details: fields.details,
-    dueDate: fragmentDueDate,
-    dueTime: fields.dueTime,
-    allDay: fields.allDay,
-    appointment: fields.appointment,
-    passive: fields.passive,
-    recurUntilCompleted: fields.recurUntilCompleted,
-    frequency: fields.frequency,
-    endDate: fields.endDate,
-    createdAt: originalTask.createdAt,
-    log: [],
-    comments: [],
+  const allDay = result.allDay.length > 0;
+  const details = {
+    name: result.name,
+    description: result.description,
+    details: result.details,
+    dueTime: allDay ? null : result.dueTime,
+    allDay,
+    appointment: result.appointment.length > 0,
+    passive: result.passive.length > 0,
   };
-  tasks.push(editedFragment);
-  logTaskEvent(editedFragment, 'Recurrence edited (this and following occurrences)', newOccurrenceDate);
-  // Seeds the first live Occurrence for a task newly becoming
-  // recurUntilCompleted via this same edit -- an already-recurUntilCompleted
-  // taskId already has a live pending Occurrence (wherever its chain
-  // currently is), which stays exactly as valid under this fragment's own
-  // settings; nothing to seed.
-  if (fields.recurUntilCompleted && !originalTask.recurUntilCompleted) {
-    ensureOccurrence(editedFragment, fragmentDueDate);
+  if (Object.keys(details).some((k) => (details[k] || null) !== (task[k] || null))) {
+    freezeMixedSeriesNameIfRenaming(task, details.name);
+    applyGeneralInfoInPlace(task, details);
   }
-  return editedFragment;
+  if (patternDiffers(task, decoded)) applyPatternChange(task, decoded);
+  saveTasks();
+  renderTodo();
+  renderSidePanel();
+  refreshTodoManageModal();
 }
 
-// Deletes a recurring task around occurrenceDate, same split point as
-// applySplitEdit but with no edited replacement -- just removing what scope
-// says to remove:
-//  - 'instance': only this occurrence is gone. The series continues
-//    afterward under its original settings, same as if this occurrence had
-//    simply never existed.
-//  - 'following': this occurrence and everything after it is gone. No
-//    continuation task -- there's nothing left of the series past this
-//    point.
-function applySplitDelete(originalTask, occurrenceDate, scope) {
-  if (isProtectedTask(originalTask)) return;
-  const originalTaskId = originalTask.taskId;
-  const originalEndDate = originalTask.endDate || null;
-  const prevDate = previousOccurrenceBeforeDate(originalTask, occurrenceDate);
-  const nextDate = nextOccurrenceAfterDate(originalTask, occurrenceDate);
-  const originalKept = !!prevDate;
+function prependEditorHint(pane, key) {
+  const el = document.createElement('div');
+  el.className = 'task-editor-hint';
+  el.textContent = t(key);
+  pane.prepend(el);
+}
 
-  if (prevDate) {
-    originalTask.endDate = prevDate; // truncate the historical portion to end right before this occurrence
-    markOccurrencesDismissedBefore(originalTask, Recurrence.dateToISO(new Date()));
+// startsOn/skipDates are bookkeeping about the recorded past (see
+// rollPatternForward/deleteOccurrence), not part of what the form edits.
+function patternDiffers(task, { dueDate, frequency, endDate, recurUntilCompleted }) {
+  const strip = (f) => {
+    const copy = { ...f };
+    delete copy.startsOn;
+    delete copy.skipDates;
+    if (copy.type === 'once') return { type: 'once' };
+    return copy;
+  };
+  return (
+    dueDate !== task.dueDate ||
+    (endDate || null) !== (task.endDate || null) ||
+    recurUntilCompleted !== !!task.recurUntilCompleted ||
+    JSON.stringify(strip(frequency)) !== JSON.stringify(strip(task.frequency))
+  );
+}
+
+// What the Occurrences tab lists, newest first: the next occurrence (and,
+// if it's already done, the one after it -- a recurUntilCompleted task's
+// next cycle already exists as its live row by then), then every past one.
+// A recurUntilCompleted occurrence is listed once, at its own date, however
+// far its chain has been carried.
+function listTaskOccurrences(task) {
+  const todayISO = Recurrence.dateToISO(new Date());
+  const entries = [];
+  if (task.recurUntilCompleted) {
+    const live = findOccurrence(task, null);
+    for (const o of occurrences) {
+      if (o.taskId !== task.taskId) continue;
+      if (o === live) entries.push({ date: o.occurrenceDate, next: true });
+      else if (o.occurrenceDate < todayISO || o.status !== 'pending') entries.push({ date: o.occurrenceDate });
+    }
   } else {
-    tasks = tasks.filter((t) => t.id !== originalTask.id); // this was the series' very first occurrence -- nothing historical to keep
+    forEachOccurrenceBefore(task, todayISO, (date) => entries.push({ date }));
+    const yesterdayISO = Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), -1));
+    const next = nextOccurrenceAfterDate(task, yesterdayISO);
+    if (next) {
+      entries.push({ date: next, next: true });
+      const nextRow = findOccurrence(task, next);
+      if (nextRow && nextRow.status === 'completed') {
+        const following = nextOccurrenceAfterDate(task, next);
+        if (following) entries.push({ date: following, next: true });
+      }
+    }
+  }
+  return entries.sort((x, y) => y.date.localeCompare(x.date));
+}
+
+function occurrenceStatusLabel(task, date) {
+  const row = findOccurrence(task, date);
+  const status = row ? row.status : 'pending';
+  if (status === 'completed') return t('taskEditor.statusDone');
+  if (status === 'failed') return t('taskEditor.statusFailed');
+  const todayISO = Recurrence.dateToISO(new Date());
+  if (date < todayISO) return t('taskEditor.statusMissed');
+  return date === todayISO ? t('taskEditor.statusPending') : t('taskEditor.statusUpcoming');
+}
+
+function renderOccurrencesTab(pane, task, initialDate) {
+  let selectedDate = initialDate;
+  let editingComment = null;
+
+  function refreshEverywhere() {
+    saveTasks();
+    renderTodo();
+    renderSidePanel();
   }
 
-  // Whichever fragment still carries this taskId forward afterward gets the
-  // log line -- the new continuation task if there is one, otherwise the
-  // truncated original if it's still around, otherwise there's nothing left
-  // of this taskId to log against at all. No occurrence data needs copying
-  // either way -- every already-recorded Occurrence already belongs to the
-  // right taskId regardless of which Task record currently owns the pattern.
-  let loggedFragment = originalKept ? originalTask : null;
-  if (scope === 'instance' && nextDate) {
-    const continuation = {
-      id: uid(),
-      taskId: originalTaskId,
-      seriesId: originalTask.seriesId,
-      seriesName: originalTask.seriesName,
-      name: originalTask.name,
-      description: originalTask.description,
-      details: originalTask.details,
-      dueDate: nextDate,
-      dueTime: originalTask.dueTime,
-      allDay: originalTask.allDay,
-      appointment: originalTask.appointment,
-      passive: originalTask.passive,
-      recurUntilCompleted: originalTask.recurUntilCompleted,
-      frequency: originalTask.frequency,
-      endDate: originalEndDate,
-      createdAt: originalTask.createdAt,
-      log: [],
-      comments: [],
+  function render() {
+    pane.innerHTML = '';
+    prependEditorHint(pane, 'taskEditor.occurrencesHint');
+    const entries = listTaskOccurrences(task);
+    if (!entries.some((e) => e.date === selectedDate)) selectedDate = entries.length ? (entries.find((e) => e.next) || entries[0]).date : null;
+
+    const list = document.createElement('div');
+    list.className = 'task-occ-list';
+    if (!entries.length) {
+      const empty = document.createElement('div');
+      empty.className = 'task-stats-empty';
+      empty.textContent = t('taskEditor.noOccurrences');
+      list.appendChild(empty);
+    }
+    for (const entry of entries) {
+      const row = document.createElement('div');
+      row.className = 'task-occ-item' + (entry.date === selectedDate ? ' selected' : '') + (entry.next ? ' next' : '');
+      const dateEl = document.createElement('span');
+      dateEl.className = 'task-occ-date';
+      dateEl.textContent = formatShortDate(entry.date) + (entry.next ? ` · ${t('taskEditor.next')}` : '');
+      const statusEl = document.createElement('span');
+      statusEl.className = 'task-occ-status';
+      const occurrenceRow = findOccurrence(task, entry.date);
+      const noteCount = occurrenceRow && occurrenceRow.comments ? occurrenceRow.comments.length : 0;
+      statusEl.textContent = occurrenceStatusLabel(task, entry.date) + (noteCount ? ` · ✎${noteCount}` : '');
+      row.appendChild(dateEl);
+      row.appendChild(statusEl);
+      row.onclick = () => {
+        selectedDate = entry.date;
+        editingComment = null;
+        render();
+      };
+      if (canDeleteOccurrence(task, entry.date)) {
+        appendDeleteButton(row, () => {
+          deleteOccurrence(task, entry.date);
+          refreshEverywhere();
+          render();
+        });
+        // The row's own click selects it -- the delete button's clicks
+        // shouldn't also do that (and re-render away its armed state).
+        row.lastChild.addEventListener('click', (e) => e.stopPropagation());
+      }
+      list.appendChild(row);
+    }
+    pane.appendChild(list);
+
+    if (selectedDate) pane.appendChild(buildOccurrenceDetail());
+    const selectedEl = list.querySelector('.task-occ-item.selected');
+    if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
+  }
+
+  function buildOccurrenceDetail() {
+    const detail = document.createElement('div');
+    detail.className = 'task-occ-detail';
+    const row = findOccurrence(task, selectedDate);
+
+    const notesHeading = document.createElement('div');
+    notesHeading.className = 'task-stats-heading';
+    notesHeading.textContent = `${t('sidePanel.notes')} · ${formatShortDate(selectedDate)}`;
+    detail.appendChild(notesHeading);
+
+    const comments = row ? row.comments || [] : [];
+    if (!comments.length) {
+      const empty = document.createElement('div');
+      empty.className = 'task-stats-empty';
+      empty.textContent = t('sidePanel.noNotes');
+      detail.appendChild(empty);
+    }
+    for (const comment of comments) {
+      const item = document.createElement('div');
+      item.className = 'task-occ-note';
+      if (editingComment === comment) {
+        const input = document.createElement('textarea');
+        input.className = 'modal-input task-occ-note-input';
+        input.value = comment.text;
+        const save = document.createElement('button');
+        save.className = 'menu-btn-small';
+        save.textContent = t('common.save');
+        save.onclick = () => {
+          const text = input.value.trim();
+          if (text) comment.text = text;
+          editingComment = null;
+          refreshEverywhere();
+          render();
+        };
+        item.appendChild(input);
+        item.appendChild(save);
+        setTimeout(() => input.focus(), 0);
+      } else {
+        const text = document.createElement('div');
+        text.className = 'task-occ-note-text';
+        text.textContent = comment.text;
+        const time = document.createElement('div');
+        time.className = 'task-occ-note-time';
+        time.textContent = formatDateTime(comment.timestamp);
+        const body = document.createElement('div');
+        body.className = 'task-occ-note-body';
+        body.appendChild(time);
+        body.appendChild(text);
+        item.appendChild(body);
+        const edit = document.createElement('button');
+        edit.className = 'task-occ-icon-btn';
+        edit.title = t('sidePanel.editNote');
+        edit.innerHTML =
+          '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+        edit.onclick = () => {
+          editingComment = comment;
+          render();
+        };
+        item.appendChild(edit);
+        appendDeleteButton(item, () => {
+          row.comments.splice(row.comments.indexOf(comment), 1);
+          refreshEverywhere();
+          render();
+        });
+      }
+      detail.appendChild(item);
+    }
+
+    const addRow = document.createElement('div');
+    addRow.className = 'task-occ-add-note';
+    const input = document.createElement('input');
+    input.className = 'modal-input';
+    input.placeholder = t('sidePanel.commentPlaceholder');
+    const limitMsg = document.createElement('div');
+    limitMsg.className = 'task-occ-limit hidden';
+    const add = document.createElement('button');
+    add.className = 'menu-btn-small';
+    add.textContent = t('sidePanel.addNote');
+    const submitNote = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      if (!canAddNoteToTask(task)) {
+        limitMsg.textContent = canCompleteOrNoteTask(task) ? t('subscribe.reasonCreateLimit') : t('subscribe.reasonTaskLimit');
+        limitMsg.classList.remove('hidden');
+        return;
+      }
+      addOccurrenceComment(task, selectedDate, text);
+      refreshEverywhere();
+      render();
     };
-    tasks.push(continuation);
-    loggedFragment = continuation;
+    add.onclick = submitNote;
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitNote();
+      }
+    };
+    addRow.appendChild(input);
+    addRow.appendChild(add);
+    detail.appendChild(addRow);
+    detail.appendChild(limitMsg);
+
+    const activityHeading = document.createElement('div');
+    activityHeading.className = 'task-stats-heading';
+    activityHeading.textContent = t('sidePanel.activity');
+    detail.appendChild(activityHeading);
+    const log = row ? (row.log || []).slice().reverse() : [];
+    if (!log.length) {
+      const empty = document.createElement('div');
+      empty.className = 'task-stats-empty';
+      empty.textContent = t('sidePanel.noActivity');
+      detail.appendChild(empty);
+    }
+    const logList = document.createElement('div');
+    logList.className = 'task-occ-log';
+    for (const entry of log) logList.appendChild(buildSidePanelLogRow(entry));
+    detail.appendChild(logList);
+    return detail;
   }
-  if (loggedFragment) {
-    logTaskEvent(
-      loggedFragment,
-      scope === 'instance' ? 'Recurrence occurrence deleted' : 'Recurrence and following occurrences deleted',
-      occurrenceDate
-    );
-  }
+
+  render();
 }
 
 // task-shaped view for previousOccurrenceBeforeDate/nextOccurrenceAfterDate's
@@ -3735,14 +3769,14 @@ function occurrenceScanShape(task) {
 //    Occurrence.isDateExcluded for how the vacated date is tracked (reusing
 //    pendingReschedules' own array-of-dates shape).
 //
-// A found row only counts if it belongs to THIS fragment (see
-// Occurrence.occurrenceBelongsToFragment) -- otherwise every fragment
-// sharing a taskId would also render every other fragment's rows, e.g. an
-// old truncated fragment showing a later one's occurrence past its own
-// endDate.
+// More generally, a task's recorded rows ARE its occurrences, whatever its
+// current pattern says: each task is one record holding only its *current*
+// pattern, and every date an earlier pattern produced is saved as a row
+// before the pattern changes (see rollPatternForward) -- so a row counts
+// even on a date the current pattern doesn't cover (before its startsOn,
+// or off its schedule).
 function occursOnDate(task, dateISO) {
-  const found = findOccurrence(task, dateISO);
-  if (found && Occurrence.occurrenceBelongsToFragment(task, found)) return true;
+  if (findOccurrence(task, dateISO)) return true;
   if (task.recurUntilCompleted) return false;
   return Recurrence.occursOn(task, dateISO) && !Occurrence.isDateExcluded(occurrences, task.taskId, dateISO);
 }
@@ -3754,19 +3788,27 @@ function occursOnDate(task, dateISO) {
 // it were still a live, unclaimed one. recurUntilCompleted has no such
 // exclusion history to check (occurrenceScanShape's own chain-membership
 // scan already only ever reflects the live pending occurrence's real dates).
+//
+// A plain task's recorded rows count too (see occursOnDate) -- whichever of
+// the nearest row and the nearest pattern date is closer wins.
 function previousOccurrenceBeforeDate(task, dateISO) {
   if (task.recurUntilCompleted) {
     const shape = occurrenceScanShape(task);
     return shape ? Recurrence.previousOccurrenceBefore(shape, dateISO) : null;
   }
+  let patternPrev = null;
   let cursor = dateISO;
   for (let i = 0; i < 3660; i++) {
     const prev = Recurrence.previousOccurrenceBefore(task, cursor);
-    if (!prev) return null;
-    if (!Occurrence.isDateExcluded(occurrences, task.taskId, prev)) return prev;
+    if (!prev) break;
+    if (!Occurrence.isDateExcluded(occurrences, task.taskId, prev)) {
+      patternPrev = prev;
+      break;
+    }
     cursor = prev;
   }
-  return null;
+  const rowPrev = taskRowDates(task.taskId).filter((d) => d < dateISO).pop() || null;
+  return [patternPrev, rowPrev].filter(Boolean).sort().pop() || null;
 }
 
 function nextOccurrenceAfterDate(task, afterISO) {
@@ -3774,14 +3816,34 @@ function nextOccurrenceAfterDate(task, afterISO) {
     const shape = occurrenceScanShape(task);
     return shape ? Recurrence.nextOccurrenceAfter(shape, afterISO) : null;
   }
+  let patternNext = null;
   let cursor = afterISO;
   for (let i = 0; i < 3660; i++) {
     const next = Recurrence.nextOccurrenceAfter(task, cursor);
-    if (!next) return null;
-    if (!Occurrence.isDateExcluded(occurrences, task.taskId, next)) return next;
+    if (!next) break;
+    if (!Occurrence.isDateExcluded(occurrences, task.taskId, next)) {
+      patternNext = next;
+      break;
+    }
     cursor = next;
   }
-  return null;
+  const rowNext = taskRowDates(task.taskId).find((d) => d > afterISO) || null;
+  return [patternNext, rowNext].filter(Boolean).sort()[0] || null;
+}
+
+// Every recorded row's date for taskId, ascending.
+function taskRowDates(taskId) {
+  return occurrences
+    .filter((o) => o.taskId === taskId)
+    .map((o) => o.occurrenceDate)
+    .sort();
+}
+
+// Where a plain task's day-by-day scans need to start: its earliest
+// recorded row, or its pattern's own start, whichever comes first.
+function earliestOccurrenceScanStart(task) {
+  const firstRow = taskRowDates(task.taskId)[0];
+  return firstRow && firstRow < task.dueDate ? firstRow : task.dueDate;
 }
 
 // Every date recurUntilCompleted's own forEachOccurrenceBefore/InRange
@@ -3791,11 +3853,14 @@ function nextOccurrenceAfterDate(task, afterISO) {
 // pendingReschedules entry), same as before. Listing every resolved
 // occurrence (not just the live one) is what lets a month view keep showing
 // an occurrence crossed out on its own date after a later one has already
-// taken over as current.
+// taken over as current. Only the live pending row's chain is expanded (see
+// findOccurrence on stale 'pending' rows) -- any other row, resolved or
+// not, is just its own date.
 function allRecurUntilCompletedDatesInRange(task, startISO, cutoffISO, fn) {
+  const live = findOccurrence(task, null);
   for (const occurrence of occurrences) {
-    if (occurrence.taskId !== task.taskId || !Occurrence.occurrenceBelongsToFragment(task, occurrence)) continue;
-    const dates = occurrence.status === 'pending' ? [occurrence.occurrenceDate, ...(occurrence.pendingReschedules || [])] : [occurrence.occurrenceDate];
+    if (occurrence.taskId !== task.taskId) continue;
+    const dates = occurrence === live ? [occurrence.occurrenceDate, ...(occurrence.pendingReschedules || [])] : [occurrence.occurrenceDate];
     for (const date of dates) {
       if (date >= startISO && date < cutoffISO) fn(date);
     }
@@ -3804,7 +3869,7 @@ function allRecurUntilCompletedDatesInRange(task, startISO, cutoffISO, fn) {
 
 function forEachOccurrenceBefore(task, cutoffISO, fn) {
   if (task.recurUntilCompleted) return allRecurUntilCompletedDatesInRange(task, '', cutoffISO, fn);
-  let cursor = task.dueDate;
+  let cursor = earliestOccurrenceScanStart(task);
   for (let i = 0; i < 3660 && cursor < cutoffISO; i++) {
     // occursOnDate, not Recurrence.occursOn directly -- this loop only ever
     // reaches here for a non-recurUntilCompleted task (see the early return
@@ -3818,44 +3883,20 @@ function forEachOccurrenceBefore(task, cutoffISO, fn) {
 }
 
 // Same as forEachOccurrenceBefore, but bounded below too -- starts at
-// whichever is later, task.dueDate or startISO, instead of always scanning
-// from dueDate (which could be years before the range actually of interest,
+// whichever is later, the task's own scan start or startISO, instead of always
+// scanning from the task's start (which could be years before the range actually of interest,
 // e.g. this month -- see computeAllTasksItems/the "pending/overdue" side of
 // computeTodoDisplayItems).
 function forEachOccurrenceInRange(task, startISO, cutoffISO, fn) {
   if (task.recurUntilCompleted) return allRecurUntilCompletedDatesInRange(task, startISO, cutoffISO, fn);
-  let cursor = task.dueDate > startISO ? task.dueDate : startISO;
+  const scanStart = earliestOccurrenceScanStart(task);
+  let cursor = scanStart > startISO ? scanStart : startISO;
   for (let i = 0; i < 3660 && cursor < cutoffISO; i++) {
     // See forEachOccurrenceBefore's own comment on why occursOnDate, not
     // Recurrence.occursOn directly.
     if (occursOnDate(task, cursor)) fn(cursor);
     cursor = Recurrence.dateToISO(Recurrence.addDays(new Date(cursor + 'T00:00:00'), 1));
   }
-}
-
-// Marks every occurrence of task strictly before cutoffISO as dismissed
-// (Occurrence.dismissed, not its status -- whether it was ever actually
-// done stays whatever it already was, so an appointment's genuinely missed
-// past occurrences stay recorded as failed rather than silently rewritten
-// to "completed") -- used right after truncating a split-off historical
-// task to a fixed end date, so it doesn't linger as an incomplete "carried
-// over" item forever. Immediate, unlike scheduleOccurrencesDismissalBefore
-// below -- there's no live "uncheck to undo" interaction happening here to
-// leave a linger window for.
-//
-// Never dismisses a recurUntilCompleted task's still-'pending' occurrence,
-// even if forEachOccurrenceBefore visits one of its (overdue) dates here --
-// that one Occurrence row is still live and governed by whichever Task
-// fragment now owns the pattern going forward (its taskId doesn't change
-// across a split), so hiding it would bury something still actionable, not
-// sweep away dead history (see autoDismissStaleCarriedOverOccurrences'
-// own comment on the same exemption).
-function markOccurrencesDismissedBefore(task, cutoffISO) {
-  forEachOccurrenceBefore(task, cutoffISO, (date) => {
-    const occurrence = ensureOccurrence(task, date);
-    if (task.recurUntilCompleted && occurrence.status === 'pending') return;
-    occurrence.dismissed = true;
-  });
 }
 
 // Same idea, but for completing a later occurrence after one or more
@@ -3874,83 +3915,21 @@ function scheduleOccurrencesDismissalBefore(task, cutoffISO) {
   forEachOccurrenceBefore(task, cutoffISO, (date) => scheduleDismissal(task, date));
 }
 
-const editScopeOverlay = document.getElementById('edit-scope-overlay');
-
-// Resolves 'instance' | 'following' | 'all' | null (cancelled). Only shown
-// for recurring tasks -- a 'once' task has nothing to split, so its
-// double-click skips straight to editing it.
-function showEditScopeChoice() {
-  return new Promise((resolve) => {
-    editScopeOverlay.classList.remove('hidden');
-    const instanceBtn = document.getElementById('edit-scope-instance');
-    const followingBtn = document.getElementById('edit-scope-following');
-    const allBtn = document.getElementById('edit-scope-all');
-    const cancelBtn = document.getElementById('edit-scope-cancel');
-
-    function finish(choice) {
-      editScopeOverlay.classList.add('hidden');
-      instanceBtn.onclick = null;
-      followingBtn.onclick = null;
-      allBtn.onclick = null;
-      cancelBtn.onclick = null;
-      resolve(choice);
-    }
-
-    instanceBtn.onclick = () => finish('instance');
-    followingBtn.onclick = () => finish('following');
-    allBtn.onclick = () => finish('all');
-    cancelBtn.onclick = () => finish(null);
-  });
-}
-
-// Shared by a row's double-click and its context menu's "Edit" item --
-// general info only (name/description/details/...), never the recurrence
-// pattern (see editTaskPattern for that, reached separately from the
-// context menu). A 'once' task has no recurrence to split, so it skips
-// straight to editing it -- only recurring tasks get the "which
-// occurrence(s)" choice.
-async function editTaskOccurrence(task, occurrenceDate) {
-  if (isProtectedTask(task)) return;
-  if (task.frequency.type === 'once') {
-    openTaskForm(task);
-    return;
-  }
-  const scope = await showEditScopeChoice();
-  if (!scope) return;
-  openTaskGeneralInfoForm(task, { occurrenceDate, scope });
-}
-
-function taskHasRecordedHistory(task) {
-  return occurrences.some((o) => o.taskId === task.taskId);
-}
-
-// The recurrence-pattern counterpart to editTaskOccurrence, reached only via
-// the context menu (never double-click -- pattern editing is a deliberately
-// less-common action than general-info editing). Whether the edit applies
-// in place or forces a "this and following" fork is a fact about the task,
-// not a user choice -- see openPatternEditForm's own comment:
-//  - no recorded history yet: nothing to protect, edit in place.
-//  - recurUntilCompleted: ALWAYS in place, regardless of history -- its live
-//    due date is governed by its current pending Occurrence's own
-//    pendingReschedules chain, not by these fields, so in-place is always
-//    safe and forking is actually the risky option (see applyPatternInPlace
-//    and forkTaskFragment's own comments).
-//  - otherwise: forced fork, so history before this point is never
-//    retroactively affected.
-async function editTaskPattern(task, occurrenceDate) {
-  if (isProtectedTask(task) || task.frequency.type === 'once') return;
-  if (task.recurUntilCompleted || !taskHasRecordedHistory(task)) {
-    openPatternEditForm(task, { inPlace: true });
-  } else {
-    openPatternEditForm(task, { occurrenceDate, scope: 'following' });
-  }
+// A row's double-click and its context menu's "Edit" item -- the task
+// editor's Details tab, with this occurrence preselected in its Occurrences
+// tab.
+function editTaskOccurrence(task, occurrenceDate) {
+  openTaskEditor(task, { tab: 'details', occurrenceDate });
 }
 
 function deleteTask(taskId) {
   const task = tasks.find((t) => t.id === taskId);
   if (!task || isProtectedTask(task)) return;
   tasks = tasks.filter((t) => t.id !== taskId);
+  // One record per task, so its occurrences go with it.
+  occurrences = occurrences.filter((o) => o.taskId !== task.taskId);
   if (activeTaskId === taskId) setActiveTaskId(null);
+  if (sidePanelTask === task) deselectSidePanelTask();
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
@@ -3998,8 +3977,7 @@ function reopenRecurUntilCompletedOccurrence(task, occurrence) {
       o !== occurrence &&
       o.taskId === task.taskId &&
       o.status !== 'pending' &&
-      o.occurrenceDate > occurrence.occurrenceDate &&
-      Occurrence.occurrenceBelongsToFragment(task, o)
+      o.occurrenceDate > occurrence.occurrenceDate
   );
   if (laterResolved) return false;
 
@@ -4667,11 +4645,10 @@ function buildTodoItemRow(item, isToday) {
   // (a recurring task can show up to three rows at once; see
   // activeOccurrenceDate).
   const isActiveHere = item.task.id === activeTaskId && item.occurrenceDate === activeOccurrenceDate;
-  // A "this occurrence only" edit (see applySplitEdit's 'instance' scope)
-  // stores its overrides on the Occurrence row itself rather than the task
-  // -- effectiveTask is what should actually be displayed for this one row;
-  // item.task stays the real record for identity/actions (taskId lookups,
-  // toggling, editing, ...).
+  // Occurrence.overrides (old "this occurrence only" edits) are cleared by
+  // migrateToSingleRecordTasks and never written anymore, so effectiveTask
+  // is just item.task in practice -- kept as the one place a row reads its
+  // display fields from.
   const rowOccurrence = findOccurrence(item.task, item.occurrenceDate);
   const effectiveTask = Occurrence.applyOverrides(item.task, rowOccurrence);
   const row = document.createElement('div');
@@ -4769,8 +4746,7 @@ function buildTodoItemRow(item, isToday) {
   name.className = 'todo-item-name';
   // A task that's part of a mixed series (see isMixedSeries) is shown as
   // "[series name]: [task name]" so it reads as belonging to that group;
-  // a single task or same-taskId recurring fragments just show their own
-  // name, as before. So does a task whose name is the series' own name (e.g.
+  // a task on its own just shows its own name. So does a task whose name is the series' own name (e.g.
   // the task a series was named after) -- "Higijena: Higijena" would just
   // repeat itself.
   const seriesLabelInfo = seriesRowLabelInfo(item.task.seriesId);
@@ -5228,9 +5204,8 @@ function ensureTimerTicking() {
 // Side panel -- notes and activity history for whichever task was last
 // interacted with (see selectTaskForSidePanel, called from the to-do list's
 // click/right-click/checkbox/focus/dismiss handlers). Scoped to just the one
-// selected record ('occurrence'), every record sharing its taskId ('task' --
-// e.g. every fragment of a recurring task that's been split via edit-scope),
-// or its whole series ('series' -- every record sharing its seriesId, which
+// selected occurrence ('occurrence'), the task as a whole ('task' -- its own
+// notes/activity plus every one of its occurrences'), or its whole series ('series' -- every record sharing its seriesId, which
 // can span multiple distinct taskIds once tasks have been merged together in
 // the manage-tasks modal) -- see sidePanelScope/sidePanelRecords.
 // ---------------------------------------------------------------------------
@@ -5388,8 +5363,7 @@ function renderSidePanelOccurrenceActions(task, occurrenceDate, occurrence) {
   const editBtn = document.createElement('button');
   editBtn.className = 'menu-btn-small';
   editBtn.textContent = t('occurrencePanel.editThisOccurrence');
-  editBtn.onclick = () =>
-    task.frequency.type === 'once' ? openTaskForm(task) : openTaskGeneralInfoForm(task, { occurrenceDate, scope: 'instance' });
+  editBtn.onclick = () => openTaskEditor(task, { tab: 'occurrences', occurrenceDate });
   sidePanelOccurrenceActionsEl.appendChild(editBtn);
 
   const manageable = Occurrence.canManageOccurrenceDirectly(task, occurrence);
@@ -5401,7 +5375,14 @@ function renderSidePanelOccurrenceActions(task, occurrenceDate, occurrence) {
   rescheduleBtn.onclick = () => rescheduleOccurrencePrompt(task, occurrence);
   sidePanelOccurrenceActionsEl.appendChild(rescheduleBtn);
 
-  if (manageable) appendDeleteButton(sidePanelOccurrenceActionsEl, () => deleteOccurrenceRecord(task, occurrenceDate));
+  if (canDeleteOccurrence(task, occurrenceDate)) {
+    appendDeleteButton(sidePanelOccurrenceActionsEl, () => {
+      deleteOccurrence(task, occurrenceDate);
+      saveTasks();
+      renderTodo();
+      renderSidePanel();
+    });
+  }
 }
 
 async function rescheduleOccurrencePrompt(task, occurrence) {
@@ -5453,17 +5434,6 @@ async function rescheduleOccurrencePrompt(task, occurrence) {
     occurrence.pendingReschedules.push(occurrence.occurrenceDate);
   }
   occurrence.occurrenceDate = result.newDate;
-  saveTasks();
-  renderTodo();
-  renderSidePanel();
-}
-
-function deleteOccurrenceRecord(task, occurrenceDate) {
-  if (isProtectedTask(task)) return;
-  const occurrence = findOccurrence(task, occurrenceDate);
-  if (!occurrence || !Occurrence.canManageOccurrenceDirectly(task, occurrence)) return;
-  occurrences.splice(occurrences.indexOf(occurrence), 1);
-  logTaskEvent(task, 'Occurrence record deleted', occurrenceDate);
   saveTasks();
   renderTodo();
   renderSidePanel();
@@ -5572,28 +5542,16 @@ function formatShortDate(dateISO) {
 // Pausing recurrence -- hides every occurrence from a right-clicked one
 // (inclusive) up to a picked date, resuming on exactly that date (even one
 // the pattern itself wouldn't land on) and continuing per the pattern from
-// there. Earlier occurrences are untouched. Nothing is deleted: Occurrence
-// rows inside the paused window stay in the data, just no longer belonging
-// to any fragment's range (see Occurrence.occurrenceBelongsToFragment), so
-// they simply stop showing.
+// there. Earlier occurrences are untouched.
 //
-// A plain recurring task is re-cut using the same fragment mechanics as a
-// "this and following" split, rather than by moving its pattern's start to
-// the picked date: several patterns are anchored on dueDate itself (every
-// N days counts from it, monthly-by-day takes its day of month from it, ...),
-// so re-anchoring there would quietly change the pattern. Instead:
-//  - the fragment owning the right-clicked occurrence is truncated to end
-//    right before it (or dropped, if it has no earlier occurrence left);
-//  - a one-off 'once' fragment (same idea as promptManualOccurrence's)
-//    covers the picked date, unless the pattern lands there anyway;
-//  - the pattern carries on unchanged from its own first date on/after the
-//    picked one (its phase preserved, since that's a date it already lands
-//    on -- same reasoning applySplitEdit's own fragments rely on).
-// Any later fragment of the same task starting inside the paused window
-// (from a "this and following" edit on a future occurrence, or a manual
-// occurrence) is dropped or moved up the same way, so nothing of it leaks
-// into the pause either; whichever fragment is in effect on the picked date
-// is the pattern that resumes.
+// A plain recurring task's pattern is rolled forward (see
+// rollPatternForward): everything it produced before the paused occurrence
+// is saved as rows, and it then starts again from the picked date --
+// frequency.startsOn, not a moved dueDate, so its phase is preserved (every
+// N days, monthly day of month, ... are all anchored on dueDate). Blank rows
+// inside the paused span go; one with anything recorded on it stays. A
+// `manual` row covers the picked date itself if the pattern doesn't land
+// there.
 //
 // A recurUntilCompleted task has no pattern dates to cut -- just its one
 // live pending Occurrence (see findOccurrence), which simply moves to the
@@ -5610,16 +5568,9 @@ function canPauseRecurrence(item) {
   return task.frequency.type !== 'once' && !item.completed && !item.failed;
 }
 
-// The latest date the task can still occur on at all, across every
-// recurring fragment of it -- null if any of them is open-ended.
+// The latest date the task can still occur on at all -- null if open-ended.
 function lastPossibleOccurrenceDate(task) {
-  let last = '';
-  for (const f of tasks) {
-    if (f.taskId !== task.taskId || f.frequency.type === 'once') continue;
-    if (!f.endDate) return null;
-    if (f.endDate > last) last = f.endDate;
-  }
-  return last || task.endDate || null;
+  return task.frequency.type === 'once' ? task.dueDate : task.endDate || null;
 }
 
 async function promptPauseRecurrence(task, occurrenceDate) {
@@ -5684,78 +5635,24 @@ function pauseRecurUntilCompletedOccurrence(task, occurrenceDate, resumeISO) {
   return true;
 }
 
-function pausePlainRecurrence(owner, pauseFromISO, resumeISO) {
-  const fragments = tasks.filter((f) => f.taskId === owner.taskId);
-  if (fragments.some((f) => f.recurUntilCompleted)) {
-    // A task that's been recurUntilCompleted for part of its history and not
-    // for another -- rare enough, and ambiguous enough about what "resume"
-    // should mean, not to guess at.
-    showInfoModal(t('pause.unsupportedMixed'));
-    return false;
-  }
-  const covers = (f, d) => f.dueDate <= d && (!f.endDate || f.endDate >= d);
-  // The pattern in effect on the resume date: the owner itself, or a later
-  // recurring fragment starting inside the window. Fragments never overlap,
-  // so there's at most one.
-  const governing = fragments.find((f) => f.frequency.type !== 'once' && covers(f, resumeISO) && (f === owner || f.dueDate > pauseFromISO));
-  if (!governing) {
+function pausePlainRecurrence(task, pauseFromISO, resumeISO) {
+  if (task.endDate && resumeISO > task.endDate) {
     showInfoModal(t('pause.nothingAfter'));
     return false;
   }
-
-  releaseOccurrenceDatesForPause(owner.taskId, pauseFromISO, resumeISO);
-
-  // Computed before anything below changes the fragments they depend on.
-  const ownerPrev = previousOccurrenceBeforeDate(owner, pauseFromISO);
-  const governingEndDate = governing.endDate || null;
-  const resumeIsPatternDate = occursOnDate(governing, resumeISO);
-  const continueFrom = resumeIsPatternDate ? resumeISO : nextOccurrenceAfterDate(governing, resumeISO);
-
-  // Every Task-level note/log entry of a fragment that's dropped here is
-  // carried over onto whichever record survives (see `heir` below), not lost
-  // along with it.
-  const dropped = [];
-  const drop = (f) => {
-    if (!dropped.includes(f)) dropped.push(f);
-  };
-  // Anything else starting inside the window -- a later fragment wholly
-  // paused, or a manual one-off occurrence there -- goes entirely.
-  for (const f of fragments) {
-    if (f !== owner && f !== governing && f.dueDate >= pauseFromISO && f.dueDate < resumeISO) drop(f);
+  releaseOccurrenceDatesForPause(task.taskId, pauseFromISO, resumeISO);
+  rollPatternForward(task, pauseFromISO);
+  const frequency = { ...task.frequency, startsOn: resumeISO };
+  if (frequency.skipDates) {
+    frequency.skipDates = frequency.skipDates.filter((d) => d >= resumeISO);
+    if (!frequency.skipDates.length) delete frequency.skipDates;
   }
-
-  let continuation = null;
-  if (governing === owner) {
-    if (continueFrom) {
-      continuation = { ...owner, id: uid(), dueDate: continueFrom, endDate: governingEndDate, log: [], comments: [] };
-    }
-  } else if (continueFrom) {
-    governing.dueDate = continueFrom; // starts inside the window -- moved up to where it resumes
-    continuation = governing;
-  } else {
-    drop(governing);
+  task.frequency = frequency;
+  dropBlankOccurrences(task.taskId, pauseFromISO, resumeISO);
+  if (!Recurrence.occursOn(task, resumeISO) && !findOccurrence(task, resumeISO)) {
+    occurrences.push(Occurrence.createOccurrence({ id: uid(), taskId: task.taskId, occurrenceDate: resumeISO, manual: true }));
   }
-  if (ownerPrev) owner.endDate = ownerPrev;
-  else drop(owner); // nothing of it left before the pause
-
-  // A manual one-off already sitting on the resume date covers it just the
-  // same (it's outside the window, so the loop above left it alone).
-  const resumeAlreadyCovered = resumeIsPatternDate || fragments.some((f) => f.frequency.type === 'once' && f.dueDate === resumeISO);
-  const resumeFragment = resumeAlreadyCovered
-    ? null
-    : { ...governing, id: uid(), dueDate: resumeISO, endDate: null, frequency: { type: 'once', interval: 1 }, log: [], comments: [] };
-
-  const heir = continuation || resumeFragment || (ownerPrev ? owner : null);
-  for (const f of dropped) {
-    if (heir && f !== heir) {
-      heir.log = [...(heir.log || []), ...(f.log || [])];
-      heir.comments = [...(heir.comments || []), ...(f.comments || [])];
-    }
-  }
-  tasks = tasks.filter((f) => !dropped.includes(f));
-  if (resumeFragment) tasks.push(resumeFragment);
-  if (continuation && continuation !== governing) tasks.push(continuation);
-  if (heir) logTaskEvent(heir, `Recurrence paused until ${resumeISO}`, pauseFromISO);
+  logTaskEvent(task, `Recurrence paused until ${resumeISO}`, pauseFromISO);
   return true;
 }
 
@@ -5816,7 +5713,7 @@ function agendaTimeToMinutes(hhmm) {
 // both are excluded rather than dragging the average toward zero. null
 // (rather than 0) signals "no measurements at all", so callers can fall back
 // to a plain default instead of showing a zero-length block. Scoped to this
-// one task (its taskId, i.e. every fragment of it), never its whole series:
+// one task (its taskId), never its whole series:
 // a series groups otherwise unrelated tasks, whose durations say nothing
 // about this one's.
 function averageFocusedMinutesForCompletedOccurrences(task) {
@@ -6047,48 +5944,25 @@ function attachAgendaBlockDrag(el, item) {
   });
 }
 
-// Applies a drag-reschedule's dropped due time -- same "which occurrence(s)"
-// choice (showEditScopeChoice) and the same underlying apply functions
-// (applyGeneralInfoInPlace/applySplitEdit) as a manual edit through
-// openTaskGeneralInfoForm, just with only dueTime actually changing and
-// everything else carried through from the occurrence's current effective
-// fields untouched -- so a drag produces exactly the same kind of record
-// (and the same activity-log entries) a form edit would. A 'once' task skips
-// the scope choice entirely, same shortcut editTaskOccurrence uses, since
-// there's nothing to split.
-//
-// Called unconditionally on drop (whatever the outcome) so renderTodo()
+// Applies a drag-reschedule's dropped due time to the task itself -- like
+// any other change to its data, that's every occurrence's due time (see
+// applyGeneralInfoInPlace). Called unconditionally on drop so renderTodo()
 // always runs -- see attachAgendaBlockDrag's own comment on why that's what
-// discards the live-drag inline styles, dropped-back-to-the-same-time and
-// cancelled-scope-choice alike.
-async function rescheduleAgendaItem(task, occurrenceDate, newDueTime) {
-  const effective = Occurrence.applyOverrides(task, findOccurrence(task, occurrenceDate));
-  let changed = false;
-  if (effective.dueTime !== newDueTime) {
-    const fields = {
-      name: effective.name,
-      description: effective.description,
-      details: effective.details,
+// discards the live-drag inline styles, dropped-back-to-the-same-time
+// included.
+function rescheduleAgendaItem(task, occurrenceDate, newDueTime) {
+  if (task.dueTime !== newDueTime) {
+    applyGeneralInfoInPlace(task, {
+      name: task.name,
+      description: task.description,
+      details: task.details,
       dueTime: newDueTime,
-      allDay: effective.allDay,
-      appointment: effective.appointment,
-      passive: effective.passive,
-    };
-    if (task.frequency.type === 'once') {
-      applyGeneralInfoInPlace(task, fields);
-      changed = true;
-    } else {
-      const scope = await showEditScopeChoice();
-      if (scope === 'all') {
-        applyGeneralInfoInPlace(task, fields);
-        changed = true;
-      } else if (scope) {
-        applySplitEdit(task, { originalOccurrenceDate: occurrenceDate, newOccurrenceDate: occurrenceDate, scope }, fields);
-        changed = true;
-      }
-    }
+      allDay: task.allDay,
+      appointment: task.appointment,
+      passive: task.passive,
+    });
+    saveTasks();
   }
-  if (changed) saveTasks();
   renderTodo();
 }
 
@@ -6230,17 +6104,15 @@ function buildSidePanelLogRow(entry, label) {
   return item;
 }
 
-// Any surviving fragment sharing taskId will do -- purely a display label
-// for an Occurrence-level comment/log entry in 'task'/'series' scope; a
-// name difference across split fragments isn't worth chasing down here.
+// Purely a display label for an Occurrence-level comment/log entry in
+// 'task'/'series' scope.
 function taskNameForId(taskId) {
   const match = tasks.find((t) => t.taskId === taskId);
   return match ? match.name : '';
 }
 
 // One block per task record -- its own name/description/details, since
-// fragments of a split recurring task or members of a merged series can
-// differ on any of those.
+// members of a merged series differ on any of those.
 function buildSidePanelTaskSummary(task) {
   const item = document.createElement('div');
   item.className = 'side-panel-task-summary';
@@ -6298,8 +6170,8 @@ function renderSidePanel() {
   sidePanelEmptyEl.classList.add('hidden');
   sidePanelContentEl.classList.remove('hidden');
   // Only a mixed series (see isMixedSeries) has a series name worth
-  // showing above the individual task summaries below; a single task or
-  // same-taskId recurring fragments have nothing to add there.
+  // showing above the individual task summaries below; a single task has
+  // nothing to add there.
   const mixedSeries = isMixedSeries(sidePanelTask.seriesId);
   sidePanelTitleEl.textContent = mixedSeries ? getSeriesName(sidePanelTask.seriesId) : '';
   sidePanelTitleEl.classList.toggle('hidden', !mixedSeries);
@@ -6320,10 +6192,9 @@ function renderSidePanel() {
   sidePanelCommentAddBtn.classList.toggle('locked', commentAddLocked);
 
   const records = sidePanelRecords();
-  // Only single-record ('occurrence') scope has just the one selected
-  // record's own name/description/details to show -- 'task' and 'series'
-  // both merge multiple records, whose fragments/members can differ on any
-  // of those, so every one of them gets its own summary block.
+  // 'task' and 'series' scope show each in-scope task's own name/
+  // description/details as a summary block ('series' can merge several
+  // tasks, which differ on any of those); 'occurrence' scope doesn't.
   const showTaskInfo = sidePanelScope !== 'occurrence';
 
   sidePanelSummariesEl.innerHTML = '';
@@ -6572,16 +6443,9 @@ function renderTodoManageMonths() {
       .sort((a, b) => a.name.localeCompare(b.name));
 
     for (const { seriesId, members, name } of seriesInMonth) {
-      // White: a single task record (whether a plain one-off or an unbroken
-      // recurring task). Blue: more than one record, but all of them are
-      // fragments of the SAME logical task (one taskId) -- a recurring task
-      // that's been split via edit-scope but never merged with anything
-      // else. Green: more than one record spanning multiple distinct
-      // taskIds -- this series is itself a merge of separately-created
-      // tasks (see the drag & drop handling below).
-      const distinctTaskIds = new Set(members.map((t) => t.taskId));
-      const colorClass =
-        members.length <= 1 ? 'series-row-single' : distinctTaskIds.size === 1 ? 'series-row-multi' : 'series-row-mixed';
+      // White: a single task. Green: several -- this series is a merge of
+      // separately-created tasks (see the drag & drop handling below).
+      const colorClass = members.length <= 1 ? 'series-row-single' : 'series-row-mixed';
 
       const row = document.createElement('div');
       row.className = 'series-row ' + colorClass;
@@ -6589,12 +6453,11 @@ function renderTodoManageMonths() {
       row.textContent = name;
       row.onclick = () => selectSeriesInManage(seriesId);
 
-      // Only a series representing a single logical task -- white or blue,
-      // i.e. exactly one taskId, however many records it's split into --
-      // can be dragged into another one. A green (already-mixed) series
-      // can't be pulled in as a further unit; peeling a task back out of it
-      // still has to go through the explicit "Remove from series" button.
-      if (distinctTaskIds.size === 1) {
+      // Only a series of a single task (white) can be dragged into another
+      // one. A green (already-mixed) series can't be pulled in as a further
+      // unit; peeling a task back out of it still has to go through the
+      // explicit "Remove from series" button.
+      if (members.length === 1) {
         row.draggable = true;
         row.ondragstart = (e) => {
           e.dataTransfer.setData('text/plain', seriesId);
@@ -6609,97 +6472,26 @@ function renderTodoManageMonths() {
   }
 }
 
-// Gives `sourceTask` one extra occurrence on a date the user picks -- e.g.
-// resuming a task whose recurrence has already ended (its own
-// frequency/endDate is left untouched; this doesn't "un-end" it, it just
-// adds one more record after the fact), or giving a one-off task a second
-// occurrence. Shares sourceTask's taskId (still "the same logical task",
-// same idea as a split-off fragment -- see applySplitEdit) and seriesId,
-// copying sourceTask's name/description/details/appointment/passive as a
-// starting point since the form here only asks for the date/time.
-//
-// If sourceTask is itself recurring (necessarily with an end date already
-// reached -- see buildSeriesMemberRow's disabling of the button otherwise),
-// the new record keeps that same frequency and picks up a fresh end date the
-// same length past the new due date as the original was past its own due
-// date, so the series effectively resumes for another run of the same span
-// instead of collapsing to a single occurrence. A one-off source just gets
-// another independent 'once' record, as before.
-async function promptManualOccurrence(sourceTask) {
-  if (isProtectedTask(sourceTask)) return;
-  const isRecurring = sourceTask.frequency.type !== 'once';
-  const hasEndDate = !!sourceTask.endDate;
-
-  // A recurring task with no end date is still generating its own
-  // occurrences forever -- there's nothing for a manual one to add on top of
-  // that. Defensive backstop; the button itself is disabled for this case.
-  if (isRecurring && !hasEndDate) return;
-
-  const result = await showFormModal(t('manualOccurrence.title'), [
-    {
-      name: 'dueDate',
-      label: t('taskForm.dueDate'),
-      type: 'date',
-      value: Recurrence.dateToISO(new Date()),
-      min: hasEndDate ? sourceTask.endDate : undefined,
-    },
-    {
-      name: 'allDay',
-      label: '',
-      type: 'checkboxes',
-      value: sourceTask.allDay ? ['allDay'] : [],
-      options: [{ value: 'allDay', label: t('taskForm.allDay') }],
-      required: false,
-    },
-    {
-      name: 'dueTime',
-      label: t('taskForm.dueTime'),
-      type: 'time',
-      value: sourceTask.dueTime || '18:00',
-      showIf: (v) => v.allDay.length === 0,
-    },
-  ]);
-  if (!result) return;
-
-  // `min` above is only a hint to the native date picker -- a typed-in date
-  // isn't rejected by it, so this is the real guard against resuming the
-  // series before it actually stopped.
-  if (hasEndDate && result.dueDate < sourceTask.endDate) {
-    showInfoModal(t('manualOccurrence.endDateTooEarly'));
+// Gives `task` one extra occurrence on a date the user picks, whatever its
+// pattern says -- e.g. once more after its recurrence has ended, or a second
+// date for a one-off. Just a `manual` row (rows always count as occurrences,
+// see occursOnDate); the task's own data, time included, applies to it like
+// to any other occurrence.
+async function promptManualOccurrence(task) {
+  if (isProtectedTask(task)) return;
+  const dateISO = await showDatePickerModal({
+    title: t('manualOccurrence.title'),
+    hint: task.name,
+    minISO: '2000-01-01',
+    initialISO: Recurrence.dateToISO(new Date()),
+  });
+  if (!dateISO) return;
+  if (occursOnDate(task, dateISO)) {
+    showInfoModal(t('manualOccurrence.exists'));
     return;
   }
-
-  const allDay = result.allDay.length > 0;
-  const endDate = isRecurring
-    ? Recurrence.dateToISO(
-        Recurrence.addDays(new Date(result.dueDate + 'T00:00:00'), Recurrence.daysBetween(sourceTask.dueDate, sourceTask.endDate))
-      )
-    : null;
-  const frequency = isRecurring ? sourceTask.frequency : { type: 'once', interval: 1 };
-
-  const manualFragment = {
-    id: uid(),
-    taskId: sourceTask.taskId,
-    seriesId: sourceTask.seriesId,
-    seriesName: sourceTask.seriesName,
-    name: sourceTask.name,
-    description: sourceTask.description,
-    details: sourceTask.details,
-    dueDate: result.dueDate,
-    dueTime: allDay ? null : result.dueTime,
-    allDay,
-    appointment: sourceTask.appointment,
-    passive: sourceTask.passive,
-    recurUntilCompleted: sourceTask.recurUntilCompleted,
-    endDate,
-    frequency,
-    createdAt: sourceTask.createdAt,
-    log: [],
-    comments: [],
-  };
-  tasks.push(manualFragment);
-  logTaskEvent(manualFragment, 'Manual occurrence added', manualFragment.dueDate);
-  if (manualFragment.recurUntilCompleted) ensureOccurrence(manualFragment, manualFragment.dueDate);
+  occurrences.push(Occurrence.createOccurrence({ id: uid(), taskId: task.taskId, occurrenceDate: dateISO, manual: true }));
+  logTaskEvent(task, 'Manual occurrence added', dateISO);
   saveTasks();
   renderTodo();
   refreshTodoManageModal();
@@ -6732,16 +6524,10 @@ function buildSeriesMemberRow(task) {
   info.appendChild(meta);
   row.appendChild(info);
 
-  // Adds one more occurrence of this task on a date the user picks -- works
-  // the same whether this task is a plain one-off or its recurrence/end date
-  // has already passed (see promptManualOccurrence). Disabled for a task
-  // that's still actively recurring with no end date: it's already
-  // generating its own occurrences forever, so there's nothing for a manual
-  // one to add.
-  const stillOpenEndedRecurring = task.frequency.type !== 'once' && !task.endDate;
+  // Adds one more occurrence of this task on a date the user picks (see
+  // promptManualOccurrence).
   const addOccurrenceBtn = document.createElement('button');
-  addOccurrenceBtn.title = stillOpenEndedRecurring ? t('manualOccurrence.cantAdd') : t('manualOccurrence.add');
-  addOccurrenceBtn.disabled = stillOpenEndedRecurring;
+  addOccurrenceBtn.title = t('manualOccurrence.add');
   addOccurrenceBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zm-8-8h2v2h2v2h-2v2h-2v-2H9v-2h2z"/></svg>';
   addOccurrenceBtn.onclick = () => promptManualOccurrence(task);
@@ -6767,26 +6553,10 @@ function buildSeriesMemberRow(task) {
   editBtn.title = t('common.edit');
   editBtn.innerHTML =
     '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
-  // This row edits one Task record directly (no specific occurrence
-  // context) -- for a 'once' task that's still just openTaskForm, but a
-  // recurring record needs the same general-vs-pattern split as everywhere
-  // else. 'all' scope here mirrors editTaskOccurrence's own 'all' branch:
-  // an in-place general-info edit of this one record.
-  editBtn.onclick = () =>
-    task.frequency.type === 'once' ? openTaskForm(task) : openTaskGeneralInfoForm(task, { occurrenceDate: task.dueDate, scope: 'all' });
+  // The task editor -- its Recurrence tab covers the pattern too.
+  editBtn.onclick = () => openTaskEditor(task);
   row.appendChild(editBtn);
 
-  if (task.frequency.type !== 'once') {
-    const editPatternBtn = document.createElement('button');
-    editPatternBtn.title = t('menu.editPattern');
-    editPatternBtn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v5z"/></svg>';
-    // No specific occurrence context here either -- editTaskPattern only
-    // uses occurrenceDate as the fork point when a fork is actually needed,
-    // so this record's own dueDate is the right stand-in.
-    editPatternBtn.onclick = () => editTaskPattern(task, task.dueDate);
-    row.appendChild(editPatternBtn);
-  }
 
   // Leaving the series is nothing but getting a fresh seriesId -- the task
   // itself, and everything else about it, is untouched. Also drops the old
@@ -6869,8 +6639,8 @@ document.getElementById('series-edit-add-new-btn').onclick = async () => {
   await openTaskForm(null, null, { forcedSeriesId: manageSelectedSeriesId, nameDefault });
 };
 
-// Dropping a dragged white/blue series (see renderTodoManageMonths -- a
-// single logical task, whether it's one record or several split fragments)
+// Dropping a dragged white series (see renderTodoManageMonths -- a single
+// task)
 // onto the right-hand pane pulls every one of its records into whichever
 // series is currently open there, all at once -- the only way to move a
 // task between series, per the "only a single-taskId series can be pulled
@@ -6918,11 +6688,7 @@ document.getElementById('todo-add-btn').onclick = () => openTaskForm(null);
 // Task stats ("Task stats..." on the to-do context menu).
 // ---------------------------------------------------------------------------
 
-// A recurring task split via "only this occurrence" / "this and following"
-// (see applySplitEdit/applySplitDelete) spreads its history across multiple
-// task records that all share the original's seriesId -- any true total has
-// to look across every one of them, not just whichever record is currently
-// on-screen representing "the task".
+// Every task in a series (see the manage-tasks modal's merging).
 function tasksInSeries(seriesId) {
   return tasks.filter((t) => t.seriesId === seriesId);
 }
@@ -6930,9 +6696,8 @@ function tasksInSeries(seriesId) {
 // A "mixed" series -- multiple records spanning more than one distinct
 // taskId, i.e. genuinely separate tasks merged together via the
 // manage-tasks modal's drag & drop (see renderTodoManageMonths' green
-// series-row-mixed) -- as opposed to a single task or a recurring task
-// split into same-taskId fragments (see tasksInSeries). Only a mixed
-// series has a "series name" worth showing next to a task's own name.
+// series-row-mixed) -- as opposed to a series of just one task. Only a
+// mixed series has a "series name" worth showing next to a task's own name.
 function isMixedSeries(seriesId) {
   const members = tasksInSeries(seriesId);
   return new Set(members.map((t) => t.taskId)).size > 1;
@@ -6952,24 +6717,17 @@ function getSeriesName(seriesId) {
   return sorted.length ? sorted[0].name : '';
 }
 
-// A series counts as recurring if any fragment still has a repeating
-// frequency, or if it's already been split into more than one record --
-// even an entirely-split series of individually-'once' fragments is still a
-// recurring task's history, not a plain one-off.
+// Whether any of these tasks recurs (or there are several of them).
 function isRecurringSeries(seriesTasks) {
   return seriesTasks.length > 1 || seriesTasks.some((t) => t.frequency.type !== 'once');
 }
 
-// Merges every fragment's (by taskId) Occurrence focus stats into one
-// per-occurrence-date map plus running totals. Fragments' date ranges never
-// overlap (each split truncates the historical portion's endDate right
-// before the next fragment starts), and Occurrence rows are keyed by taskId
-// rather than which fragment currently owns the pattern, so this never
-// double-counts a date across fragments. Each date's bucket also keeps the
+// Merges the given tasks' Occurrence focus stats into one
+// per-occurrence-date map plus running totals. Each date's bucket also keeps the
 // Occurrence row(s) it came from, so a bad measurement can be deleted from
 // the stats modal (see clearOccurrenceFocusTime).
-function aggregateFocusLog(taskFragments) {
-  const taskIds = new Set(taskFragments.map((t) => t.taskId));
+function aggregateFocusLog(taskRecords) {
+  const taskIds = new Set(taskRecords.map((t) => t.taskId));
   const byDate = new Map();
   let totalFocusedSeconds = 0;
   let totalTimerSeconds = 0;
@@ -6998,10 +6756,9 @@ function countSeriesCompletions(seriesTasks) {
   return count;
 }
 
-// How many occurrences of the series have happened up to and including
-// today, across every fragment -- reuses forEachOccurrenceBefore (see the
-// dismissal logic above), which already respects each fragment's own
-// dueDate/endDate via Recurrence.occursOn.
+// How many occurrences of these tasks have happened up to and including
+// today -- recorded rows and pattern dates alike (see
+// forEachOccurrenceBefore).
 function countSeriesOccurrencesToDate(seriesTasks, todayISO) {
   const cutoff = Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), 1));
   let count = 0;
@@ -7068,16 +6825,15 @@ function clearOccurrenceFocusTime(occurrence) {
   occurrence.log.push({ message: 'Measured focus time deleted', timestamp: Date.now() });
 }
 
-// Stats for this one task -- every fragment sharing its taskId (a recurring
-// task split by "this and following" edits), never its whole series, which
-// groups otherwise unrelated tasks together.
+// Stats for this one task, never its whole series, which groups otherwise
+// unrelated tasks together.
 function showTaskStatsModal(task) {
   taskStatsTitleEl.textContent = t('taskStats.title', { name: task.name });
   taskStatsBodyEl.innerHTML = '';
 
-  const taskFragments = tasks.filter((t) => t.taskId === task.taskId);
-  const recurring = isRecurringSeries(taskFragments);
-  const { byDate, totalFocusedSeconds, totalTimerSeconds } = aggregateFocusLog(taskFragments);
+  const taskRecords = tasks.filter((t) => t.taskId === task.taskId);
+  const recurring = isRecurringSeries(taskRecords);
+  const { byDate, totalFocusedSeconds, totalTimerSeconds } = aggregateFocusLog(taskRecords);
 
   const totalsSection = buildStatsSection(recurring ? t('taskStats.totalFocusedAllRecurrences') : t('taskStats.totalFocused'));
   totalsSection.appendChild(buildStatRow(t('taskStats.total'), formatStatsDuration(totalFocusedSeconds + totalTimerSeconds)));
@@ -7091,8 +6847,8 @@ function showTaskStatsModal(task) {
   }
 
   const todayISO = Recurrence.dateToISO(new Date());
-  const completed = countSeriesCompletions(taskFragments);
-  const occurrences = countSeriesOccurrencesToDate(taskFragments, todayISO);
+  const completed = countSeriesCompletions(taskRecords);
+  const occurrences = countSeriesOccurrencesToDate(taskRecords, todayISO);
   const percent = occurrences > 0 ? Math.round((completed / occurrences) * 100) : 0;
 
   const completionSection = buildStatsSection(t('taskStats.completion'));
@@ -7493,8 +7249,14 @@ settingsImportDataFileInput.onchange = async () => {
   }
   if (!confirm(t('data.importConfirm'))) return;
 
-  const normalizedTasks = normalizeLoadedTasks(data.tasks);
-  const importedOccurrences = Array.isArray(data.occurrences) ? data.occurrences : [];
+  // An export can predate the single-record model just as well as what's on
+  // the server can -- same migration as startApp's.
+  const migratedImport = migrateToSingleRecordTasks(
+    normalizeLoadedTasks(data.tasks),
+    Array.isArray(data.occurrences) ? data.occurrences : []
+  );
+  const normalizedTasks = migratedImport.tasks;
+  const importedOccurrences = migratedImport.occurrences;
   const totalNotesBefore = [...normalizedTasks, ...importedOccurrences].reduce((sum, r) => sum + (r.comments ? r.comments.length : 0), 0);
   const limited = applyFreeTierLimitsToImportedTasks(normalizedTasks, importedOccurrences);
   tasks = limited.tasks;
@@ -7982,6 +7744,13 @@ function renderAppTitle() {
 // in the background, applying and saving it whenever it resolves.
 async function startApp(needsLanguageDetection) {
   ({ tasks, occurrences } = await loadTasks());
+  const migration = migrateToSingleRecordTasks(tasks, occurrences);
+  ({ tasks, occurrences } = migration);
+  if (migration.idMap[activeTaskId]) {
+    activeTaskId = migration.idMap[activeTaskId];
+    saveActiveTaskId();
+  }
+  if (migration.changed) saveTasks();
   ensureSubscriptionPromptTask();
   applyStaticTranslations();
   renderAppTitle();

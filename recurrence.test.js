@@ -494,4 +494,39 @@ assert.strictEqual(
   'weekly with specific weekdays: snaps to the next selected weekday, still within the same week'
 );
 
+// -- frequency.startsOn -----------------------------------------------------
+{
+  // Every 3 days from Sep 1 (1, 4, 7, 10, 13, ...), but only from the 8th on.
+  const t = { dueDate: '2026-09-01', frequency: { type: 'days', interval: 3, startsOn: '2026-09-08' } };
+  assert.strictEqual(R.occursOn(t, '2026-09-07'), false, 'startsOn: a pattern date before startsOn is not produced');
+  assert.strictEqual(R.occursOn(t, '2026-09-10'), true, 'startsOn: phase still anchored on dueDate (1, 4, 7, 10 ...), not on startsOn');
+  assert.strictEqual(R.occursOn(t, '2026-09-08'), false, 'startsOn: startsOn itself is not an occurrence unless the pattern lands there');
+  assert.strictEqual(R.nextOccurrenceAfter(t, '2026-09-01'), '2026-09-10', 'startsOn: next occurrence skips the dates before startsOn');
+  assert.strictEqual(R.mostRecentOccurrenceOnOrBefore(t, '2026-09-09'), null, 'startsOn: nothing before startsOn to find');
+  assert.strictEqual(R.mostRecentOccurrenceOnOrBefore(t, '2026-09-12'), '2026-09-10', 'startsOn: most recent on/after startsOn');
+  assert.strictEqual(R.previousOccurrenceBefore(t, '2026-09-10'), null, 'startsOn: the first date from startsOn has no previous one');
+
+  // Monthly on the 31st (clamped), started on Jan 31 -- startsOn must not re-anchor the day of month.
+  const m = { dueDate: '2026-01-31', frequency: { type: 'months', interval: 1, startsOn: '2026-04-01' } };
+  assert.strictEqual(R.nextOccurrenceAfter(m, '2026-03-31'), '2026-04-30', 'startsOn: monthly day-of-month still comes from dueDate');
+  assert.strictEqual(R.occursOn(m, '2026-03-31'), false, 'startsOn: monthly occurrence before startsOn not produced');
+
+  // A one-off before startsOn doesn't occur at all.
+  const once = { dueDate: '2026-09-05', frequency: { type: 'once', startsOn: '2026-09-06' } };
+  assert.strictEqual(R.occursOn(once, '2026-09-05'), false, 'startsOn: a once task dated before startsOn does not occur');
+  assert.strictEqual(R.mostRecentOccurrenceOnOrBefore(once, '2026-09-30'), null, 'startsOn: once task before startsOn has no most recent occurrence');
+  assert.strictEqual(R.nextOccurrenceAfter(once, '2026-09-01'), null, 'startsOn: once task before startsOn has no next occurrence');
+}
+
+// -- frequency.skipDates ----------------------------------------------------
+{
+  const t = { dueDate: '2026-09-01', frequency: { type: 'days', interval: 1, skipDates: ['2026-09-03'] } };
+  assert.strictEqual(R.occursOn(t, '2026-09-03'), false, 'skipDates: a skipped date is not produced');
+  assert.strictEqual(R.occursOn(t, '2026-09-04'), true, 'skipDates: the rest of the pattern is untouched');
+  assert.strictEqual(R.nextOccurrenceAfter(t, '2026-09-02'), '2026-09-04', 'skipDates: next occurrence steps over a skipped date');
+  assert.strictEqual(R.previousOccurrenceBefore(t, '2026-09-04'), '2026-09-02', 'skipDates: previous occurrence steps over a skipped date');
+  const once = { dueDate: '2026-09-05', frequency: { type: 'once', skipDates: ['2026-09-05'] } };
+  assert.strictEqual(R.nextOccurrenceAfter(once, '2026-09-01'), null, 'skipDates: a skipped one-off has no occurrence left');
+}
+
 console.log('recurrence.test.js: all assertions passed');

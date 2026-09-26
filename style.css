@@ -2113,13 +2113,9 @@ main,
 }
 .series-row:hover { background: var(--hover-tint); }
 .series-row.selected { background: rgba(138, 180, 248, 0.16); }
-/* A series with a single task record (one-off, or an unbroken recurring
-   task) stays plain white/default. One with multiple records but all the
-   SAME taskId -- a recurring task split via edit-scope, never merged with
-   anything else -- reads as blue. One with multiple records spanning
-   multiple taskIds -- a merge of separately-created tasks -- reads as
-   green. Distinguishable at a glance without opening any of them. */
-.series-row-multi { color: var(--accent); }
+/* A series of a single task stays plain white/default; one merging several
+   separately-created tasks reads as green -- distinguishable at a glance
+   without opening it. */
 .series-row-mixed { color: var(--success); }
 .series-row[draggable="true"] { cursor: grab; }
 
@@ -2137,16 +2133,6 @@ main,
   background: rgba(138, 180, 248, 0.08);
 }
 
-.edit-scope-modal {
-  width: 320px;
-}
-
-.edit-scope-desc {
-  font-size: 12px;
-  color: var(--text-label);
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
 
 .todo-manage-empty {
   font-size: 12px;
@@ -2209,6 +2195,109 @@ main,
 }
 .todo-manage-item button.confirm,
 .todo-manage-item button.confirm:hover {
+  background: #d93025;
+  color: #fff;
+}
+
+/* Tabbed forms (showFormModal's opts.tabs, app.js) -- the task editor. */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+.modal-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-label);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  text-shadow: inherit;
+}
+.modal-tab:hover { color: var(--text-primary); }
+.modal-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+.task-editor-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* The task editor's Occurrences tab (renderOccurrencesTab, app.js): a list
+   of occurrences, then the selected one's notes and (read-only) activity. */
+.task-occ-list {
+  max-height: 190px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  padding: 2px;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.task-occ-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.task-occ-item:hover { background: var(--hover-tint); }
+.task-occ-item.selected { background: rgba(138, 180, 248, 0.16); }
+.task-occ-item.next .task-occ-date { font-weight: 600; }
+.task-occ-date { flex: 1; color: var(--text-primary); }
+.task-occ-status { color: var(--text-label); }
+.task-occ-detail .task-stats-heading { margin-top: 8px; }
+.task-occ-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-hairline);
+}
+.task-occ-note-body { flex: 1; min-width: 0; }
+.task-occ-note-time { font-size: 10px; color: var(--text-muted); }
+.task-occ-note-text { font-size: 12px; color: var(--text-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-occ-note-input { flex: 1; min-height: 48px; }
+.task-occ-add-note {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.task-occ-add-note .modal-input { flex: 1; }
+.task-occ-limit { font-size: 11px; color: var(--danger); margin-top: 4px; }
+.task-occ-log { max-height: 120px; overflow-y: auto; }
+/* Small circular icon buttons -- the note's edit button, and the shared
+   appendDeleteButton (app.js) on occurrence rows and notes, same treatment
+   as .side-panel-comment-actions' own. */
+.task-occ-icon-btn,
+.task-occ-item > button,
+.task-occ-note > button:not(.menu-btn-small) {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.task-occ-icon-btn:hover,
+.task-occ-item > button:hover,
+.task-occ-note > button:not(.menu-btn-small):hover { background: var(--hover-tint); color: var(--text-primary); }
+.task-occ-item > button.confirm,
+.task-occ-note > button.confirm {
   background: #d93025;
   color: #fff;
 }

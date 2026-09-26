@@ -3,15 +3,13 @@
 // Node so occurrence.test.js can require it directly, window.Occurrence in
 // the browser).
 //
-// A Task is a recurrence PATTERN (dueDate/frequency/endDate/...). An
-// Occurrence is one interacted-with instance of it, sparse: a
-// pattern-predicted date with nothing recorded against it yet (still
-// pending, no note, no override, no timer) has no row at all -- exactly
-// like an absent key in the old completions/dismissed/markedFailed maps
-// meant "still pending". Occurrences are addressed by (taskId,
-// occurrenceDate) -- taskId, not any single Task record's own id, since a
-// "this and following" split forks a new Task row for the pattern going
-// forward while every already-recorded Occurrence stays exactly where it is.
+// A Task is one record: its data plus its CURRENT recurrence pattern
+// (dueDate/frequency/endDate/...). An Occurrence is one interacted-with
+// instance of it, sparse: a pattern-produced date with nothing recorded
+// against it yet (still pending, no note, no timer) has no row at all --
+// but every row that does exist always counts as an occurrence, whatever
+// the current pattern says (a task's recorded past is its rows; see app.js's
+// rollPatternForward). Occurrences are addressed by (taskId, occurrenceDate).
 //
 // recurUntilCompleted tasks keep at most one 'pending' Occurrence alive at a
 // time -- see recurrenceShim below for how its pendingReschedules chain
@@ -116,26 +114,24 @@ function canManageOccurrenceDirectly(task, occurrence) {
   return !(task.recurUntilCompleted && occurrence.status === 'pending');
 }
 
-// Occurrence rows are keyed by taskId alone, but after a 'following' split
-// several Task fragments share that taskId, each owning its own
-// [dueDate, endDate] slice of the timeline. Without this check every
-// fragment claims every row of its taskId -- e.g. an old, truncated
-// fragment rendering a later fragment's occurrence past its own endDate, where
-// deleting it via that old fragment (applySplitDelete) can't do anything,
-// since that date isn't part of the old fragment's pattern at all.
-// A plain task's rescheduled row still belongs to the fragment it was
-// originally scheduled under (pendingReschedules[0], see isDateExcluded),
-// wherever it has since moved to. A recurUntilCompleted task's
-// still-'pending' row is judged by where its chain currently is
-// (effectiveDueDate), not where it started -- a chain begun under an earlier
-// fragment can still be the live one of whichever fragment governs it now,
-// whereas a stale plain-task 'pending' row left behind before the
-// fragment's own start never is.
-function occurrenceBelongsToFragment(task, occurrence) {
-  const inRange = (d) => !!d && d >= task.dueDate && (!task.endDate || d <= task.endDate);
-  if (task.recurUntilCompleted && occurrence.status === 'pending') return inRange(effectiveDueDate(occurrence));
-  if (inRange(occurrence.occurrenceDate)) return true;
-  return !task.recurUntilCompleted && inRange((occurrence.pendingReschedules || [])[0]);
+// Whether a row carries nothing beyond what the task's own pattern would
+// produce at that date anyway -- no outcome, notes, activity, timing,
+// reschedule history or manual origin. Such a row is safe to drop whenever
+// the pattern stops producing its date (a pattern change or a pause, see
+// app.js's rollPatternForward and friends): nothing recorded is lost.
+// Dismissal doesn't count as content -- it's just "hidden from the list".
+function isBlankOccurrence(o) {
+  return (
+    o.status === 'pending' &&
+    !o.manual &&
+    !o.timer &&
+    !o.overrides &&
+    !(o.comments && o.comments.length) &&
+    !(o.log && o.log.length) &&
+    !(o.pendingReschedules && o.pendingReschedules.length) &&
+    !o.focusedSeconds &&
+    !o.timerSeconds
+  );
 }
 
 // A date a plain (non-recurUntilCompleted) task's own pattern might still
@@ -189,7 +185,7 @@ const occurrenceApi = {
   recurrenceShim,
   applyOverrides,
   canManageOccurrenceDirectly,
-  occurrenceBelongsToFragment,
+  isBlankOccurrence,
   isDateExcluded,
   statusOf,
   notesCount,
