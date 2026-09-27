@@ -127,6 +127,10 @@
 
       <!-- Shown only while a task save has failed and is being retried --
            see saveTasks/renderSaveStatus in app.js. -->
+      <div id="site-status-banner" class="save-status-banner site-status hidden" role="status">
+        <span id="site-status-message" class="save-status-message"></span>
+        <button id="site-status-reload" class="menu-btn-small hidden" data-i18n="siteStatus.reload">Reload</button>
+      </div>
       <div id="save-status-banner" class="save-status-banner hidden" role="alert">
         <span id="save-status-message" class="save-status-message"></span>
         <button id="save-status-retry" class="menu-btn-small" data-i18n="saveStatus.retryNow">Retry now</button>
@@ -506,6 +510,7 @@
        gracefully if this 404s, so it's fine to open index.html directly
        without ever creating one. -->
   <script src="config.js"></script>
+  <script src="version.js"></script>
   <script src="sharedInputBehavior.js"></script>
   <script src="recurrence.js"></script>
   <script src="occurrence.js"></script>

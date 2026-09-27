@@ -5,6 +5,12 @@ COPY landing.html landing.css landing.js checkout.html checkout.js success.html 
 
 COPY favicon.ico favicon.svg apple-touch-icon.png logo-on-dark.svg /usr/share/nginx/html/
 
+# The platform version this image was built as (e.g. 2026.09.27.1; `dev` for
+# untagged builds) -- the app compares it with the live one in _status.json
+# (see renderSiteStatus in app.js) to offer a reload after an update.
+ARG VERSION=dev
+RUN printf 'window.APP_VERSION = "%s";\n' "${VERSION}" > /usr/share/nginx/html/version.js
+
 # Stock server block plus Cache-Control: no-cache -- see nginx.conf.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 

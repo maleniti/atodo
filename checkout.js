@@ -109,7 +109,7 @@ async function runCheckout() {
     // anything else is just "no charge made" -- logged, since nothing on
     // that page says what actually went wrong.
     console.error('Checkout failed:', err);
-    const reason = { PAYMENTS_UNAVAILABLE: 'unavailable', ALREADY_SUBSCRIBED: 'subscribed' }[err && err.code];
+    const reason = { PAYMENTS_UNAVAILABLE: 'unavailable', MAINTENANCE: 'unavailable', ALREADY_SUBSCRIBED: 'subscribed' }[err && err.code];
     location.href = `cancel.html?plan=${encodeURIComponent(plan)}${reason ? `&reason=${reason}` : ''}`;
   }
 }

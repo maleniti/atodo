@@ -395,6 +395,11 @@ const I18N = {
       "Your free plan's limits apply to imports too, so some of this file's tasks and/or notes were left out. Subscribe to import everything.",
     'saveStatus.failed': "Your latest changes haven't been saved yet ({message}). Retrying automatically -- keep this tab open until this message goes away, or they'll be lost.",
     'saveStatus.retryNow': 'Retry now',
+    'saveStatus.maintenance': "A-To-Do is being updated -- your latest changes will be saved as soon as it's back, in a few minutes. Keep this tab open until this message goes away.",
+    'login.maintenance': 'A-To-Do is being updated. Please try again in a few minutes -- this page will keep trying.',
+    'siteStatus.announcement': 'A-To-Do will be briefly unavailable for an update on {date} (about {minutes} min). Your tasks are safe -- changes made meanwhile are saved once it’s back.',
+    'siteStatus.newVersion': 'A new version of A-To-Do is available.',
+    'siteStatus.reload': 'Reload',
     'saveStatus.retrying': 'Retrying…',
     'data.importSaveFailed':
       "Your tasks were imported here, but saving them to your account failed, so they may not actually be there yet: {message} Try again in a bit, and if it keeps happening, please contact support and attach the file you tried to import so we can look into it.",
@@ -769,6 +774,11 @@ const I18N = {
       'Ograničenja vašeg besplatnog plana vrijede i za uvoz, pa su neki zadaci i/ili bilješke iz ove datoteke izostavljeni. Pretplatite se za potpuni uvoz.',
     'saveStatus.failed': 'Vaše posljednje promjene još nisu spremljene ({message}). Spremanje se automatski ponavlja -- ne zatvarajte ovu karticu dok ova poruka ne nestane, inače će se promjene izgubiti.',
     'saveStatus.retryNow': 'Pokušaj ponovno',
+    'saveStatus.maintenance': 'A-To-Do se ažurira -- vaše posljednje promjene spremit će se čim ponovno proradi, za nekoliko minuta. Ne zatvarajte ovu karticu dok ova poruka ne nestane.',
+    'login.maintenance': 'A-To-Do se ažurira. Pokušajte ponovno za nekoliko minuta -- ova stranica će pokušavati sama.',
+    'siteStatus.announcement': 'A-To-Do će {date} nakratko biti nedostupan zbog ažuriranja (oko {minutes} min). Vaši zadaci su sigurni -- promjene napravljene u međuvremenu spremit će se čim ponovno proradi.',
+    'siteStatus.newVersion': 'Dostupna je nova verzija A-To-Do-a.',
+    'siteStatus.reload': 'Učitaj ponovno',
     'saveStatus.retrying': 'Ponovni pokušaj…',
     'data.importSaveFailed':
       'Zadaci su uvezeni ovdje, ali njihovo spremanje na vaš račun nije uspjelo, pa možda još nisu tamo: {message} Pokušajte ponovno za koji trenutak, a ako se problem nastavi, javite se podršci i priložite datoteku koju ste pokušali uvesti kako bismo to mogli istražiti.',
@@ -1788,6 +1798,7 @@ function describeAuthError(err) {
   if (err.code === 'ACCOUNT_EXPIRED_INACTIVITY') return t('login.accountExpired');
   if (err.code === 'ACCOUNT_DELETED_SCHEDULED') return t('login.accountDeletedScheduled');
   if (err.code === 'NETWORK_ERROR') return t('login.networkError');
+  if (err.code === 'MAINTENANCE') return t('login.maintenance');
   return t('login.invalidCredentials');
 }
 
@@ -1847,6 +1858,8 @@ function applyLanguage(language) {
   renderTodo();
   renderSidePanel();
   refreshTodoManageModal();
+  renderSaveStatus();
+  renderSiteStatus();
 }
 
 // Applies a (possibly new) theme -- called on startup (startApp) and
@@ -2227,7 +2240,13 @@ const saveStatusRetryBtn = document.getElementById('save-status-retry');
 function renderSaveStatus() {
   saveStatusBannerEl.classList.toggle('hidden', !taskSaveFailure);
   if (!taskSaveFailure) return;
-  saveStatusMessageEl.textContent = t('saveStatus.failed', { message: taskSaveFailure.message });
+  // An update in progress isn't an error on the user's side -- same queue
+  // and retries, calmer wording (and styling, see .save-status-banner.maintenance).
+  const maintenance = taskSaveFailure.code === 'MAINTENANCE';
+  saveStatusBannerEl.classList.toggle('maintenance', maintenance);
+  saveStatusMessageEl.textContent = maintenance
+    ? t('saveStatus.maintenance')
+    : t('saveStatus.failed', { message: taskSaveFailure.message });
   saveStatusRetryBtn.disabled = taskSaveInFlight;
   saveStatusRetryBtn.textContent = t(taskSaveInFlight ? 'saveStatus.retrying' : 'saveStatus.retryNow');
 }
@@ -2235,6 +2254,54 @@ function renderSaveStatus() {
 saveStatusRetryBtn.onclick = () => {
   if (!taskSaveInFlight) runTaskSave();
 };
+
+// The platform's status file (written by the deploy script, served by
+// nginx even during maintenance): an announced maintenance window, and the
+// client version that's live -- so a tab still running older code (the
+// app's own version is window.APP_VERSION, see version.js) offers a reload
+// rather than keep talking to a newer API. Polled, and re-read whenever the
+// tab comes back into view. Missing (local dev) or unreadable = nothing to show.
+const SITE_STATUS_URL = '_status.json';
+const SITE_STATUS_POLL_MS = 5 * 60 * 1000;
+const siteStatusBannerEl = document.getElementById('site-status-banner');
+const siteStatusMessageEl = document.getElementById('site-status-message');
+const siteStatusReloadBtn = document.getElementById('site-status-reload');
+let siteStatus = null;
+let siteStatusTimer = null;
+
+async function refreshSiteStatus() {
+  try {
+    const res = await fetch(SITE_STATUS_URL, { cache: 'no-store' });
+    siteStatus = res.ok ? await res.json() : null;
+  } catch {
+    siteStatus = null;
+  }
+  renderSiteStatus();
+}
+
+function renderSiteStatus() {
+  const ownVersion = window.APP_VERSION;
+  const liveVersion = siteStatus && siteStatus.clientVersion;
+  const newVersion = !!(ownVersion && liveVersion && ownVersion !== 'dev' && liveVersion !== ownVersion);
+  const announcement = siteStatus && siteStatus.announcement;
+  const start = announcement && Date.parse(announcement.start);
+  const upcoming = !!start && Date.now() < start + (announcement.minutes || 0) * 60 * 1000;
+  siteStatusBannerEl.classList.toggle('hidden', !newVersion && !upcoming);
+  siteStatusReloadBtn.classList.toggle('hidden', !newVersion);
+  if (newVersion) siteStatusMessageEl.textContent = t('siteStatus.newVersion');
+  else if (upcoming) siteStatusMessageEl.textContent = t('siteStatus.announcement', { date: formatDateTime(start), minutes: announcement.minutes });
+}
+
+function startSiteStatusPolling() {
+  if (siteStatusTimer) return;
+  refreshSiteStatus();
+  siteStatusTimer = setInterval(refreshSiteStatus, SITE_STATUS_POLL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshSiteStatus();
+  });
+}
+
+siteStatusReloadBtn.onclick = () => location.reload();
 
 window.addEventListener('beforeunload', (e) => {
   if (!hasUnsavedTaskChanges()) return;
@@ -8296,6 +8363,7 @@ function renderAppTitle() {
 // IP-based language/time-format guess (detectLanguageAndTimeFormatFromLocation)
 // in the background, applying and saving it whenever it resolves.
 async function startApp(needsLanguageDetection) {
+  startSiteStatusPolling();
   ({ tasks, occurrences } = await loadTasks());
   const migration = migrateToSingleRecordTasks(tasks, occurrences);
   ({ tasks, occurrences } = migration);
@@ -8426,8 +8494,20 @@ function boot() {
     return;
   }
   appMainEl.classList.remove('hidden');
+  resumeStoredSession(token);
+}
+
+// boot()'s existing-token path. Only an answer about the account itself
+// ends the session -- an update in progress (MAINTENANCE) or no connection
+// at all says nothing about it, so the token is kept and this retries
+// until the server answers.
+const RESUME_RETRY_MS = 15000;
+function resumeStoredSession(token) {
   getMe(token)
     .then(async (user) => {
+      clearAuthMessage(loginMessageEl);
+      loginScreenEl.classList.add('hidden');
+      appMainEl.classList.remove('hidden');
       // A direct/bookmarked visit to this URL while already logged in --
       // see the same check in the login form's submit handler below for the
       // logged-out case (landing.js normally sends an already-logged-in
@@ -8444,6 +8524,16 @@ function boot() {
       await startApp(user.language == null);
     })
     .catch((err) => {
+      if (err.code === 'MAINTENANCE' || err.code === 'NETWORK_ERROR') {
+        appMainEl.classList.add('hidden');
+        loginScreenEl.classList.remove('hidden');
+        showAuthMessage(loginMessageEl, 'error', describeAuthError(err));
+        setTimeout(() => {
+          // Unless the visitor logged in by hand meanwhile.
+          if (localStorage.getItem(AUTH_TOKEN_KEY) === token && !loginScreenEl.classList.contains('hidden')) resumeStoredSession(token);
+        }, RESUME_RETRY_MS);
+        return;
+      }
       // The account itself (if it still existed) was already deleted
       // server-side for ACCOUNT_EXPIRED_INACTIVITY/ACCOUNT_DELETED_SCHEDULED
       // as part of handling this request (see GET /auth/me in api-spec.yaml)

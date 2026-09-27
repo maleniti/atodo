@@ -73,7 +73,13 @@ async function apiFetch(path, { method = 'GET', body, token } = {}) {
     // No body, or not valid JSON -- data stays null; only a problem below
     // if the response wasn't ok, where there's supposed to be an Error body.
   }
-  if (!res.ok) throw codeError((data && data.code) || 'UNKNOWN_ERROR', data && data.message);
+  if (!res.ok) {
+    // A gateway error without a code of its own is the platform mid-update
+    // (the API container restarting behind nginx) -- same as the
+    // MAINTENANCE the API and nginx's maintenance mode send explicitly.
+    const code = (data && data.code) || ([502, 503, 504].includes(res.status) ? 'MAINTENANCE' : 'UNKNOWN_ERROR');
+    throw codeError(code, data && data.message);
+  }
   return data;
 }
 

@@ -627,6 +627,14 @@ main {
   flex: none;
 }
 .save-status-message { flex: 1; min-width: 0; }
+/* The same banner, for things that aren't errors: an update in progress
+   (save retries paused on MAINTENANCE), an announced maintenance window, a
+   new version to reload into -- see renderSaveStatus/renderSiteStatus. */
+.save-status-banner.maintenance,
+.save-status-banner.site-status {
+  border-color: var(--accent);
+  color: var(--text);
+}
 .save-status-banner .menu-btn-small { flex: none; }
 
 .app-header h1 {
