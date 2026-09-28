@@ -2058,6 +2058,13 @@ function migrateToSingleRecordTasks(taskList, occurrenceList) {
     }
   }
   const keptTasks = dropped.size ? taskList.filter((t) => !dropped.has(t)) : taskList;
+  // Older data (and exports of it) can also lack a recurUntilCompleted
+  // task's live occurrence entirely -- see Occurrence.missingLiveOccurrences.
+  const seeded = Occurrence.missingLiveOccurrences(keptTasks, occurrenceList, uid);
+  if (seeded.length) {
+    occurrenceList.push(...seeded);
+    changed = true;
+  }
   return { tasks: keptTasks, occurrences: occurrenceList, changed, idMap };
 }
 

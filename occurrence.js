@@ -179,6 +179,28 @@ function notesCount(taskRecords, occurrences, taskId) {
   return taskLevel + occurrenceLevel;
 }
 
+// The live occurrences recurUntilCompleted tasks are missing, as new rows
+// (ids from newId). Every such task is created with its first 'pending'
+// occurrence, which then carries it: nothing displays, finds or advances
+// one without it. Data from before this Occurrence model can lack it,
+// though: a task's recorded state lived on the task itself back then, and
+// a recurUntilCompleted task nobody had touched yet had none to convert,
+// so it came over with no rows at all. Its dueDate was the live "current
+// occurrence" pointer then -- which is where that occurrence belongs. Only
+// tasks with no rows at all: one with rows but no pending occurrence has
+// run its course (e.g. past its endDate) and must stay that way.
+function missingLiveOccurrences(tasks, occurrences, newId) {
+  const withRows = new Set(occurrences.map((o) => o.taskId));
+  const seeded = new Set();
+  const rows = [];
+  for (const t of tasks) {
+    if (!t.recurUntilCompleted || withRows.has(t.taskId) || seeded.has(t.taskId)) continue;
+    seeded.add(t.taskId);
+    rows.push(createOccurrence({ id: newId(), taskId: t.taskId, occurrenceDate: t.dueDate }));
+  }
+  return rows;
+}
+
 const occurrenceApi = {
   findOccurrence,
   pendingOccurrenceFor,
@@ -191,6 +213,7 @@ const occurrenceApi = {
   isDateExcluded,
   statusOf,
   notesCount,
+  missingLiveOccurrences,
 };
 
 if (typeof module === 'object' && module.exports) {

@@ -138,4 +138,32 @@ assert.strictEqual(O.notesCount(taskRecords, occForNotes, 'tA'), 4, '2 + 1 task-
 assert.strictEqual(O.notesCount(taskRecords, occForNotes, 'tB'), 3, '1 task-level plus 2 occurrence-level');
 assert.strictEqual(O.notesCount(taskRecords, occForNotes, 'tC'), 0, 'no records at all for this taskId');
 
+// missingLiveOccurrences: a recurUntilCompleted task with no rows at all
+// (from before the Occurrence model) gets its live occurrence back, at its
+// dueDate; nothing else is touched.
+{
+  let n = 0;
+  const newId = () => `seed${++n}`;
+  const monthly = { type: 'months', interval: 1, dayMode: 'weekday', ordinal: 1, weekday: 1 };
+  const seedTasks = [
+    { taskId: 'untouched', dueDate: '2026-10-05', recurUntilCompleted: true, frequency: monthly },
+    { taskId: 'live', dueDate: '2026-09-01', recurUntilCompleted: true, frequency: monthly },
+    { taskId: 'finished', dueDate: '2026-01-05', recurUntilCompleted: true, frequency: monthly, endDate: '2026-03-01' },
+    { taskId: 'plain', dueDate: '2026-10-05', recurUntilCompleted: false, frequency: monthly },
+  ];
+  const seedOccurrences = [
+    { ...O.createOccurrence({ id: 'a', taskId: 'live', occurrenceDate: '2026-10-05' }) },
+    { ...O.createOccurrence({ id: 'b', taskId: 'finished', occurrenceDate: '2026-02-02' }), status: 'completed' },
+  ];
+  const rows = O.missingLiveOccurrences(seedTasks, seedOccurrences, newId);
+  assert.strictEqual(rows.length, 1, 'only the recurUntilCompleted task with no rows at all gets one');
+  assert.deepStrictEqual([rows[0].taskId, rows[0].occurrenceDate, rows[0].status, rows[0].id], ['untouched', '2026-10-05', 'pending', 'seed1'], 'pending, at its dueDate');
+  assert.strictEqual(O.missingLiveOccurrences(seedTasks, [...seedOccurrences, ...rows], newId).length, 0, 'idempotent once seeded');
+  assert.strictEqual(
+    O.missingLiveOccurrences([seedTasks[0], { ...seedTasks[0] }], [], newId).length,
+    1,
+    'one per taskId, even if several records share it'
+  );
+}
+
 console.log('occurrence.test.js: all assertions passed');
