@@ -32,6 +32,18 @@ const I18N = {
     'login.submit': 'Log in',
     'login.noAccount': "Don't have an account?",
     'login.registerLink': 'Create one',
+    'login.forgotLink': 'Forgot password?',
+    'forgotPassword.title': 'Reset your password',
+    'forgotPassword.hint': "Your account's email -- we'll send it a link to set a new password (valid for 30 minutes)",
+    'forgotPassword.submit': 'Send link',
+    'forgotPassword.sent': "If {email} has an account, a link to set a new password is on its way. It's valid for 30 minutes.",
+    'forgotPassword.invalidEmail': 'Enter a valid email address.',
+    'forgotPassword.failed': "Couldn't send the link. Please try again.",
+    'resetPassword.title': 'Set a new password',
+    'resetPassword.intro': 'Choose a new password for your account. Every other session gets signed out.',
+    'resetPassword.submit': 'Set new password',
+    'resetPassword.done': "Your new password is set, and you're logged in.",
+    'resetPassword.invalid': 'That password reset link is invalid, has expired, or has already been used. You can ask for a new one with "Forgot password?".',
     'login.invalidCredentials': 'Incorrect email or password.',
     'login.networkError': 'Could not reach the server. Check your connection and try again.',
     'login.notVerified': "That email hasn't been verified yet – check your inbox for the verification link.",
@@ -423,6 +435,18 @@ const I18N = {
     'login.submit': 'Prijava',
     'login.noAccount': 'Nemate račun?',
     'login.registerLink': 'Napravite ga',
+    'login.forgotLink': 'Zaboravili ste lozinku?',
+    'forgotPassword.title': 'Resetiranje lozinke',
+    'forgotPassword.hint': 'E-mail vašeg računa -- na njega ćemo poslati poveznicu za postavljanje nove lozinke (vrijedi 30 minuta)',
+    'forgotPassword.submit': 'Pošalji poveznicu',
+    'forgotPassword.sent': 'Ako za {email} postoji račun, poveznica za postavljanje nove lozinke je na putu. Vrijedi 30 minuta.',
+    'forgotPassword.invalidEmail': 'Upišite valjanu e-mail adresu.',
+    'forgotPassword.failed': 'Poveznicu nije bilo moguće poslati. Pokušajte ponovno.',
+    'resetPassword.title': 'Postavite novu lozinku',
+    'resetPassword.intro': 'Odaberite novu lozinku za svoj račun. Sve ostale sesije bit će odjavljene.',
+    'resetPassword.submit': 'Postavi novu lozinku',
+    'resetPassword.done': 'Nova lozinka je postavljena i prijavljeni ste.',
+    'resetPassword.invalid': 'Ta poveznica za resetiranje lozinke nije valjana, istekla je ili je već iskorištena. Novu možete zatražiti putem "Zaboravili ste lozinku?".',
     'login.invalidCredentials': 'Netočan e-mail ili lozinka.',
     'login.networkError': 'Nije moguće spojiti se na poslužitelj. Provjerite vezu i pokušajte ponovno.',
     'login.notVerified': 'Taj e-mail još nije potvrđen – provjerite poštanski sandučić za poveznicu za potvrdu.',
@@ -1143,7 +1167,10 @@ function recomputeUntouchedNextCycle(task) {
     .filter((o) => o.taskId === task.taskId && o.status !== 'pending' && o.resolvedAt && o.occurrenceDate <= live.occurrenceDate)
     .sort((a, b) => b.resolvedAt - a.resolvedAt)[0];
   if (!previous) return;
-  const completedISO = Recurrence.dateToISO(new Date(previous.resolvedAt));
+  // The day it was done: the last date its chain reached (see
+  // resolveRecurUntilCompletedOccurrence) -- not necessarily the day it was
+  // checked off.
+  const completedISO = Occurrence.effectiveDueDate(previous);
   const nextDate = Recurrence.nextRecurUntilCompletedDueDate(task, completedISO) || null;
   if (!nextDate) {
     occurrences.splice(occurrences.indexOf(live), 1);
@@ -4287,27 +4314,25 @@ function deleteTask(taskId) {
 }
 
 // Resolves a task.recurUntilCompleted task's current pending Occurrence once
-// whichever instance of it is marked done (see toggleTaskCompletion) -- the
-// next occurrence's own due date is computed counted from *today* (real
-// time, when this actually runs) rather than completedDate itself (see
-// Recurrence.nextRecurUntilCompletedDueDate) -- "the date of completion" is
-// when the task was actually done, not whichever backlogged instance's row
-// happened to get clicked. Using completedDate instead would make
-// completing an old backlogged instance (rather than the most recent one)
-// immediately fall behind again by however many days separate them, needing
-// another whole run of catch-up reschedules right on the next render,
-// instead of actually resolving anything. A fresh 'pending' Occurrence is
-// created for that next cycle; `occurrence` itself is marked 'completed' and
-// never touched again -- unlike before, there's no shared dueDate pointer
-// left for a later edit to collide with. A 'once' task (or one whose
-// endDate is now behind it) has no next occurrence -- nothing new is
-// created, so the just-completed occurrence (crossed out) is all that's
-// left to show.
-function resolveRecurUntilCompletedOccurrence(task, occurrence) {
+// one of its rows is marked done (see toggleTaskCompletion). completedISO
+// is the day it was done: the checked-off row's date -- for a carried-over
+// row that's before today, the user recording that it was done back then
+// (checked off belatedly). The chain stops there: the days it was carried
+// to after that never happened, so no occurrence shows on them (today
+// included), and the next cycle is computed from that day
+// (Recurrence.nextRecurUntilCompletedDueDate). A next cycle that then falls
+// before today is simply carried over from there like any missed one --
+// done back then, not since. A fresh 'pending' Occurrence is created for
+// that next cycle; `occurrence` itself is marked 'completed'. A 'once' task
+// (or one whose endDate is now behind it) has no next occurrence: the
+// completed one, on its own date, is all that's left to show.
+function resolveRecurUntilCompletedOccurrence(task, occurrence, completedISO = Recurrence.dateToISO(new Date())) {
+  const chain = occurrence.pendingReschedules || [];
+  if (completedISO === occurrence.occurrenceDate) occurrence.pendingReschedules = [];
+  else if (chain.includes(completedISO)) occurrence.pendingReschedules = chain.slice(0, chain.indexOf(completedISO) + 1);
   occurrence.status = 'completed';
   occurrence.resolvedAt = Date.now();
-  const todayISO = Recurrence.dateToISO(new Date());
-  const nextDate = Recurrence.nextRecurUntilCompletedDueDate(task, todayISO) || null;
+  const nextDate = Recurrence.nextRecurUntilCompletedDueDate(task, completedISO) || null;
   if (nextDate) ensureOccurrence(task, nextDate);
 }
 
@@ -4387,7 +4412,7 @@ function toggleTaskCompletion(task, occurrenceDate) {
       // than lingering as a dismissed-once-the-more-recent-one-completes
       // carried-over item the way an ordinary task's missed occurrences do
       // below.
-      resolveRecurUntilCompletedOccurrence(task, occurrence);
+      resolveRecurUntilCompletedOccurrence(task, occurrence, occurrenceDate);
     } else {
       // Only this task's "today" or carried-over occurrence is ever checked
       // off this way (see the checkbox's disabled condition below), so
@@ -8160,8 +8185,10 @@ const changePasswordConfirmInput = document.getElementById('change-password-conf
 const changePasswordTitleEl = changePasswordOverlay.querySelector('.modal-title');
 const changePasswordCurrentField = changePasswordCurrentInput.closest('.modal-field');
 const changePasswordSubmitBtn = changePasswordFormEl.querySelector('button[type="submit"]');
-// Non-null while this modal is setting a new password after an email-change
-// undo ({ resetToken, email }, see handleUndoEmailChangeLink): no current
+// Non-null while this modal is setting a new password with a reset token --
+// after an email-change undo ({ resetToken, email }, see
+// handleUndoEmailChangeLink) or from a "Forgot password?" link
+// ({ kind: 'forgot', resetToken }, see handlePasswordResetLink): no current
 // password (the reset token stands in for it), and POST /auth/reset-password
 // instead of change-password.
 let passwordResetContext = null;
@@ -8178,11 +8205,12 @@ function openChangePasswordModal() {
 
 function openPasswordResetModal(context) {
   passwordResetContext = context;
+  const forgot = context.kind === 'forgot';
   changePasswordFormEl.reset();
-  changePasswordTitleEl.textContent = t('undoEmailChange.title');
-  changePasswordSubmitBtn.textContent = t('undoEmailChange.submit');
+  changePasswordTitleEl.textContent = t(forgot ? 'resetPassword.title' : 'undoEmailChange.title');
+  changePasswordSubmitBtn.textContent = t(forgot ? 'resetPassword.submit' : 'undoEmailChange.submit');
   changePasswordCurrentField.classList.add('hidden');
-  showAuthMessage(changePasswordMessageEl, 'success', t('undoEmailChange.intro', { email: context.email }));
+  showAuthMessage(changePasswordMessageEl, 'success', forgot ? t('resetPassword.intro') : t('undoEmailChange.intro', { email: context.email }));
   changePasswordOverlay.classList.remove('hidden');
   changePasswordNewInput.focus();
 }
@@ -8190,8 +8218,10 @@ function openPasswordResetModal(context) {
 function closeChangePasswordModal() {
   changePasswordOverlay.classList.add('hidden');
   // Skipping the new password after an undo still has to land somewhere --
-  // signed out, on the login screen, told what happened.
-  if (passwordResetContext) reloadWithNotice(t('undoEmailChange.skipped', { email: passwordResetContext.email }), 'success');
+  // signed out, on the login screen, told what happened. Closing a "Forgot
+  // password?" reset just goes back to wherever this tab would otherwise be.
+  if (passwordResetContext && passwordResetContext.kind === 'forgot') location.replace(location.pathname + location.search + location.hash);
+  else if (passwordResetContext) reloadWithNotice(t('undoEmailChange.skipped', { email: passwordResetContext.email }), 'success');
 }
 
 settingsChangePasswordBtn.onclick = openChangePasswordModal;
@@ -8244,22 +8274,68 @@ async function submitPasswordReset() {
     showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.mismatch'));
     return;
   }
-  const { resetToken, email } = passwordResetContext;
+  const { resetToken, email, kind } = passwordResetContext;
+  const forgot = kind === 'forgot';
+  let restored = false;
   try {
-    const { token } = await apiFetch('/auth/reset-password', { method: 'POST', body: { resetToken, newPassword } });
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    const result = await apiFetch('/auth/reset-password', { method: 'POST', body: { resetToken, newPassword } });
+    localStorage.setItem(AUTH_TOKEN_KEY, result.token);
+    restored = !!result.restored;
   } catch (err) {
     if (err.code === 'INVALID_PASSWORD') {
       showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.tooShort'));
       return;
     }
+    if (err.code === 'NETWORK_ERROR' || err.code === 'MAINTENANCE') {
+      showAuthMessage(changePasswordMessageEl, 'error', describeAuthError(err)); // the link still works -- try again
+      return;
+    }
     passwordResetContext = null;
-    reloadWithNotice(t('undoEmailChange.resetExpired'), 'error');
+    if (err.code === 'ACCOUNT_EXPIRED_INACTIVITY' || err.code === 'ACCOUNT_DELETED_SCHEDULED') reloadWithNotice(describeAuthError(err), 'error');
+    else reloadWithNotice(t(forgot ? 'resetPassword.invalid' : 'undoEmailChange.resetExpired'), 'error');
     return;
   }
   passwordResetContext = null;
-  reloadWithNotice(t('undoEmailChange.done', { email }), 'success');
+  if (restored) reloadWithNotice(t('login.accountRestored'), 'success');
+  else reloadWithNotice(forgot ? t('resetPassword.done') : t('undoEmailChange.done', { email }), 'success');
 }
+
+// `?resetPassword=<token>` -- a "Forgot password?" link (POST
+// /auth/forgot-password): straight to setting a new password, before
+// anything signs in. The session this tab may already have is left alone
+// until the new password is actually set (which ends every other session
+// and logs this one in); closing the modal just carries on as before.
+function handlePasswordResetLink() {
+  const resetToken = takeUrlParam('resetPassword');
+  openPasswordResetModal({ kind: 'forgot', resetToken });
+}
+
+// "Forgot password?" on the login screen. The answer is the same whether or
+// not the email has an account (see POST /auth/forgot-password).
+document.getElementById('forgot-password-link').onclick = async (e) => {
+  e.preventDefault();
+  clearAuthMessage(loginMessageEl);
+  const result = await showFormModal(
+    t('forgotPassword.title'),
+    [{ name: 'email', label: t('forgotPassword.hint'), value: document.getElementById('login-email').value.trim() }],
+    { okLabel: t('forgotPassword.submit') }
+  );
+  if (!result) return;
+  const email = result.email.trim();
+  try {
+    await apiFetch('/auth/forgot-password', { method: 'POST', body: { email } });
+  } catch (err) {
+    const message =
+      err.code === 'INVALID_EMAIL'
+        ? t('forgotPassword.invalidEmail')
+        : err.code === 'NETWORK_ERROR' || err.code === 'MAINTENANCE'
+          ? describeAuthError(err)
+          : t('forgotPassword.failed');
+    showAuthMessage(loginMessageEl, 'error', message);
+    return;
+  }
+  showAuthMessage(loginMessageEl, 'success', t('forgotPassword.sent', { email }));
+};
 
 // ---------------------------------------------------------------------------
 // Account deletion -- Settings' "Delete account" opens a dedicated
@@ -8752,6 +8828,10 @@ function boot() {
   });
   if (new URLSearchParams(location.search).has('undoEmailChange')) {
     handleUndoEmailChangeLink(); // reloads into a fresh boot() once done
+    return;
+  }
+  if (new URLSearchParams(location.search).has('resetPassword')) {
+    handlePasswordResetLink(); // reloads into a fresh boot() once done (or closed)
     return;
   }
   showPostBootNotice();
