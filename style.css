@@ -2133,6 +2133,15 @@ main,
   gap: 8px;
 }
 
+/* "+ Add task" / "Stats (all tasks)", and the series pane's "+ Add new
+   task" / "Series stats" -- side by side, wrapping if they don't fit. */
+.todo-manage-left-actions,
+.series-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 #todo-manage-months {
   max-height: 360px;
   overflow-y: auto;
@@ -2513,6 +2522,24 @@ main,
 .task-stats-empty {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.task-stats-since {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* "Reset stats…" -- two clicks, the second one shown in the danger color
+   (see buildResetStatsButton). */
+.task-stats-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.task-stats-reset.confirm {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .task-stats-occurrence-list {

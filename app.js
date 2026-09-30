@@ -268,6 +268,17 @@ const I18N = {
     'taskStats.timePerRecurrence': 'Time per recurrence',
     'taskStats.noFocusedTime': 'No focused time logged yet.',
     'taskStats.focusedAndTimer': '{focused} focused · {timer} timer',
+    'taskStats.allTitle': 'Stats: all tasks',
+    'taskStats.seriesTitle': 'Stats: series "{name}"',
+    'taskStats.overview': 'Overview',
+    'taskStats.taskCount': 'Tasks',
+    'taskStats.occurrencesToDate': 'Occurrences to date',
+    'taskStats.timePerDay': 'Time per day',
+    'taskStats.since': 'Since the reset on {date}',
+    'taskStats.reset': 'Reset stats…',
+    'taskStats.resetConfirm': 'Click again to reset',
+    'manage.allStats': 'Stats (all tasks)',
+    'manage.seriesStats': 'Series stats',
 
     'settings.title': 'Settings',
     'settings.nickname': 'Nickname',
@@ -648,6 +659,17 @@ const I18N = {
     'taskStats.timePerRecurrence': 'Vrijeme po ponavljanju',
     'taskStats.noFocusedTime': 'Još nije zabilježeno vrijeme fokusa.',
     'taskStats.focusedAndTimer': '{focused} fokusirano · {timer} mjerač',
+    'taskStats.allTitle': 'Statistika: svi zadaci',
+    'taskStats.seriesTitle': 'Statistika: serija "{name}"',
+    'taskStats.overview': 'Pregled',
+    'taskStats.taskCount': 'Zadaci',
+    'taskStats.occurrencesToDate': 'Pojavljivanja do danas',
+    'taskStats.timePerDay': 'Vrijeme po danu',
+    'taskStats.since': 'Od resetiranja {date}',
+    'taskStats.reset': 'Resetiraj statistiku…',
+    'taskStats.resetConfirm': 'Klikni ponovno za resetiranje',
+    'manage.allStats': 'Statistika (svi zadaci)',
+    'manage.seriesStats': 'Statistika serije',
 
     'settings.title': 'Postavke',
     'settings.nickname': 'Nadimak',
@@ -7093,6 +7115,11 @@ document.getElementById('series-edit-save-btn').onclick = () => {
   seriesEditSaveConfirmTimer = setTimeout(() => seriesEditSaveConfirmEl.classList.remove('visible'), 1500);
 };
 
+document.getElementById('series-stats-btn').onclick = () => {
+  if (manageSelectedSeriesId) showStatsModal({ kind: 'series', seriesId: manageSelectedSeriesId });
+};
+document.getElementById('todo-all-stats-btn').onclick = () => showStatsModal({ kind: 'all' });
+
 document.getElementById('series-edit-add-new-btn').onclick = async () => {
   if (!manageSelectedSeriesId) return;
   const nameDefault = seriesEditNameInput.value.trim();
@@ -7207,23 +7234,93 @@ function aggregateFocusLog(taskRecords) {
   return { byDate, totalFocusedSeconds, totalTimerSeconds };
 }
 
+// Whether an occurrence of `task` on dateISO counts toward its stats: a
+// task's stats start over at its last reset (Task.statsResetAt, see
+// resetStats), never touching its history. On the reset day itself, an
+// occurrence counts unless it was already resolved before the reset -- so
+// what's done right after resetting shows up at once.
+function countsTowardStats(task, dateISO) {
+  if (!task.statsResetAt) return true;
+  const resetISO = Recurrence.dateToISO(new Date(task.statsResetAt));
+  if (dateISO !== resetISO) return dateISO > resetISO;
+  const occurrence = findOccurrence(task, dateISO);
+  return !(occurrence && occurrence.status !== 'pending' && occurrence.resolvedAt && occurrence.resolvedAt < task.statsResetAt);
+}
+
 function countSeriesCompletions(seriesTasks) {
-  const taskIds = new Set(seriesTasks.map((t) => t.taskId));
+  const byTaskId = new Map(seriesTasks.map((t) => [t.taskId, t]));
   let count = 0;
   for (const occurrence of occurrences) {
-    if (taskIds.has(occurrence.taskId) && occurrence.status === 'completed') count++;
+    const task = byTaskId.get(occurrence.taskId);
+    if (task && occurrence.status === 'completed' && countsTowardStats(task, occurrence.occurrenceDate)) count++;
   }
   return count;
 }
 
 // How many occurrences of these tasks have happened up to and including
 // today -- recorded rows and pattern dates alike (see
-// forEachOccurrenceBefore).
+// forEachOccurrenceBefore) -- since each one's last stats reset.
 function countSeriesOccurrencesToDate(seriesTasks, todayISO) {
   const cutoff = Recurrence.dateToISO(Recurrence.addDays(new Date(todayISO + 'T00:00:00'), 1));
   let count = 0;
-  for (const t of seriesTasks) forEachOccurrenceBefore(t, cutoff, () => count++);
+  for (const t of seriesTasks) {
+    forEachOccurrenceBefore(t, cutoff, (dateISO) => {
+      if (countsTowardStats(t, dateISO)) count++;
+    });
+  }
   return count;
+}
+
+// "Reset stats": these tasks' stats start over now. Their measured focus/
+// timer time is cleared (a session running right now restarts its clock
+// from now, as in clearOccurrenceFocusTime), and each records the moment
+// (Task.statsResetAt) completions and occurrences are counted from --
+// which occurrences were done when stays exactly as it was.
+function resetStats(taskRecords) {
+  const now = Date.now();
+  const taskIds = new Set(taskRecords.map((t) => t.taskId));
+  for (const task of taskRecords) {
+    task.statsResetAt = now;
+    logTaskEvent(task, 'Stats reset');
+  }
+  for (const occurrence of occurrences) {
+    if (!taskIds.has(occurrence.taskId)) continue;
+    occurrence.focusedSeconds = 0;
+    occurrence.timerSeconds = 0;
+  }
+  const activeTask = tasks.find((t) => t.id === activeTaskId);
+  if (activeTask && taskIds.has(activeTask.taskId)) {
+    const activeOccurrence = findOccurrence(activeTask, activeOccurrenceDate);
+    if (activeOccurrence && activeOccurrence.timer && activeOccurrence.timer.runningSince != null) activeOccurrence.timer.runningSince = now;
+    if (activeFocusOnlySince != null) activeFocusOnlySince = now;
+  }
+  saveTasks();
+  renderSidePanel(); // the agenda's block lengths come from the measured time
+}
+
+// Two clicks to reset (arm -> confirm), same idea as appendDeleteButton.
+function buildResetStatsButton(onReset) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'menu-btn-small task-stats-reset';
+  btn.textContent = t('taskStats.reset');
+  let armed = false;
+  btn.onclick = () => {
+    if (!armed) {
+      armed = true;
+      btn.textContent = t('taskStats.resetConfirm');
+      btn.classList.add('confirm');
+      return;
+    }
+    onReset();
+  };
+  btn.addEventListener('mouseleave', () => {
+    if (!armed) return;
+    armed = false;
+    btn.textContent = t('taskStats.reset');
+    btn.classList.remove('confirm');
+  });
+  return btn;
 }
 
 function formatStatsDuration(totalSeconds) {
@@ -7285,74 +7382,120 @@ function clearOccurrenceFocusTime(occurrence) {
   occurrence.log.push({ message: 'Measured focus time deleted', timestamp: Date.now() });
 }
 
-// Stats for this one task, never its whole series, which groups otherwise
-// unrelated tasks together.
+// Stats for one task (its context menu's "Task stats"), for every task in a
+// series, or for all tasks (both from the Manage Tasks modal -- the
+// reminder task isn't one of them). scope: { kind: 'task', task } |
+// { kind: 'series', seriesId } | { kind: 'all' }. A task's stats never
+// include its series, which groups otherwise unrelated tasks together;
+// the series and all-tasks views add them up, with how many tasks and
+// occurrences that covers.
+function statsScopeRecords(scope) {
+  if (scope.kind === 'task') return tasks.filter((t) => t.taskId === scope.task.taskId);
+  const pool = scope.kind === 'series' ? tasksInSeries(scope.seriesId) : tasks;
+  return pool.filter((t) => !isProtectedTask(t));
+}
+
 function showTaskStatsModal(task) {
-  taskStatsTitleEl.textContent = t('taskStats.title', { name: task.name });
+  showStatsModal({ kind: 'task', task });
+}
+
+function showStatsModal(scope) {
+  const taskRecords = statsScopeRecords(scope);
+  const aggregate = scope.kind !== 'task';
+  taskStatsTitleEl.textContent =
+    scope.kind === 'task'
+      ? t('taskStats.title', { name: scope.task.name })
+      : scope.kind === 'series'
+        ? t('taskStats.seriesTitle', { name: getSeriesName(scope.seriesId) })
+        : t('taskStats.allTitle');
   taskStatsBodyEl.innerHTML = '';
 
-  const taskRecords = tasks.filter((t) => t.taskId === task.taskId);
-  const recurring = isRecurringSeries(taskRecords);
+  // "Since the reset on ...", when every task in scope was reset together.
+  const resets = new Set(taskRecords.map((r) => r.statsResetAt || null));
+  const [onlyReset] = resets;
+  if (resets.size === 1 && onlyReset) {
+    const since = document.createElement('div');
+    since.className = 'task-stats-since';
+    since.textContent = t('taskStats.since', { date: formatDateTime(onlyReset) });
+    taskStatsBodyEl.appendChild(since);
+  }
+
+  const recurring = aggregate || isRecurringSeries(taskRecords);
+  const todayISO = Recurrence.dateToISO(new Date());
+  const occurrenceCount = recurring ? countSeriesOccurrencesToDate(taskRecords, todayISO) : 0;
   const { byDate, totalFocusedSeconds, totalTimerSeconds } = aggregateFocusLog(taskRecords);
 
-  const totalsSection = buildStatsSection(recurring ? t('taskStats.totalFocusedAllRecurrences') : t('taskStats.totalFocused'));
+  if (aggregate) {
+    const overview = buildStatsSection(t('taskStats.overview'));
+    overview.appendChild(buildStatRow(t('taskStats.taskCount'), String(new Set(taskRecords.map((r) => r.taskId)).size)));
+    overview.appendChild(buildStatRow(t('taskStats.occurrencesToDate'), String(occurrenceCount)));
+    taskStatsBodyEl.appendChild(overview);
+  }
+
+  const totalsSection = buildStatsSection(!aggregate && recurring ? t('taskStats.totalFocusedAllRecurrences') : t('taskStats.totalFocused'));
   totalsSection.appendChild(buildStatRow(t('taskStats.total'), formatStatsDuration(totalFocusedSeconds + totalTimerSeconds)));
   totalsSection.appendChild(buildStatRow(t('taskStats.justFocused'), formatStatsDuration(totalFocusedSeconds)));
   totalsSection.appendChild(buildStatRow(t('taskStats.focusedWithTimer'), formatStatsDuration(totalTimerSeconds)));
   taskStatsBodyEl.appendChild(totalsSection);
 
-  if (!recurring) {
-    taskStatsOverlay.classList.remove('hidden');
-    return;
-  }
+  if (recurring) {
+    const completed = countSeriesCompletions(taskRecords);
+    const percent = occurrenceCount > 0 ? Math.round((completed / occurrenceCount) * 100) : 0;
+    const completionSection = buildStatsSection(t('taskStats.completion'));
+    completionSection.appendChild(buildStatRow(t('taskStats.completed'), String(completed)));
+    if (!aggregate) completionSection.appendChild(buildStatRow(t('taskStats.recurrencesToDate'), String(occurrenceCount)));
+    completionSection.appendChild(buildStatRow(t('taskStats.completionRate'), `${percent}%`));
+    taskStatsBodyEl.appendChild(completionSection);
 
-  const todayISO = Recurrence.dateToISO(new Date());
-  const completed = countSeriesCompletions(taskRecords);
-  const occurrences = countSeriesOccurrencesToDate(taskRecords, todayISO);
-  const percent = occurrences > 0 ? Math.round((completed / occurrences) * 100) : 0;
-
-  const completionSection = buildStatsSection(t('taskStats.completion'));
-  completionSection.appendChild(buildStatRow(t('taskStats.completed'), String(completed)));
-  completionSection.appendChild(buildStatRow(t('taskStats.recurrencesToDate'), String(occurrences)));
-  completionSection.appendChild(buildStatRow(t('taskStats.completionRate'), `${percent}%`));
-  taskStatsBodyEl.appendChild(completionSection);
-
-  const perRecurrenceSection = buildStatsSection(t('taskStats.timePerRecurrence'));
-  const dates = [...byDate.keys()].sort().reverse();
-  if (dates.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'task-stats-empty';
-    empty.textContent = t('taskStats.noFocusedTime');
-    perRecurrenceSection.appendChild(empty);
-  } else {
-    const list = document.createElement('div');
-    list.className = 'task-stats-occurrence-list';
-    for (const date of dates) {
-      const entry = byDate.get(date);
-      const item = document.createElement('div');
-      item.className = 'task-stats-occurrence-item';
-      const dateEl = document.createElement('span');
-      dateEl.className = 'task-stats-occurrence-date';
-      dateEl.textContent = date;
-      const timeEl = document.createElement('span');
-      timeEl.className = 'task-stats-occurrence-time';
-      timeEl.textContent = t('taskStats.focusedAndTimer', {
-        focused: formatStatsDuration(entry.focusedSeconds),
-        timer: formatStatsDuration(entry.timerSeconds),
-      });
-      item.appendChild(dateEl);
-      item.appendChild(timeEl);
-      appendDeleteButton(item, () => {
-        for (const occurrence of entry.occurrences) clearOccurrenceFocusTime(occurrence);
-        saveTasks();
-        showTaskStatsModal(task);
-        renderSidePanel(); // the agenda's block lengths come from these measurements
-      });
-      list.appendChild(item);
+    const perDateSection = buildStatsSection(aggregate ? t('taskStats.timePerDay') : t('taskStats.timePerRecurrence'));
+    const dates = [...byDate.keys()].sort().reverse();
+    if (dates.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'task-stats-empty';
+      empty.textContent = t('taskStats.noFocusedTime');
+      perDateSection.appendChild(empty);
+    } else {
+      const list = document.createElement('div');
+      list.className = 'task-stats-occurrence-list';
+      for (const date of dates) {
+        const entry = byDate.get(date);
+        const item = document.createElement('div');
+        item.className = 'task-stats-occurrence-item';
+        const dateEl = document.createElement('span');
+        dateEl.className = 'task-stats-occurrence-date';
+        dateEl.textContent = date;
+        const timeEl = document.createElement('span');
+        timeEl.className = 'task-stats-occurrence-time';
+        timeEl.textContent = t('taskStats.focusedAndTimer', {
+          focused: formatStatsDuration(entry.focusedSeconds),
+          timer: formatStatsDuration(entry.timerSeconds),
+        });
+        item.appendChild(dateEl);
+        item.appendChild(timeEl);
+        appendDeleteButton(item, () => {
+          for (const occurrence of entry.occurrences) clearOccurrenceFocusTime(occurrence);
+          saveTasks();
+          showStatsModal(scope);
+          renderSidePanel(); // the agenda's block lengths come from these measurements
+        });
+        list.appendChild(item);
+      }
+      perDateSection.appendChild(list);
     }
-    perRecurrenceSection.appendChild(list);
+    taskStatsBodyEl.appendChild(perDateSection);
   }
-  taskStatsBodyEl.appendChild(perRecurrenceSection);
+
+  if (taskRecords.length) {
+    const actions = document.createElement('div');
+    actions.className = 'task-stats-actions';
+    actions.appendChild(
+      buildResetStatsButton(() => {
+        resetStats(taskRecords);
+        showStatsModal(scope);
+      })
+    );
+    taskStatsBodyEl.appendChild(actions);
+  }
 
   taskStatsOverlay.classList.remove('hidden');
 }

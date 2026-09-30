@@ -244,7 +244,10 @@
       <div class="todo-manage-panes">
         <div class="todo-manage-left">
           <div id="todo-manage-months"></div>
-          <button id="todo-add-btn" class="menu-btn-small" data-i18n="todo.addTask">+ Add task</button>
+          <div class="todo-manage-left-actions">
+            <button id="todo-add-btn" class="menu-btn-small" data-i18n="todo.addTask">+ Add task</button>
+            <button id="todo-all-stats-btn" class="menu-btn-small" data-i18n="manage.allStats">Stats (all tasks)</button>
+          </div>
         </div>
         <div class="todo-manage-right">
           <div id="series-edit-empty" class="todo-manage-empty" data-i18n="manage.selectSeries">Select a series on the left to edit it.</div>
@@ -255,7 +258,10 @@
               <span id="series-edit-save-confirm" class="series-edit-save-confirm" data-i18n="manage.saved">Saved</span>
             </div>
             <div id="series-edit-list"></div>
-            <button id="series-edit-add-new-btn" class="menu-btn-small" data-i18n="manage.addNewTask">+ Add new task</button>
+            <div class="series-edit-actions">
+              <button id="series-edit-add-new-btn" class="menu-btn-small" data-i18n="manage.addNewTask">+ Add new task</button>
+              <button id="series-stats-btn" class="menu-btn-small" data-i18n="manage.seriesStats">Series stats</button>
+            </div>
           </div>
         </div>
       </div>
