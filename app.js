@@ -117,6 +117,7 @@ const I18N = {
     'menu.show': 'Show',
     'menu.hide': 'Hide',
     'menu.pauseRecurrence': 'Pause recurrence until…',
+    'menu.resumeRecurrence': 'Resume recurrence now',
     'pause.title': 'Pause "{name}"',
     'pause.hint': 'From {date}, until the date you pick -- recurrence starts again on that exact date.',
     'pause.summary': 'Paused {from} – {to}, resumes {resume}.',
@@ -496,6 +497,7 @@ const I18N = {
     'menu.show': 'Prikaži',
     'menu.hide': 'Sakrij',
     'menu.pauseRecurrence': 'Pauziraj ponavljanje do…',
+    'menu.resumeRecurrence': 'Nastavi ponavljanje odmah',
     'pause.title': 'Pauziraj "{name}"',
     'pause.hint': 'Od {date} do datuma koji odaberete -- ponavljanje se nastavlja točno na taj datum.',
     'pause.summary': 'Pauzirano {from} – {to}, nastavlja se {resume}', // no trailing period: Croatian dates already end in one
@@ -1039,7 +1041,10 @@ function dropBlankOccurrences(taskId, fromISO, beforeISO = null) {
 //  - one-off -> one-off: just moving its date -- its one row (if any) moves
 //    with it, rather than leaving the old date behind as a second occurrence.
 //  - recurUntilCompleted -> recurUntilCompleted: the live occurrence and its
-//    chain are untouched; only how the next cycle is computed changes.
+//    chain are untouched; only how the next cycle is computed changes --
+//    except a still-blank next cycle that completing the previous one
+//    created under the old pattern, which is recomputed under the new one
+//    (see recomputeUntouchedNextCycle).
 //  - turning recurUntilCompleted off: the live occurrence's chain is
 //    cleared (on a plain task that field means something else -- dates
 //    vacated by a reschedule, see Occurrence.isDateExcluded), and the row
@@ -1052,9 +1057,15 @@ function applyPatternChange(task, { dueDate, frequency, endDate, recurUntilCompl
   const newFrequency = { ...frequency };
   delete newFrequency.startsOn;
   delete newFrequency.skipDates;
+  // A pause is part of the pattern it was made on: a new pattern ends it --
+  // except for a recurUntilCompleted task staying one, whose live
+  // occurrence (still on the pause's resume date) is left as it is.
+  delete newFrequency.pause;
 
   if (wasRecurUntilCompleted && recurUntilCompleted) {
+    if (task.frequency.pause) newFrequency.pause = task.frequency.pause;
     Object.assign(task, { dueDate, frequency: newFrequency, endDate });
+    recomputeUntouchedNextCycle(task);
     if (logMessage) logTaskEvent(task, logMessage);
     return;
   }
@@ -1092,6 +1103,31 @@ function applyPatternChange(task, { dueDate, frequency, endDate, recurUntilCompl
   if (dueDate < todayISO && newFrequency.type !== 'once') newFrequency.startsOn = todayISO;
   Object.assign(task, { dueDate, frequency: newFrequency, endDate: newFrequency.type === 'once' ? null : endDate, recurUntilCompleted: false });
   if (logMessage) logTaskEvent(task, logMessage);
+}
+
+// A recurUntilCompleted task's pending occurrence is often just the next
+// cycle that completing the previous one created, dated by the pattern at
+// that moment (resolveRecurUntilCompletedOccurrence). If the pattern then
+// changes while that occurrence is still untouched -- blank: nothing
+// recorded, never carried over, paused or moved -- its date was only ever
+// the old pattern's, so it's recomputed from the same completion day under
+// the new one; a pattern with no next cycle (e.g. now a one-off) means the
+// task is done, and the occurrence goes. A task's very first occurrence (no
+// completion before it) and anything with content stay as they are.
+function recomputeUntouchedNextCycle(task) {
+  const live = findOccurrence(task, null);
+  if (!live || !Occurrence.isBlankOccurrence(live)) return;
+  const previous = occurrences
+    .filter((o) => o.taskId === task.taskId && o.status !== 'pending' && o.resolvedAt && o.occurrenceDate <= live.occurrenceDate)
+    .sort((a, b) => b.resolvedAt - a.resolvedAt)[0];
+  if (!previous) return;
+  const completedISO = Recurrence.dateToISO(new Date(previous.resolvedAt));
+  const nextDate = Recurrence.nextRecurUntilCompletedDueDate(task, completedISO) || null;
+  if (!nextDate) {
+    occurrences.splice(occurrences.indexOf(live), 1);
+  } else if (nextDate !== live.occurrenceDate && !occurrences.some((o) => o !== live && o.taskId === task.taskId && o.occurrenceDate === nextDate)) {
+    live.occurrenceDate = nextDate;
+  }
 }
 
 // Whether an occurrence can be deleted outright: anything but a
@@ -2118,14 +2154,25 @@ let occurrences = [];
 // were simply never done, not live chains. If several 'pending' rows exist,
 // the latest-starting one is the live chain: a stale one always predates
 // it, and once mistaken for it would get advanced
-// (advanceRecurUntilCompletedTasks) right past the real one.
+// (advanceRecurUntilCompletedTasks) right past the real one. And none of
+// them is live if it predates the latest resolved occurrence -- every cycle
+// starts after the one completed before it -- so a task with only stale
+// rows left (e.g. one that's since become a one-off and been done) has no
+// live occurrence at all, rather than a stale row being revived and
+// carried forward to today.
 function findOccurrence(task, occurrenceDate) {
   if (!task.recurUntilCompleted) return Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
   let pending = null;
+  let latestResolvedDate = null;
   for (const o of occurrences) {
-    if (o.taskId !== task.taskId || o.status !== 'pending') continue;
-    if (!pending || o.occurrenceDate > pending.occurrenceDate) pending = o;
+    if (o.taskId !== task.taskId) continue;
+    if (o.status !== 'pending') {
+      if (!latestResolvedDate || o.occurrenceDate > latestResolvedDate) latestResolvedDate = o.occurrenceDate;
+    } else if (!pending || o.occurrenceDate > pending.occurrenceDate) {
+      pending = o;
+    }
   }
+  if (pending && latestResolvedDate && pending.occurrenceDate < latestResolvedDate) pending = null;
   if (occurrenceDate == null) return pending;
   const exact = Occurrence.findOccurrence(occurrences, task.taskId, occurrenceDate);
   if (exact) return exact;
@@ -2755,6 +2802,7 @@ function showTodoContextMenu(event, item, canWorkOnNow, isLockedByLimit) {
 
   if (!isProtectedTask(task)) addItem(2, t('common.edit'), () => editTaskOccurrence(task, occurrenceDate));
   if (canPauseRecurrence(item)) addItem(2, t('menu.pauseRecurrence'), () => promptPauseRecurrence(task, occurrenceDate));
+  if (!isProtectedTask(task) && currentPause(task)) addItem(2, t('menu.resumeRecurrence'), () => resumeRecurrenceNow(task));
   addItem(3, t('menu.taskStats'), () => showTaskStatsModal(task));
 
   for (const group of groups) {
@@ -5842,6 +5890,14 @@ function formatShortDate(dateISO) {
 // A recurUntilCompleted task has no pattern dates to cut -- just its one
 // live pending Occurrence (see findOccurrence), which simply moves to the
 // picked date, its carried-over chain cleared.
+//
+// Either way the pause records its own span as frequency.pause { from,
+// until } (kept with the pattern -- the backend stores frequency as-is), so
+// a task paused right now can be told apart from one whose next date just
+// happens to be later (currentPause), and resumed early from the context
+// menu: "Resume recurrence now" (resumeRecurrenceNow) restarts it today,
+// with an occurrence today even if the pattern doesn't land there -- the
+// same way the pause guarantees one on its resume date.
 // ---------------------------------------------------------------------------
 
 function canPauseRecurrence(item) {
@@ -5852,6 +5908,32 @@ function canPauseRecurrence(item) {
     return !!occurrence && occurrence.status === 'pending';
   }
   return task.frequency.type !== 'once' && !item.completed && !item.failed;
+}
+
+const isoDayAfter = (iso) => Recurrence.dateToISO(Recurrence.addDays(new Date(iso + 'T00:00:00'), 1));
+
+// The task's pause, if it's paused right now: today falls inside the span
+// its last pause recorded, and that pause is still what's in effect (the
+// pattern still restarts on its resume date / the live occurrence still
+// sits there) -- a later edit may have superseded it. null otherwise.
+function currentPause(task) {
+  const pause = task.frequency && task.frequency.pause;
+  if (!pause) return null;
+  const todayISO = Recurrence.dateToISO(new Date());
+  if (!(pause.from <= todayISO && todayISO < pause.until)) return null;
+  if (task.recurUntilCompleted) {
+    const live = findOccurrence(task, null);
+    return live && live.occurrenceDate === pause.until ? pause : null;
+  }
+  return task.frequency.startsOn === pause.until ? pause : null;
+}
+
+// The span a new pause from pauseFromISO to resumeISO records -- pausing
+// again right where a current pause ends (from its resume-date occurrence)
+// extends that pause rather than starting a separate one.
+function pauseSpan(task, pauseFromISO, resumeISO) {
+  const previous = currentPause(task);
+  return { from: previous && previous.until === pauseFromISO ? previous.from : pauseFromISO, until: resumeISO };
 }
 
 // The latest date the task can still occur on at all -- null if open-ended.
@@ -5914,6 +5996,7 @@ function pauseRecurUntilCompletedOccurrence(task, occurrenceDate, resumeISO) {
     return false;
   }
   releaseOccurrenceDatesForPause(task.taskId, occurrence.occurrenceDate, resumeISO);
+  task.frequency = { ...task.frequency, pause: pauseSpan(task, occurrenceDate, resumeISO) };
   occurrence.log.push({ message: `Recurrence paused until ${resumeISO}`, timestamp: Date.now() });
   occurrence.occurrenceDate = resumeISO;
   occurrence.pendingReschedules = [];
@@ -5926,9 +6009,10 @@ function pausePlainRecurrence(task, pauseFromISO, resumeISO) {
     showInfoModal(t('pause.nothingAfter'));
     return false;
   }
+  const span = pauseSpan(task, pauseFromISO, resumeISO);
   releaseOccurrenceDatesForPause(task.taskId, pauseFromISO, resumeISO);
   rollPatternForward(task, pauseFromISO);
-  const frequency = { ...task.frequency, startsOn: resumeISO };
+  const frequency = { ...task.frequency, startsOn: resumeISO, pause: span };
   if (frequency.skipDates) {
     frequency.skipDates = frequency.skipDates.filter((d) => d >= resumeISO);
     if (!frequency.skipDates.length) delete frequency.skipDates;
@@ -5940,6 +6024,50 @@ function pausePlainRecurrence(task, pauseFromISO, resumeISO) {
   }
   logTaskEvent(task, `Recurrence paused until ${resumeISO}`, pauseFromISO);
   return true;
+}
+
+// "Resume recurrence now": ends a current pause today instead of on its
+// resume date. A plain task's pattern restarts today (startsOn); the
+// pause's own stand-in occurrence on the old resume date goes if nothing
+// was recorded on it and the pattern doesn't land there anyway. A
+// recurUntilCompleted task's live occurrence moves to today. Either way
+// there's an occurrence today, pattern date or not.
+function resumeRecurrenceNow(task) {
+  const pause = currentPause(task);
+  if (!pause) return;
+  const todayISO = Recurrence.dateToISO(new Date());
+  const message = `Recurrence resumed (was paused until ${pause.until})`;
+  const { pause: _ended, ...frequency } = task.frequency;
+
+  if (task.recurUntilCompleted) {
+    const live = findOccurrence(task, null);
+    const collision = occurrences.find((o) => o !== live && o.taskId === task.taskId && o.occurrenceDate === todayISO);
+    if (collision) {
+      showInfoModal(t('occurrencePanel.rescheduleCollision'));
+      return;
+    }
+    releaseOccurrenceDatesForPause(task.taskId, pause.until, isoDayAfter(pause.until));
+    task.frequency = frequency;
+    live.log.push({ message, timestamp: Date.now() });
+    live.occurrenceDate = todayISO;
+    live.pendingReschedules = [];
+    live.dismissed = false;
+  } else {
+    task.frequency = { ...frequency, startsOn: todayISO };
+    const standIn = Occurrence.findOccurrence(occurrences, task.taskId, pause.until);
+    if (standIn && standIn.manual && Occurrence.isBlankOccurrence({ ...standIn, manual: false }) && !Recurrence.occursOn(task, pause.until)) {
+      releaseOccurrenceDatesForPause(task.taskId, pause.until, isoDayAfter(pause.until));
+      occurrences.splice(occurrences.indexOf(standIn), 1);
+    }
+    if (!Recurrence.occursOn(task, todayISO) && !findOccurrence(task, todayISO)) {
+      occurrences.push(Occurrence.createOccurrence({ id: uid(), taskId: task.taskId, occurrenceDate: todayISO, manual: true }));
+    }
+    logTaskEvent(task, message, todayISO);
+  }
+  saveTasks();
+  renderTodo();
+  renderSidePanel();
+  refreshTodoManageModal();
 }
 
 function buildSidePanelEmptyRow(text) {
