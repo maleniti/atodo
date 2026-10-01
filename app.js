@@ -5018,15 +5018,80 @@ function scrollTodoToToday(behavior = 'smooth') {
     todoViewportEl.scrollTo({ top: 0, behavior });
     return;
   }
-  // Where today's top is with the list at scrollTop 0, below the day bar.
-  const { readingOffset } = todoReadingGeometry();
-  const listTop = todoViewportEl.getBoundingClientRect().top;
-  const dayTop = ref.sentinel.getBoundingClientRect().top - listTop + todoViewportEl.scrollTop;
-  // Near the top the reading point rides up with the scroll (it's at
-  // scrollTop itself there), so today meets it halfway.
-  const target = dayTop <= 2 * readingOffset ? dayTop / 2 : dayTop - readingOffset;
-  todoViewportEl.scrollTo({ top: Math.max(0, Math.round(target) + 1), behavior });
+  scrollTodoToDay(ref, behavior);
 }
+
+// Puts a day's top at the reading point, so it becomes the highlighted one.
+function scrollTodoToDay(ref, behavior = 'smooth') {
+  todoViewportEl.scrollTo({ top: todoDayScrollTarget(ref), behavior });
+}
+
+// Where a day's top is with the list at scrollTop 0.
+function todoDayTop(ref) {
+  return ref.sentinel.getBoundingClientRect().top - todoViewportEl.getBoundingClientRect().top + todoViewportEl.scrollTop;
+}
+
+function clampTodoScrollTop(top) {
+  return Math.min(Math.max(0, Math.round(top)), todoViewportEl.scrollHeight - todoViewportEl.clientHeight);
+}
+
+function todoDayScrollTarget(ref) {
+  const { readingOffset } = todoReadingGeometry();
+  const dayTop = todoDayTop(ref);
+  // Near the top the reading point rides up with the scroll (it's at
+  // scrollTop itself there), so the day meets it halfway.
+  const target = dayTop <= 2 * readingOffset ? dayTop / 2 : dayTop - readingOffset;
+  return clampTodoScrollTop(target + 1);
+}
+
+// Page Down/Space and Page Up/Shift+Space step the list a whole day at a
+// time instead of a screenful. Steps count from the day a step still in
+// flight is heading to (todoKeyStepIndex), not the highlighted one -- a
+// smooth scroll takes a moment to move the highlight, and pressing again
+// meanwhile should go one day further, not repeat the same step. Page Up
+// first goes back to the current day's own top if that's scrolled past.
+let todoKeyStepIndex = null;
+todoViewportEl.addEventListener('scrollend', () => { todoKeyStepIndex = null; });
+document.addEventListener('keydown', (e) => {
+  const forward = e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey);
+  const back = e.key === 'PageUp' || (e.key === ' ' && e.shiftKey);
+  if (!forward && !back) return;
+  if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+  const target = e.target;
+  if (target instanceof Element && target.closest('input, textarea, select, button, [contenteditable]')) return;
+  if (document.querySelector('.modal-overlay:not(.hidden)') || !todoViewportEl.offsetParent || !todoDayRefs.length) return;
+  e.preventDefault();
+  let index = todoKeyStepIndex ?? todoDayRefs.findIndex((ref) => ref.dateISO === highlightedTodoDate);
+  if (index < 0) index = 0;
+  if (forward) {
+    index = Math.min(index + 1, todoDayRefs.length - 1);
+  } else if (todoKeyStepIndex !== null || todoDayScrollTarget(todoDayRefs[index]) >= todoViewportEl.scrollTop - 2) {
+    index = Math.max(index - 1, 0);
+  }
+  todoKeyStepIndex = index;
+  let top = todoDayScrollTarget(todoDayRefs[index]);
+  // Stepping back, the reading point on the day's top isn't enough by
+  // itself: the highlight only moves back once the following day's top is
+  // a gap below the band (see updateTodoDayHighlight) -- but not so far
+  // that this day's own top is too, or it'd move back past it. The band
+  // shrinks near the top of the list, so the first scroll position (going
+  // up from the reading-point one) where exactly that holds is searched for.
+  const following = todoDayRefs[index + 1];
+  if (back && following) {
+    const { height, readingOffset } = todoReadingGeometry();
+    const movesBack = (dayTop, scrollTop) =>
+      dayTop - scrollTop > Math.min(1, scrollTop / readingOffset) * BAND_BOTTOM * height + (BAND_NEAR + BACK_GAP) * height;
+    const dayTop = todoDayTop(todoDayRefs[index]);
+    const followingTop = todoDayTop(following);
+    for (let candidate = top; candidate >= 0; candidate--) {
+      if (movesBack(followingTop, candidate) && (index === 0 || !movesBack(dayTop, candidate))) {
+        top = candidate;
+        break;
+      }
+    }
+  }
+  todoViewportEl.scrollTo({ top, behavior: 'smooth' });
+});
 
 
 const PENDING_VIEW_ICON =
