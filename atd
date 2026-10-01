@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the advanced-todo image and (re)runs it, detached, on the given
-# port. Safe to re-run any time -- an existing container with the same name
+# port. Safe to re-run any time -- an existing container for that port
 # is replaced regardless of whether the image actually changed, since a
 # no-op rebuild is cheap and there's no meaningful state to lose (this
 # container only ever serves the static client -- see CLAUDE.md -- so it
@@ -13,8 +13,11 @@ if [ $# -ne 1 ]; then
 fi
 
 port="$1"
-image="advanced-todo"
-container="advanced-todo"
+# One image and container per port, so clients built from different
+# checkouts (e.g. two branches, see `git worktree`) can run side by side --
+# re-running on a port replaces only that port's.
+image="advanced-todo:${port}"
+container="advanced-todo-${port}"
 
 cd "$(dirname "$0")"
 

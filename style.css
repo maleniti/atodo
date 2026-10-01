@@ -1223,10 +1223,9 @@ main {
    background/backdrop-filter/box-shadow reasoning) -- just shaped as a long,
    narrow bar (100% wide, tall enough for one line of text) instead of a
    whole row. No masking/fade tricks here: this panel is opaque-looking
-   enough on its own (same as every .todo-item already is) that whichever
-   one header ends up sticky (see .pinned below) simply covers whatever's
-   behind it just by being drawn there -- nothing here needs to appear/
-   disappear or transition in step with that. */
+   enough on its own (same as every .todo-item already is) that the sticky
+   day bar (see .todo-day-bar below) simply covers whatever scrolls behind
+   it just by being drawn there. */
 .todo-day-header {
   display: flex;
   align-items: center;
@@ -1256,22 +1255,21 @@ main {
   -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(88%);
 }
 
-/* Whichever single day header is currently "current" (see
-   updatePinnedTodoHeader) toggles this -- including the very first one,
-   which needs no special-casing here: at rest (scrolled all the way to the
-   very top) it's simply not .pinned yet, but that's indistinguishable from
-   being stuck anyway, since its natural (unstuck) flow position is already
-   exactly where sticky would hold it. z-index:1 is enough on its own (not
-   z-index:0) to comfortably beat .todo-item's z-index:auto regardless of
-   DOM order -- see the notes on that in this file's git history if it comes
-   up again -- and no *second* header is ever simultaneously sticky here to
-   also need outranking, unlike the old permanently-sticky-anchor design
-   this replaced. */
-.todo-day-header.pinned {
+/* The highlighted day's header, kept at the top of #todo-viewport while
+   the list scrolls underneath it (see updateTodoDayHighlight): the same
+   glass bar as every day header, just sticky, above the rows, and holding
+   a "Today" button whenever the highlighted day isn't today. Its label and
+   buttons change with the highlight; the bar itself never moves. */
+.todo-day-bar {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
 }
+.todo-day-bar-today { margin-left: auto; }
+
+/* Empty space after the last day (sized by sizeTodoListSpacers), so even a
+   short last day can be scrolled up into the highlight band. */
+.todo-list-spacer { flex: none; }
 
 /* Dims only the label text, not the header element itself -- opacity on the
    whole element would also fade its background, so a dimmed ("not today")
@@ -1319,6 +1317,7 @@ main {
   display: grid;
   grid-template-columns: 1fr 1fr;
   column-gap: 12px;
+  margin-bottom: 20px; /* space between days */
 }
 .todo-day-column {
   min-width: 0;

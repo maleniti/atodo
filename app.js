@@ -33,6 +33,7 @@ const I18N = {
     'login.noAccount': "Don't have an account?",
     'login.registerLink': 'Create one',
     'login.forgotLink': 'Forgot password?',
+    'todo.backToToday': 'Today',
     'forgotPassword.title': 'Reset your password',
     'forgotPassword.hint': "Your account's email -- we'll send it a link to set a new password (valid for 30 minutes)",
     'forgotPassword.submit': 'Send link',
@@ -436,6 +437,7 @@ const I18N = {
     'login.noAccount': 'Nemate račun?',
     'login.registerLink': 'Napravite ga',
     'login.forgotLink': 'Zaboravili ste lozinku?',
+    'todo.backToToday': 'Danas',
     'forgotPassword.title': 'Resetiranje lozinke',
     'forgotPassword.hint': 'E-mail vašeg računa -- na njega ćemo poslati poveznicu za postavljanje nove lozinke (vrijedi 30 minuta)',
     'forgotPassword.submit': 'Pošalji poveznicu',
@@ -4802,9 +4804,14 @@ const todoViewToggleEl = document.getElementById('todo-view-toggle');
 const todoViewToggleThumb = todoViewToggleEl.querySelector('.todo-view-toggle-thumb');
 const todoViewToggleOpts = Array.from(todoViewToggleEl.querySelectorAll('.todo-view-toggle-opt'));
 
-// { sentinel, header } per visible day, in display order -- rebuilt on every
-// renderTodo(). See updatePinnedTodoHeader.
-let todoDayHeaderRefs = [];
+// { dateISO, sentinel, header, columns } per visible day, in display order
+// -- rebuilt on every renderTodo(). See updateTodoDayHighlight.
+let todoDayRefs = [];
+// Which day is highlighted right now (see updateTodoDayHighlight).
+let highlightedTodoDate = null;
+// Set whenever the list should open positioned on today -- the first
+// render, and switching view or month -- rather than keep its scroll.
+let todoScrollToTodayOnRender = true;
 
 // Reset at the top of each renderTodo() call (see there) and consulted by
 // buildTodoItemRow's seriesRowLabelInfo -- isMixedSeries/getSeriesName each
@@ -4823,28 +4830,175 @@ function seriesRowLabelInfo(seriesId) {
   return info;
 }
 
-// Keeps exactly one day header "pinned" (position: sticky, see .todo-day-
-// header.pinned in style.css) at a time: the last one (in display order)
-// whose day has already started scrolling past the top of #todo-viewport --
-// including index 0 itself, no special-casing needed there, since at rest
-// (pinnedIndex still -1, nothing scrolled past yet) its natural, unstuck
-// flow position already sits exactly where sticky would hold it anyway.
-// Every day header already looks like its own opaque glass card (see
-// .todo-day-header in style.css), so whichever one is currently pinned
-// simply covers whatever's behind it just by being drawn there -- nothing
-// else here needs to track or react to the handoff.
-function updatePinnedTodoHeader() {
-  if (todoDayHeaderRefs.length === 0) return;
-  const viewportTop = todoViewportEl.getBoundingClientRect().top;
-  let pinnedIndex = -1;
-  for (let i = 0; i < todoDayHeaderRefs.length; i++) {
-    // Strictly less than, not <= -- the very first sentinel sits exactly at
-    // the viewport's own top edge before any scrolling at all (0 == 0), so
-    // <= pinned it from the very first render for no visible reason.
-    if (todoDayHeaderRefs[i].sentinel.getBoundingClientRect().top < viewportTop) pinnedIndex = i;
-  }
-  todoDayHeaderRefs.forEach(({ header }, i) => header.classList.toggle('pinned', i === pinnedIndex));
+// Which day is highlighted (today's undimmed look; every other day, today
+// included, gets the dimmed .not-today one) follows the reader through the
+// list -- "progress through the day, with hysteresis":
+//  - The preferred band is where the gaze naturally rests: 20-35 % of the
+//    way down the visible list (below the day bar). Its middle is the
+//    reading point. (Lower, 30-45 %, kept a tall day scrolling up out of
+//    view highlighted for too long.)
+//  - Progress through the highlighted day (0-1) is how far the reading
+//    point has moved through that day's section.
+//  - Moving on to the next day takes progress past a height-dependent
+//    threshold -- 65 % for a short day, down to 45 % for one at least as
+//    tall as the visible list (switchThreshold) -- AND the next day's top
+//    already inside the band, or close below it (BAND_NEAR).
+//  - Moving back to the previous day happens once the highlighted day's top
+//    has dropped below the band -- past its bottom plus the "near" margin
+//    and a further BACK_GAP (the hysteresis), so the highlight doesn't
+//    flicker back and forth around the switch point. A position, mirroring
+//    the way forward, rather than the previous day's progress: with that, a
+//    tall previous day only took over once its top was near the top of the
+//    viewport -- the day below, highlighted, almost scrolled out of view.
+// Applied repeatedly on each update, so a fast scroll or a jump settles in
+// one go. The day bar at the top always shows the highlighted day -- its
+// label, its "+" -- plus a "Today" button whenever that isn't today; the bar
+// itself stays put while the list scrolls underneath it.
+const todoDayBarEl = document.getElementById('todo-day-bar');
+const todoDayBarLabelEl = document.getElementById('todo-day-bar-label');
+const todoDayBarAddBtn = document.getElementById('todo-day-bar-add');
+const todoDayBarTodayBtn = document.getElementById('todo-day-bar-today');
+
+const BAND_TOP = 0.2;
+const BAND_BOTTOM = 0.35;
+const BAND_NEAR = 0.05; // "near the band": this much of the visible height below it
+const THRESHOLD_SHORT = 0.65; // a day at most SHORT_DAY of the visible height
+const THRESHOLD_TALL = 0.45; // a day at least as tall as the visible list
+const SHORT_DAY = 0.25;
+const BACK_GAP = 0.05; // hysteresis: this much further below the band before moving back
+
+function todoVisibleListTop() {
+  return todoDayBarEl.classList.contains('hidden') ? 0 : todoDayBarEl.offsetHeight;
 }
+
+// The visible part of the list, in viewport coordinates, and the band in it.
+// Near the very top of the list the band rides higher, starting at the top
+// edge at scrollTop 0 and settling into place once the list has scrolled
+// as far as the reading point is from the top -- so the first day is the
+// highlighted one at the top without empty space above it to scroll it
+// down into the band, and the highlight walks through the first days as
+// the list scrolls.
+function todoReadingGeometry() {
+  const viewportTop = todoViewportEl.getBoundingClientRect().top;
+  const top = viewportTop + todoVisibleListTop();
+  const height = Math.max(1, viewportTop + todoViewportEl.clientHeight - top);
+  const readingOffset = ((BAND_TOP + BAND_BOTTOM) / 2) * height;
+  const settle = Math.min(1, todoViewportEl.scrollTop / readingOffset);
+  return {
+    height,
+    readingOffset,
+    bandTop: top + settle * BAND_TOP * height,
+    bandBottom: top + settle * BAND_BOTTOM * height,
+    reading: top + settle * readingOffset,
+  };
+}
+
+// A day's section: from its sentinel to the next day's (or its columns' end).
+function todoDayExtent(index) {
+  const top = todoDayRefs[index].sentinel.getBoundingClientRect().top;
+  const next = todoDayRefs[index + 1];
+  const bottom = next ? next.sentinel.getBoundingClientRect().top : todoDayRefs[index].columns.getBoundingClientRect().bottom;
+  return { top, bottom: Math.max(bottom, top + 1) };
+}
+
+function dayProgress(index, reading) {
+  const { top, bottom } = todoDayExtent(index);
+  return Math.min(1, Math.max(0, (reading - top) / (bottom - top)));
+}
+
+function switchThreshold(index, visibleHeight) {
+  const { top, bottom } = todoDayExtent(index);
+  const relative = (bottom - top) / visibleHeight;
+  const t = Math.min(1, Math.max(0, (relative - SHORT_DAY) / (1 - SHORT_DAY)));
+  return THRESHOLD_SHORT + (THRESHOLD_TALL - THRESHOLD_SHORT) * t;
+}
+
+// So every day can be scrolled into the band, even a short last one: room
+// below the last day to bring its top up to the band's top. (The top of the
+// list needs none -- the band rides up to meet it, see todoReadingGeometry.)
+function sizeTodoListSpacers() {
+  const visible = Math.max(0, todoViewportEl.clientHeight - todoVisibleListTop());
+  const bottom = todoListEl.lastElementChild;
+  if (bottom && bottom.classList.contains('todo-list-spacer')) bottom.style.height = `${Math.ceil(visible * (1 - BAND_TOP))}px`;
+}
+
+function updateTodoDayHighlight() {
+  todoDayBarEl.classList.toggle('hidden', todoDayRefs.length === 0);
+  if (todoDayRefs.length === 0) {
+    highlightedTodoDate = null;
+    return;
+  }
+  const { height, bandBottom, reading } = todoReadingGeometry();
+
+  // Start from the day highlighted so far (still listed after a render?),
+  // or else from whichever day the reading point is in.
+  let index = todoDayRefs.findIndex((ref) => ref.dateISO === highlightedTodoDate);
+  if (index < 0) {
+    index = 0;
+    for (let i = 0; i < todoDayRefs.length; i++) if (todoDayExtent(i).top <= reading) index = i;
+  }
+  for (let guard = 0; guard < todoDayRefs.length * 2; guard++) {
+    const next = index + 1;
+    if (next < todoDayRefs.length && dayProgress(index, reading) >= switchThreshold(index, height) && todoDayExtent(next).top <= bandBottom + BAND_NEAR * height) {
+      index = next;
+      continue;
+    }
+    const previous = index - 1;
+    if (previous >= 0 && todoDayExtent(index).top > bandBottom + (BAND_NEAR + BACK_GAP) * height) {
+      index = previous;
+      continue;
+    }
+    break;
+  }
+
+  const current = todoDayRefs[index];
+  // A full re-render rebuilt every row (see renderTodo), so the classes are
+  // re-applied whenever the day changes or nothing's applied yet.
+  if (current.dateISO !== highlightedTodoDate || !todoDayRefs.some((ref) => ref.header.classList.contains('todo-highlight-applied'))) {
+    highlightedTodoDate = current.dateISO;
+    for (const ref of todoDayRefs) {
+      const dimmed = ref !== current;
+      ref.header.classList.toggle('not-today', dimmed);
+      ref.header.classList.add('todo-highlight-applied');
+      for (const row of ref.columns.querySelectorAll('.todo-item')) row.classList.toggle('not-today', dimmed);
+    }
+  }
+  const todayISO = Recurrence.dateToISO(new Date());
+  todoDayBarLabelEl.textContent = describeDayLabel(current.dateISO, todayISO);
+  todoDayBarAddBtn.title = t('todo.addTaskDue', { date: current.dateISO });
+  todoDayBarTodayBtn.classList.toggle('hidden', current.dateISO === todayISO || !todayTargetDayRef());
+}
+
+// Today's day -- or, with nothing listed today, the first day after it.
+function todayTargetDayRef() {
+  const todayISO = Recurrence.dateToISO(new Date());
+  return todoDayRefs.find((ref) => ref.dateISO >= todayISO) || null;
+}
+
+// Puts today's top right at the reading point -- progress 0, so it's the
+// highlighted day there however short it is (a day's top higher up could
+// already be past its threshold, highlighting the next one instead).
+// Nothing from today on = the top of the list.
+function scrollTodoToToday(behavior = 'smooth') {
+  const ref = todayTargetDayRef();
+  if (!ref) {
+    todoViewportEl.scrollTo({ top: 0, behavior });
+    return;
+  }
+  // Where today's top is with the list at scrollTop 0, below the day bar.
+  const { readingOffset } = todoReadingGeometry();
+  const listTop = todoViewportEl.getBoundingClientRect().top + todoVisibleListTop();
+  const dayTop = ref.sentinel.getBoundingClientRect().top - listTop + todoViewportEl.scrollTop;
+  // Near the top the reading point rides up with the scroll (it's at
+  // scrollTop itself there), so today meets it halfway.
+  const target = dayTop <= 2 * readingOffset ? dayTop / 2 : dayTop - readingOffset;
+  todoViewportEl.scrollTo({ top: Math.max(0, Math.round(target) + 1), behavior });
+}
+
+todoDayBarAddBtn.onclick = () => {
+  if (highlightedTodoDate) openTaskForm(null, highlightedTodoDate);
+};
+todoDayBarTodayBtn.onclick = () => scrollTodoToToday();
 
 const PENDING_VIEW_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z"/></svg>';
@@ -4881,6 +5035,7 @@ todoViewToggleOpts.forEach((btn) => {
     if (todoViewMode === btn.dataset.mode) return;
     todoViewMode = btn.dataset.mode;
     saveTodoViewMode();
+    todoScrollToTodayOnRender = true;
     renderTodo();
   };
 });
@@ -4919,24 +5074,32 @@ function updateTodoMonthNav() {
 
 todoMonthPrevBtn.onclick = () => {
   viewedMonthKey = addMonthsToKey(viewedMonthKey, -1);
+  todoScrollToTodayOnRender = true;
   renderTodo();
 };
 todoMonthNextBtn.onclick = () => {
   viewedMonthKey = addMonthsToKey(viewedMonthKey, 1);
+  todoScrollToTodayOnRender = true;
   renderTodo();
 };
 todoMonthLabelEl.onclick = () => {
   const currentMonthKey = monthKeyOf(Recurrence.dateToISO(new Date()));
   if (viewedMonthKey === currentMonthKey) return;
   viewedMonthKey = currentMonthKey;
+  todoScrollToTodayOnRender = true;
   renderTodo();
 };
 
-todoViewportEl.addEventListener('scroll', updatePinnedTodoHeader);
-window.addEventListener('resize', updatePinnedTodoHeader);
+todoViewportEl.addEventListener('scroll', updateTodoDayHighlight);
+window.addEventListener('resize', () => {
+  sizeTodoListSpacers();
+  updateTodoDayHighlight();
+});
 
 function renderTodoEmptyState() {
   todoListEl.innerHTML = '';
+  todoDayRefs = [];
+  updateTodoDayHighlight(); // hides the day bar
 
   const message = document.createElement('div');
   message.className = 'empty-state';
@@ -5491,16 +5654,14 @@ function renderTodo() {
   }
   const todayISO = Recurrence.dateToISO(new Date());
 
-  todoDayHeaderRefs = [];
+  todoDayRefs = []; // highlightedTodoDate stays: the highlight carries on from it (see updateTodoDayHighlight)
 
   for (const dateISO of [...itemsByDate.keys()].sort()) {
     const isToday = dateISO === todayISO;
 
-    // Zero-height marker at exactly this day's own natural (never-sticky)
-    // flow position -- updatePinnedTodoHeader reads its position on scroll
-    // to tell whether this day has started scrolling past the top, which a
-    // header itself can't reliably report once it's the one being pinned
-    // (position: sticky overrides its own natural position).
+    // Zero-height marker where this day's section starts --
+    // updateTodoDayHighlight reads its position on scroll to tell which
+    // day crosses the highlight line.
     const sentinel = document.createElement('div');
     sentinel.className = 'todo-day-sentinel';
     todoListEl.appendChild(sentinel);
@@ -5520,7 +5681,6 @@ function renderTodo() {
     header.appendChild(addBtn);
 
     todoListEl.appendChild(header);
-    todoDayHeaderRefs.push({ sentinel, header });
 
     // Within a day: all-day tasks first (they have no due time to sort by),
     // then earliest due time first, ties broken alphabetically by name
@@ -5548,9 +5708,21 @@ function renderTodo() {
       columns.appendChild(column);
     }
     todoListEl.appendChild(columns);
+    todoDayRefs.push({ dateISO, sentinel, header, columns });
   }
 
-  updatePinnedTodoHeader();
+  const bottomSpacer = document.createElement('div');
+  bottomSpacer.className = 'todo-list-spacer';
+  todoListEl.appendChild(bottomSpacer);
+
+  todoDayBarEl.classList.toggle('hidden', todoDayRefs.length === 0);
+  sizeTodoListSpacers();
+  // Only once the list is actually laid out (it isn't while still hidden).
+  if (todoScrollToTodayOnRender && todoViewportEl.clientHeight > 0) {
+    todoScrollToTodayOnRender = false;
+    scrollTodoToToday('auto');
+  }
+  updateTodoDayHighlight();
   ensureTimerTicking();
   renderSidePanel();
 }
