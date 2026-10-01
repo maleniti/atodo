@@ -1223,9 +1223,9 @@ main {
    background/backdrop-filter/box-shadow reasoning) -- just shaped as a long,
    narrow bar (100% wide, tall enough for one line of text) instead of a
    whole row. No masking/fade tricks here: this panel is opaque-looking
-   enough on its own (same as every .todo-item already is) that the sticky
-   day bar (see .todo-day-bar below) simply covers whatever scrolls behind
-   it just by being drawn there. */
+   enough on its own (same as every .todo-item already is) that the
+   highlighted day's sticky header (see .todo-day below) simply covers
+   whatever scrolls behind it just by being drawn there. */
 .todo-day-header {
   display: flex;
   align-items: center;
@@ -1255,17 +1255,74 @@ main {
   -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(88%);
 }
 
-/* The highlighted day's header, kept at the top of #todo-viewport while
-   the list scrolls underneath it (see updateTodoDayHighlight): the same
-   glass bar as every day header, just sticky, above the rows, and holding
-   a "Today" button whenever the highlighted day isn't today. Its label and
-   buttons change with the highlight; the bar itself never moves. */
-.todo-day-bar {
+/* One day of the list (see renderTodo). Only the highlighted day shows its
+   header -- sticky within its own day, so it stays at the top while that
+   day is on screen; every other day's header is invisible but keeps its
+   space, so the list doesn't shift as the highlight moves. Those days get a
+   floating name panel instead, kept at the middle of whatever part of the
+   day is visible (see updateTodoDayHighlight). */
+.todo-day {
+  position: relative;
+}
+.todo-day:not(.highlighted) .todo-day-header {
+  visibility: hidden;
+}
+.todo-day.highlighted .todo-day-header {
   position: sticky;
   top: 0;
   z-index: 2;
 }
-.todo-day-bar-today { margin-left: auto; }
+.todo-day-today-btn { margin-left: auto; }
+
+/* A day that isn't highlighted fades with distance from the reading point
+   (opacity, see updateTodoDayHighlight) -- and any opacity below 1 makes
+   the element a backdrop root, cutting a backdrop-filter inside it off from
+   whatever's behind the list: its glass look would snap instead of fading.
+   So these days' rows (and their name panel, below) trade the glass for a
+   plain dark background, which fades smoothly. Focused keeps its blue tint
+   and dismissed its hatching -- neither depends on the backdrop. */
+.todo-day:not(.highlighted) .todo-item {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.todo-day:not(.highlighted) .todo-item:not(.focused) {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+.todo-day:not(.highlighted) .todo-item.selected:not(.focused) {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+:root[data-theme="light"] .todo-day:not(.highlighted) .todo-item:not(.focused) {
+  background-color: rgba(255, 255, 255, 0.4) !important;
+}
+:root[data-theme="light"] .todo-day:not(.highlighted) .todo-item.selected:not(.focused) {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Centered on the day; clicks pass through to the tasks underneath. A
+   solid dark card rather than glass, so it can fade with its day (see
+   above). */
+.todo-day-panel {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  pointer-events: none;
+  padding: 4px 10px;
+  border-radius: 7px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-heading);
+  text-shadow: var(--glass-text-shadow);
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="light"] .todo-day-panel {
+  background: rgba(255, 255, 255, 0.65);
+}
+.todo-day.highlighted .todo-day-panel { display: none; }
+.todo-day-panel.panel-out { visibility: hidden; } /* still measurable, see updateTodoDayHighlight */
 
 /* Empty space after the last day (sized by sizeTodoListSpacers), so even a
    short last day can be scrolled up into the highlight band. */

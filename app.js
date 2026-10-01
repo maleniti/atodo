@@ -4834,7 +4834,7 @@ function seriesRowLabelInfo(seriesId) {
 // included, gets the dimmed .not-today one) follows the reader through the
 // list -- "progress through the day, with hysteresis":
 //  - The preferred band is where the gaze naturally rests: 20-35 % of the
-//    way down the visible list (below the day bar). Its middle is the
+//    way down the visible list. Its middle is the
 //    reading point. (Lower, 30-45 %, kept a tall day scrolling up out of
 //    view highlighted for too long.)
 //  - Progress through the highlighted day (0-1) is how far the reading
@@ -4851,13 +4851,17 @@ function seriesRowLabelInfo(seriesId) {
 //    tall previous day only took over once its top was near the top of the
 //    viewport -- the day below, highlighted, almost scrolled out of view.
 // Applied repeatedly on each update, so a fast scroll or a jump settles in
-// one go. The day bar at the top always shows the highlighted day -- its
-// label, its "+" -- plus a "Today" button whenever that isn't today; the bar
-// itself stays put while the list scrolls underneath it.
-const todoDayBarEl = document.getElementById('todo-day-bar');
-const todoDayBarLabelEl = document.getElementById('todo-day-bar-label');
-const todoDayBarAddBtn = document.getElementById('todo-day-bar-add');
-const todoDayBarTodayBtn = document.getElementById('todo-day-bar-today');
+// one go.
+//
+// Only the highlighted day shows its header -- sticky at the top while the
+// day is on screen, with its "+" and a "Today" button whenever it isn't
+// today. Every other day's header is hidden (it keeps its space, so the list
+// doesn't shift as the highlight moves); instead a panel floats at the
+// middle of whatever part of that day's tasks is visible, naming it -- and
+// disappears once it would stick out past the first or last of them. The
+// closer a day is to the reading point, the more opaque its tasks
+// (MIN_OPACITY far away, fully opaque at FADE_DISTANCE and closer) and,
+// fading faster, its panel (PANEL_MIN_OPACITY / PANEL_FADE_DISTANCE).
 
 const BAND_TOP = 0.2;
 const BAND_BOTTOM = 0.35;
@@ -4866,10 +4870,10 @@ const THRESHOLD_SHORT = 0.65; // a day at most SHORT_DAY of the visible height
 const THRESHOLD_TALL = 0.45; // a day at least as tall as the visible list
 const SHORT_DAY = 0.25;
 const BACK_GAP = 0.05; // hysteresis: this much further below the band before moving back
-
-function todoVisibleListTop() {
-  return todoDayBarEl.classList.contains('hidden') ? 0 : todoDayBarEl.offsetHeight;
-}
+const MIN_OPACITY = 0.3; // a non-highlighted day's tasks, far from the reading point
+const FADE_DISTANCE = 0.6; // ...becoming fully opaque this close to it, in visible heights
+const PANEL_MIN_OPACITY = 0.1; // a day's name panel fades faster than its tasks
+const PANEL_FADE_DISTANCE = 0.35;
 
 // The visible part of the list, in viewport coordinates, and the band in it.
 // Near the very top of the list the band rides higher, starting at the top
@@ -4880,7 +4884,7 @@ function todoVisibleListTop() {
 // the list scrolls.
 function todoReadingGeometry() {
   const viewportTop = todoViewportEl.getBoundingClientRect().top;
-  const top = viewportTop + todoVisibleListTop();
+  const top = viewportTop;
   const height = Math.max(1, viewportTop + todoViewportEl.clientHeight - top);
   const readingOffset = ((BAND_TOP + BAND_BOTTOM) / 2) * height;
   const settle = Math.min(1, todoViewportEl.scrollTop / readingOffset);
@@ -4917,13 +4921,12 @@ function switchThreshold(index, visibleHeight) {
 // below the last day to bring its top up to the band's top. (The top of the
 // list needs none -- the band rides up to meet it, see todoReadingGeometry.)
 function sizeTodoListSpacers() {
-  const visible = Math.max(0, todoViewportEl.clientHeight - todoVisibleListTop());
+  const visible = todoViewportEl.clientHeight;
   const bottom = todoListEl.lastElementChild;
   if (bottom && bottom.classList.contains('todo-list-spacer')) bottom.style.height = `${Math.ceil(visible * (1 - BAND_TOP))}px`;
 }
 
 function updateTodoDayHighlight() {
-  todoDayBarEl.classList.toggle('hidden', todoDayRefs.length === 0);
   if (todoDayRefs.length === 0) {
     highlightedTodoDate = null;
     return;
@@ -4958,15 +4961,45 @@ function updateTodoDayHighlight() {
     highlightedTodoDate = current.dateISO;
     for (const ref of todoDayRefs) {
       const dimmed = ref !== current;
+      ref.group.classList.toggle('highlighted', !dimmed);
       ref.header.classList.toggle('not-today', dimmed);
       ref.header.classList.add('todo-highlight-applied');
       for (const row of ref.columns.querySelectorAll('.todo-item')) row.classList.toggle('not-today', dimmed);
     }
   }
   const todayISO = Recurrence.dateToISO(new Date());
-  todoDayBarLabelEl.textContent = describeDayLabel(current.dateISO, todayISO);
-  todoDayBarAddBtn.title = t('todo.addTaskDue', { date: current.dateISO });
-  todoDayBarTodayBtn.classList.toggle('hidden', current.dateISO === todayISO || !todayTargetDayRef());
+  const showTodayBtn = current.dateISO !== todayISO && !!todayTargetDayRef();
+  for (const ref of todoDayRefs) ref.todayBtn.classList.toggle('hidden', ref !== current || !showTodayBtn);
+
+  // Every other day: opacity by closeness to the reading point, and its
+  // name panel centered on the part of it that's visible.
+  const viewportRect = todoViewportEl.getBoundingClientRect();
+  todoDayRefs.forEach((ref, i) => {
+    if (ref === current) {
+      ref.columns.style.opacity = '';
+      return;
+    }
+    const { top, bottom } = todoDayExtent(i);
+    const distance = reading < top ? top - reading : reading > bottom ? reading - bottom : 0;
+    const closeness = 1 - Math.min(1, distance / (FADE_DISTANCE * height));
+    ref.columns.style.opacity = (MIN_OPACITY + (1 - MIN_OPACITY) * closeness).toFixed(3);
+    const panelCloseness = 1 - Math.min(1, distance / (PANEL_FADE_DISTANCE * height));
+    ref.panel.style.opacity = (PANEL_MIN_OPACITY + (1 - PANEL_MIN_OPACITY) * panelCloseness).toFixed(3);
+
+    // Centered on the visible part of the day's tasks -- and hidden once it
+    // would stick out above the first of them or below the last.
+    const rows = ref.columns.getBoundingClientRect();
+    const visibleTop = Math.max(rows.top, viewportRect.top);
+    const visibleBottom = Math.min(rows.bottom, viewportRect.bottom);
+    const center = (visibleTop + visibleBottom) / 2;
+    const halfHeight = ref.panel.offsetHeight / 2;
+    // Within the visible part of the rows -- so as the day scrolls out of
+    // view it goes once the visible slice can't hold it, rather than
+    // sticking out past the viewport's edge or the day's rows.
+    const fits = visibleBottom - visibleTop >= 2 * halfHeight && center - halfHeight >= rows.top && center + halfHeight <= rows.bottom;
+    ref.panel.classList.toggle('panel-out', !fits);
+    if (fits) ref.panel.style.top = `${center - ref.group.getBoundingClientRect().top}px`;
+  });
 }
 
 // Today's day -- or, with nothing listed today, the first day after it.
@@ -4987,7 +5020,7 @@ function scrollTodoToToday(behavior = 'smooth') {
   }
   // Where today's top is with the list at scrollTop 0, below the day bar.
   const { readingOffset } = todoReadingGeometry();
-  const listTop = todoViewportEl.getBoundingClientRect().top + todoVisibleListTop();
+  const listTop = todoViewportEl.getBoundingClientRect().top;
   const dayTop = ref.sentinel.getBoundingClientRect().top - listTop + todoViewportEl.scrollTop;
   // Near the top the reading point rides up with the scroll (it's at
   // scrollTop itself there), so today meets it halfway.
@@ -4995,10 +5028,6 @@ function scrollTodoToToday(behavior = 'smooth') {
   todoViewportEl.scrollTo({ top: Math.max(0, Math.round(target) + 1), behavior });
 }
 
-todoDayBarAddBtn.onclick = () => {
-  if (highlightedTodoDate) openTaskForm(null, highlightedTodoDate);
-};
-todoDayBarTodayBtn.onclick = () => scrollTodoToToday();
 
 const PENDING_VIEW_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z"/></svg>';
@@ -5659,12 +5688,19 @@ function renderTodo() {
   for (const dateISO of [...itemsByDate.keys()].sort()) {
     const isToday = dateISO === todayISO;
 
+    // One group per day, holding all of it -- the highlighted day's header
+    // sticks within it (see .todo-day.highlighted), and the name panel is
+    // positioned in it (see updateTodoDayHighlight).
+    const group = document.createElement('div');
+    group.className = 'todo-day';
+    todoListEl.appendChild(group);
+
     // Zero-height marker where this day's section starts --
     // updateTodoDayHighlight reads its position on scroll to tell which
     // day crosses the highlight line.
     const sentinel = document.createElement('div');
     sentinel.className = 'todo-day-sentinel';
-    todoListEl.appendChild(sentinel);
+    group.appendChild(sentinel);
 
     const header = document.createElement('div');
     header.className = 'todo-day-header' + (isToday ? '' : ' not-today');
@@ -5680,7 +5716,25 @@ function renderTodo() {
     addBtn.onclick = () => openTaskForm(null, dateISO);
     header.appendChild(addBtn);
 
-    todoListEl.appendChild(header);
+    // Shown only on the highlighted day, and only if that isn't today.
+    const todayBtn = document.createElement('button');
+    todayBtn.type = 'button';
+    todayBtn.className = 'menu-btn-small todo-day-today-btn hidden';
+    todayBtn.textContent = t('todo.backToToday');
+    todayBtn.onclick = () => scrollTodoToToday();
+    header.appendChild(todayBtn);
+
+    group.appendChild(header);
+
+    // The day's name for when it isn't the highlighted one: the header's
+    // label, a line per comma-separated part.
+    const panel = document.createElement('div');
+    panel.className = 'todo-day-panel';
+    for (const part of describeDayLabel(dateISO, todayISO).split(', ')) {
+      const line = document.createElement('div');
+      line.textContent = part;
+      panel.appendChild(line);
+    }
 
     // Within a day: all-day tasks first (they have no due time to sort by),
     // then earliest due time first, ties broken alphabetically by name
@@ -5707,15 +5761,15 @@ function renderTodo() {
       }
       columns.appendChild(column);
     }
-    todoListEl.appendChild(columns);
-    todoDayRefs.push({ dateISO, sentinel, header, columns });
+    group.appendChild(columns);
+    group.appendChild(panel);
+    todoDayRefs.push({ dateISO, group, sentinel, header, columns, panel, todayBtn });
   }
 
   const bottomSpacer = document.createElement('div');
   bottomSpacer.className = 'todo-list-spacer';
   todoListEl.appendChild(bottomSpacer);
 
-  todoDayBarEl.classList.toggle('hidden', todoDayRefs.length === 0);
   sizeTodoListSpacers();
   // Only once the list is actually laid out (it isn't while still hidden).
   if (todoScrollToTodayOnRender && todoViewportEl.clientHeight > 0) {
