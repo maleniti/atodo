@@ -5730,11 +5730,14 @@ function renderTodo() {
     // label, a line per comma-separated part.
     const panel = document.createElement('div');
     panel.className = 'todo-day-panel';
+    const panelCard = document.createElement('div');
+    panelCard.className = 'todo-day-panel-card';
     for (const part of describeDayLabel(dateISO, todayISO).split(', ')) {
       const line = document.createElement('div');
       line.textContent = part;
-      panel.appendChild(line);
+      panelCard.appendChild(line);
     }
+    panel.appendChild(panelCard);
 
     // Within a day: all-day tasks first (they have no due time to sort by),
     // then earliest due time first, ties broken alphabetically by name

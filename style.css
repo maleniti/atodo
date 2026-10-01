@@ -1264,15 +1264,39 @@ main {
 .todo-day {
   position: relative;
 }
+/* Fading in/out as the highlight moves -- a bit slower than the app's usual
+   0.15 s transitions, so the hand-over reads as one calm change. */
+.todo-day .todo-day-header {
+  transition: opacity 0.4s ease, visibility 0s linear 0s;
+}
 .todo-day:not(.highlighted) .todo-day-header {
+  opacity: 0;
   visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0s linear 0.4s;
+}
+/* In the light theme the header's glass (a brightening/darkening
+   backdrop-filter) wouldn't fade with the opacity above -- it snaps on/off
+   instead -- so it gets a plain translucent white instead, like the rows'
+   (see below). */
+:root[data-theme="light"] .todo-day .todo-day-header {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background-color: rgba(255, 255, 255, 0.6) !important;
 }
 .todo-day.highlighted .todo-day-header {
   position: sticky;
   top: 0;
   z-index: 2;
 }
-.todo-day-today-btn { margin-left: auto; }
+/* As tall as the "+" button next to it (a plain .menu-btn-small is 28px),
+   so a header is the same height with or without it. */
+.todo-day-header .todo-day-today-btn {
+  margin-left: auto;
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1;
+}
 
 /* A day that isn't highlighted fades with distance from the reading point
    (opacity, see updateTodoDayHighlight) -- and any opacity below 1 makes
@@ -1292,21 +1316,27 @@ main {
   background-color: rgba(255, 255, 255, 0.1) !important;
 }
 :root[data-theme="light"] .todo-day:not(.highlighted) .todo-item:not(.focused) {
-  background-color: rgba(255, 255, 255, 0.4) !important;
+  background-color: rgba(190, 190, 190, 0.22) !important;
 }
 :root[data-theme="light"] .todo-day:not(.highlighted) .todo-item.selected:not(.focused) {
-  background-color: rgba(255, 255, 255, 0.9) !important;
+  background-color: rgba(210, 210, 210, 0.55) !important;
 }
 
-/* Centered on the day; clicks pass through to the tasks underneath. A
-   solid dark card rather than glass, so it can fade with its day (see
-   above). */
+/* Centered on the day; clicks pass through to the tasks underneath. The
+   outer box is placed and faded with distance by updateTodoDayHighlight
+   (inline top/opacity, no transition -- it has to keep up with the
+   scroll); the card inside fades in/out (with a slight zoom) as the day
+   stops/starts being the highlighted one, as slowly as the header. A solid
+   dark card rather than glass, so it can fade with its day (see above). */
 .todo-day-panel {
   position: absolute;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 1;
   pointer-events: none;
+}
+.todo-day-panel-card {
+  transition: opacity 0.4s ease, transform 0.4s ease;
   padding: 4px 10px;
   border-radius: 7px;
   text-align: center;
@@ -1318,10 +1348,13 @@ main {
   background: rgba(0, 0, 0, 0.55);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
-:root[data-theme="light"] .todo-day-panel {
-  background: rgba(255, 255, 255, 0.65);
+:root[data-theme="light"] .todo-day-panel-card {
+  background: rgba(255, 255, 255, 0.5);
 }
-.todo-day.highlighted .todo-day-panel { display: none; }
+.todo-day.highlighted .todo-day-panel-card {
+  opacity: 0;
+  transform: scale(0.92);
+}
 .todo-day-panel.panel-out { visibility: hidden; } /* still measurable, see updateTodoDayHighlight */
 
 /* Empty space after the last day (sized by sizeTodoListSpacers), so even a
