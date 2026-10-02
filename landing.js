@@ -60,17 +60,67 @@ function setUpVideo(lang) {
 // to send the visitor on to checkout right after (see index.html's
 // login-form submit handler in app.js), plus `lang` so that login screen
 // itself matches this page's current language (see boot() in app.js).
-document.querySelectorAll('[data-plan]').forEach((btn) => {
-  btn.onclick = () => {
-    const plan = btn.dataset.plan;
-    const userId = getCurrentUserIdFromStoredToken();
-    if (userId) {
-      location.href = `checkout.html?plan=${encodeURIComponent(plan)}`;
-    } else {
-      location.href = `index.html?next=checkout&plan=${encodeURIComponent(plan)}&lang=${getStoredMarketingLanguage() || 'en'}`;
-    }
-  };
-});
+function subscribeTo(plan) {
+  const userId = getCurrentUserIdFromStoredToken();
+  if (userId) {
+    location.href = `checkout.html?plan=${encodeURIComponent(plan)}`;
+  } else {
+    location.href = `index.html?next=checkout&plan=${encodeURIComponent(plan)}&lang=${getStoredMarketingLanguage() || 'en'}`;
+  }
+}
+
+// The pricing cards: the products the price list features on the landing
+// page (featured_ord set), in that order, the highlighted one(s) outlined --
+// all from the API (anchor-prices.js's loadSitePrices), so a product, its
+// name, price, place or highlight changes in the admin app, not here. What a
+// card says beyond that depends on its kind: a free plan (no billing
+// interval) lists the free limits and leads to sign-up; a subscription
+// lists Pro's benefits and leads to checkout for its plan.
+const PLAN_FOR_INTERVAL = { month: 'monthly', year: 'annual' };
+
+async function renderPricingCards(lang) {
+  const grid = document.getElementById('pricing-grid');
+  const strings = LANDING_I18N[lang] || LANDING_I18N.en;
+  let products;
+  try {
+    products = await loadSitePrices(lang);
+  } catch {
+    grid.innerHTML = `<p class="pricing-unavailable">${escapeLandingHtml(strings['pricing.unavailable'])}</p>`;
+    return;
+  }
+  if (lang !== currentLandingLanguage) return; // toggled again meanwhile
+  const monthly = products.find((p) => p.billing_interval === 'month');
+  const featured = products.filter((p) => p.featured_ord !== null).sort((a, b) => a.featured_ord - b.featured_ord);
+  grid.innerHTML = featured.map((product) => {
+    const plan = PLAN_FOR_INTERVAL[product.billing_interval];
+    const per = product.billing_interval ? ` <span>${escapeLandingHtml(strings[product.billing_interval === 'year' ? 'pricing.perYear' : 'pricing.perMonth'])}</span>` : '';
+    const savePercent = product.billing_interval === 'year' && monthly
+      ? Math.round((1 - product.price_eur / (12 * monthly.price_eur)) * 100) : 0;
+    const benefits = plan
+      ? ['pricing.proBenefit1', 'pricing.proBenefit2', 'pricing.proBenefit3']
+      : ['pricing.freeLimit1', 'pricing.freeLimit2', 'pricing.freeLimit3'];
+    const button = plan
+      ? `<button type="button" class="btn btn-primary" data-plan="${plan}">${escapeLandingHtml(strings[plan === 'annual' ? 'pricing.subscribeYearly' : 'pricing.subscribeMonthly'])}</button>`
+      : `<a class="btn btn-secondary" href="index.html?lang=${lang}">${escapeLandingHtml(strings['hero.getStarted'])}</a>`;
+    return `<div class="pricing-card${product.highlight ? ' highlight' : ''}">
+      <h3>${escapeLandingHtml(product.name)}</h3>
+      <div class="price">${escapeLandingHtml(formatSitePrice(product.price_eur, lang))}${per} <span class="js-anchor"></span></div>
+      ${savePercent > 0 ? `<p class="save">${escapeLandingHtml(strings['pricing.save'].replace('{percent}', savePercent))}</p>` : ''}
+      <ul>${benefits.map((key) => `<li>${escapeLandingHtml(strings[key])}</li>`).join('')}</ul>
+      ${button}
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('.js-anchor').forEach((el, i) => renderAnchorBadge(el, featured[i], lang));
+  grid.querySelectorAll('[data-plan]').forEach((btn) => {
+    btn.onclick = () => subscribeTo(btn.dataset.plan);
+  });
+}
+
+function escapeLandingHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
+}
 
 const LANDING_I18N = {
   en: {
@@ -100,19 +150,17 @@ const LANDING_I18N = {
     'features.responsiveTitle': 'Works everywhere',
     'features.responsiveBody': 'A responsive layout that works as well on your phone as it does on your desktop.',
     'pricing.heading': 'Pricing',
-    'pricing.freeTitle': 'Free',
     'pricing.freeLimit1': 'Up to 10 one-off tasks',
     'pricing.freeLimit2': 'Up to 5 recurring tasks',
     'pricing.freeLimit3': 'Up to 5 notes per task',
-    'pricing.monthlyTitle': 'Pro -- Monthly',
     'pricing.perMonth': '/ month',
     'pricing.proBenefit1': 'Unlimited tasks, recurring or not',
     'pricing.proBenefit2': 'Unlimited notes on every task',
     'pricing.proBenefit3': 'No more subscription reminders cluttering your list',
     'pricing.subscribeMonthly': 'Subscribe monthly',
-    'pricing.yearlyTitle': 'Pro -- Yearly',
     'pricing.perYear': '/ year',
-    'pricing.save': 'Save ~17% vs. monthly',
+    'pricing.save': 'Save ~{percent}% vs. monthly',
+    'pricing.unavailable': "Prices can't be loaded right now - please try again later.",
     'priceList.label': 'Price list (CSV)',
     'priceList.download': 'Download',
     'priceList.unavailable': "The price list can't be loaded right now.",
@@ -145,19 +193,17 @@ const LANDING_I18N = {
     'features.responsiveTitle': 'Radi svugdje',
     'features.responsiveBody': 'Responzivan izgled koji radi jednako dobro na mobitelu kao i na računalu.',
     'pricing.heading': 'Cijene',
-    'pricing.freeTitle': 'Besplatno',
     'pricing.freeLimit1': 'Do 10 jednokratnih zadataka',
     'pricing.freeLimit2': 'Do 5 ponavljajućih zadataka',
     'pricing.freeLimit3': 'Do 5 bilješki po zadatku',
-    'pricing.monthlyTitle': 'Pro -- Mjesečno',
     'pricing.perMonth': '/ mjesec',
     'pricing.proBenefit1': 'Neograničen broj zadataka, ponavljajućih ili ne',
     'pricing.proBenefit2': 'Neograničen broj bilješki na svakom zadatku',
     'pricing.proBenefit3': 'Bez podsjetnika za pretplatu koji zatrpavaju popis',
     'pricing.subscribeMonthly': 'Pretplatite se mjesečno',
-    'pricing.yearlyTitle': 'Pro -- Godišnje',
     'pricing.perYear': '/ godina',
-    'pricing.save': 'Ušteda ~17% u odnosu na mjesečno',
+    'pricing.save': 'Ušteda ~{percent}% u odnosu na mjesečno',
+    'pricing.unavailable': 'Cijene trenutno nije moguće učitati - pokušajte ponovno kasnije.',
     'priceList.label': 'Cjenik (CSV)',
     'priceList.download': 'Preuzmi',
     'priceList.unavailable': 'Cjenik trenutno nije moguće učitati.',
@@ -239,9 +285,12 @@ priceListDownloadBtn.onclick = () => {
   link.remove();
 };
 
+let currentLandingLanguage = null;
+
 initSitePage(LANDING_I18N, (lang) => {
+  currentLandingLanguage = lang;
   setUpVideo(lang);
-  fillAnchorPrices(document, lang);
+  renderPricingCards(lang);
   renderPriceListVersions(lang);
 });
 loadPriceListVersions();

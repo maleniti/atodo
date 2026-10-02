@@ -12,15 +12,14 @@
 // getCheckoutSessionStatus, site-i18n.js for initSitePage/
 // getStoredMarketingLanguage, and anchor-prices.js for fillAnchorPrices.
 
-function planPrice(billingInterval) {
-  return billingInterval === 'annual' ? '€20/year' : '€2/month';
-}
 
 const CHECKOUT_I18N = {
   en: {
     'checkout.title': 'Processing your payment…',
     'checkout.summaryDefault': 'Setting up your subscription.',
     'checkout.summary': 'Subscribing to A-To-Do Pro – {price}.',
+    'checkout.perMonth': '/month',
+    'checkout.perYear': '/year',
     'checkout.cancelLink': 'Cancel',
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
@@ -29,6 +28,8 @@ const CHECKOUT_I18N = {
     'checkout.title': 'Obrada plaćanja…',
     'checkout.summaryDefault': 'Postavljanje vaše pretplate.',
     'checkout.summary': 'Pretplata na A-To-Do Pro – {price}.',
+    'checkout.perMonth': ' mjesečno',
+    'checkout.perYear': ' godišnje',
     'checkout.cancelLink': 'Odustani',
     'nav.privacy': 'Pravila privatnosti',
     'nav.terms': 'Uvjeti korištenja',
@@ -41,14 +42,18 @@ const returningSessionId = params.get('session_id');
 
 // Re-rendered on every language change (initial resolution or a toggle
 // click, see initSitePage) since it's built from `plan`, not a plain
-// data-i18n swap.
+// data-i18n swap -- and once the prices (anchor-prices.js) have loaded: the
+// price is the price list's, the same one checkout charges.
 function renderPlanSummary(lang) {
-  const summary = (CHECKOUT_I18N[lang] || CHECKOUT_I18N.en)['checkout.summary'];
+  const strings = CHECKOUT_I18N[lang] || CHECKOUT_I18N.en;
   const summaryEl = document.getElementById('checkout-plan-summary');
-  summaryEl.textContent = summary.replace('{price}', planPrice(plan));
+  const [before, after] = strings['checkout.summary'].split('{price}');
+  summaryEl.textContent = '';
+  const price = document.createElement('span');
+  price.dataset.pricePlan = plan;
   const anchor = document.createElement('span');
   anchor.dataset.anchorPlan = plan;
-  summaryEl.append(' ', anchor);
+  summaryEl.append(before, price, strings[plan === 'annual' ? 'checkout.perYear' : 'checkout.perMonth'], ' ', anchor, after);
   fillAnchorPrices(summaryEl, lang);
 }
 
@@ -119,5 +124,8 @@ async function runCheckout() {
   }
 }
 
-initSitePage(CHECKOUT_I18N, renderPlanSummary);
+initSitePage(CHECKOUT_I18N, (lang) => {
+  renderPlanSummary(lang);
+  loadSitePrices(lang).then(() => renderPlanSummary(lang), () => {});
+});
 runCheckout();

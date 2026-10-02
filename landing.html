@@ -69,39 +69,8 @@
   <section class="section" id="pricing">
     <div class="wrap">
       <h2 data-i18n="pricing.heading">Pricing</h2>
-      <div class="pricing-grid">
-        <div class="pricing-card">
-          <h3 data-i18n="pricing.freeTitle">Free</h3>
-          <div class="price">&euro;0 <span data-anchor-plan="free"></span></div>
-          <ul>
-            <li data-i18n="pricing.freeLimit1">Up to 10 one-off tasks</li>
-            <li data-i18n="pricing.freeLimit2">Up to 5 recurring tasks</li>
-            <li data-i18n="pricing.freeLimit3">Up to 5 notes per task</li>
-          </ul>
-          <a class="btn btn-secondary js-login-link" href="index.html" data-i18n="hero.getStarted">Get started free</a>
-        </div>
-        <div class="pricing-card">
-          <h3 data-i18n="pricing.monthlyTitle">Pro -- Monthly</h3>
-          <div class="price">&euro;2 <span data-i18n="pricing.perMonth">/ month</span> <span data-anchor-plan="monthly"></span></div>
-          <ul>
-            <li data-i18n="pricing.proBenefit1">Unlimited tasks, recurring or not</li>
-            <li data-i18n="pricing.proBenefit2">Unlimited notes on every task</li>
-            <li data-i18n="pricing.proBenefit3">No more subscription reminders cluttering your list</li>
-          </ul>
-          <button type="button" class="btn btn-primary" data-plan="monthly" data-i18n="pricing.subscribeMonthly">Subscribe monthly</button>
-        </div>
-        <div class="pricing-card highlight">
-          <h3 data-i18n="pricing.yearlyTitle">Pro -- Yearly</h3>
-          <div class="price">&euro;20 <span data-i18n="pricing.perYear">/ year</span> <span data-anchor-plan="annual"></span></div>
-          <p class="save" data-i18n="pricing.save">Save ~17% vs. monthly</p>
-          <ul>
-            <li data-i18n="pricing.proBenefit1">Unlimited tasks, recurring or not</li>
-            <li data-i18n="pricing.proBenefit2">Unlimited notes on every task</li>
-            <li data-i18n="pricing.proBenefit3">No more subscription reminders cluttering your list</li>
-          </ul>
-          <button type="button" class="btn btn-primary" data-plan="annual" data-i18n="pricing.subscribeYearly">Subscribe yearly</button>
-        </div>
-      </div>
+      <!-- Filled by landing.js's renderPricingCards from the price list. -->
+      <div class="pricing-grid" id="pricing-grid"></div>
       <div class="price-list-download">
         <label for="price-list-version" data-i18n="priceList.label">Price list (CSV)</label>
         <select id="price-list-version" disabled></select>

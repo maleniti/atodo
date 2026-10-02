@@ -210,6 +210,7 @@ a { color: inherit; }
   flex: 1;
 }
 .pricing-card .btn { margin-top: 4px; }
+.pricing-unavailable { grid-column: 1 / -1; text-align: center; color: #9aa0a6; }
 
 /* Below the pricing cards: every price list version still to be offered
    (see landing.js's loadPriceListVersions), picked and downloaded as CSV. */
