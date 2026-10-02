@@ -113,6 +113,9 @@ const LANDING_I18N = {
     'pricing.yearlyTitle': 'Pro -- Yearly',
     'pricing.perYear': '/ year',
     'pricing.save': 'Save ~17% vs. monthly',
+    'priceList.label': 'Price list (CSV)',
+    'priceList.download': 'Download',
+    'priceList.unavailable': "The price list can't be loaded right now.",
     'pricing.subscribeYearly': 'Subscribe yearly',
   },
   hr: {
@@ -155,8 +158,90 @@ const LANDING_I18N = {
     'pricing.yearlyTitle': 'Pro -- Godišnje',
     'pricing.perYear': '/ godina',
     'pricing.save': 'Ušteda ~17% u odnosu na mjesečno',
+    'priceList.label': 'Cjenik (CSV)',
+    'priceList.download': 'Preuzmi',
+    'priceList.unavailable': 'Cjenik trenutno nije moguće učitati.',
     'pricing.subscribeYearly': 'Pretplatite se godišnje',
   },
 };
 
-initSitePage(LANDING_I18N, setUpVideo);
+// The published price list (Croatian law: Odluka o objavi cjenika, NN
+// 101/2026): every version still due -- each replaced one stays available
+// for 30 days -- offered for download, oldest first. The backend lists the
+// price lists and the moments their prices took effect
+// (GET /maleniti/v1/price-lists/atodo/versions, see the API's
+// routes/priceLists.js); every such moment starts a version, valid until
+// the next one, and downloading it asks for the list as it stood then.
+const PRICE_LIST_URL = `${(window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || ''}/maleniti/v1/price-lists/atodo`;
+const priceListSelect = document.getElementById('price-list-version');
+const priceListDownloadBtn = document.getElementById('price-list-download-btn');
+const priceListStatus = document.getElementById('price-list-status');
+let priceListVersions = null; // [{ from, until }], until null = still valid
+let priceListLanguage = 'hr';
+
+function formatPriceListMoment(iso, lang) {
+  return new Intl.DateTimeFormat(lang === 'hr' ? 'hr-HR' : 'en-GB', {
+    timeZone: 'Europe/Zagreb', day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(iso));
+}
+
+function priceListVersionLabel({ from, until }, lang) {
+  const since = formatPriceListMoment(from, lang);
+  if (until) return `${since} – ${formatPriceListMoment(until, lang)}`;
+  return lang === 'hr' ? `od ${since} (važeći)` : `since ${since} (current)`;
+}
+
+function renderPriceListVersions(lang) {
+  priceListLanguage = lang;
+  if (!priceListVersions) return;
+  const selected = priceListSelect.value;
+  priceListSelect.innerHTML = '';
+  for (const version of priceListVersions) {
+    const option = document.createElement('option');
+    option.value = version.from;
+    option.textContent = priceListVersionLabel(version, lang);
+    priceListSelect.appendChild(option);
+  }
+  // The current version unless one was picked already.
+  priceListSelect.value = selected || priceListVersions[priceListVersions.length - 1].from;
+}
+
+function showPriceListUnavailable() {
+  priceListStatus.dataset.i18n = 'priceList.unavailable';
+  priceListStatus.textContent = (LANDING_I18N[priceListLanguage] || LANDING_I18N.en)['priceList.unavailable'];
+  priceListStatus.classList.remove('hidden');
+}
+
+async function loadPriceListVersions() {
+  try {
+    const response = await fetch(`${PRICE_LIST_URL}/versions`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const { priceLists } = await response.json();
+    const moments = [...new Set(priceLists.flatMap((list) => list.priceChanges))].sort();
+    if (moments.length === 0) throw new Error('no price list versions');
+    priceListVersions = moments.map((from, i) => ({ from, until: moments[i + 1] || null }));
+    renderPriceListVersions(priceListLanguage);
+    priceListSelect.disabled = false;
+    priceListDownloadBtn.disabled = false;
+  } catch (err) {
+    console.error('Failed to load price list versions:', err);
+    showPriceListUnavailable();
+  }
+}
+
+// A plain navigation: the response is an attachment, so the browser saves
+// it (under the file name the backend gives it) and stays on this page.
+priceListDownloadBtn.onclick = () => {
+  const link = document.createElement('a');
+  link.href = `${PRICE_LIST_URL}?at=${encodeURIComponent(priceListSelect.value)}&lang=${priceListLanguage}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+};
+
+initSitePage(LANDING_I18N, (lang) => {
+  setUpVideo(lang);
+  fillAnchorPrices(document, lang);
+  renderPriceListVersions(lang);
+});
+loadPriceListVersions();

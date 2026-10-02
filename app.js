@@ -381,17 +381,17 @@ const I18N = {
     'subscribe.title': 'Upgrade to A-To-Do Pro',
     'subscribe.cta': 'Start free trial…',
     'subscribe.ctaPaid': 'Subscribe…',
-    'subscribe.priceHintPaid': 'Just 2 EUR/month, or 20 EUR/year.',
+    'subscribe.priceHintPaid': 'Just 2 EUR/month <span data-anchor-plan="monthly"></span>, or 20 EUR/year <span data-anchor-plan="annual"></span>.',
     'subscribe.headerCta': 'Subscribe',
     'subscribe.maybeLater': 'Maybe later',
     'subscribe.benefitTasks': 'Unlimited tasks, recurring or not',
     'subscribe.benefitNotes': 'Unlimited notes on every task',
     'subscribe.benefitAds': 'No more subscription reminders cluttering your list',
-    'subscribe.priceHint': "Just 2 EUR/month afterwards – start with a free 14-day trial, no payment required now.",
+    'subscribe.priceHint': 'Just 2 EUR/month <span data-anchor-plan="monthly"></span> afterwards – start with a free 14-day trial, no payment required now.',
     'subscribe.reasonCreateLimit': "You've hit a limit of what we can do for you for free. Subscribe today and keep adding to your To-Do list indefinitely!",
     'subscribe.reasonTaskLimit': "This task is beyond your free plan's limit, so it can't be completed or noted on.",
     'subscribe.taskName': 'Subscribe to A-To-Do',
-    'subscribe.taskDescription': "It's only 2 EUR/month",
+    'subscribe.taskDescription': 'Unlock unlimited tasks and notes',
     'subscribe.taskDetails':
       'Unlock A-To-Do Pro:\n– Unlimited tasks, recurring or not\n– Unlimited notes on every task\n– No more subscription reminders cluttering your list',
 
@@ -785,17 +785,17 @@ const I18N = {
     'subscribe.title': 'Nadogradite na A-To-Do Pro',
     'subscribe.cta': 'Isprobajte besplatno…',
     'subscribe.ctaPaid': 'Pretplati se…',
-    'subscribe.priceHintPaid': 'Samo 2 EUR mjesečno ili 20 EUR godišnje.',
+    'subscribe.priceHintPaid': 'Samo 2 EUR mjesečno <span data-anchor-plan="monthly"></span> ili 20 EUR godišnje <span data-anchor-plan="annual"></span>.',
     'subscribe.headerCta': 'Pretplati se',
     'subscribe.maybeLater': 'Možda kasnije',
     'subscribe.benefitTasks': 'Neograničen broj zadataka, ponavljajućih ili ne',
     'subscribe.benefitNotes': 'Neograničen broj bilješki na svakom zadatku',
     'subscribe.benefitAds': 'Bez podsjetnika za pretplatu koji zatrpavaju popis',
-    'subscribe.priceHint': 'Nakon toga samo 2 EUR/mjesečno – započnite s besplatnim probnim razdobljem od 14 dana, bez plaćanja sada.',
+    'subscribe.priceHint': 'Nakon toga samo 2 EUR/mjesečno <span data-anchor-plan="monthly"></span> – započnite s besplatnim probnim razdobljem od 14 dana, bez plaćanja sada.',
     'subscribe.reasonCreateLimit': 'Dosegli ste granicu onoga što možemo ponuditi besplatno. Pretplatite se danas i nastavite neograničeno dodavati zadatke na svoj popis obveza!',
     'subscribe.reasonTaskLimit': 'Ovaj zadatak je izvan ograničenja besplatnog plana, pa se ne može završiti ni komentirati.',
     'subscribe.taskName': 'Pretplatite se na A-To-Do',
-    'subscribe.taskDescription': 'Samo 2 EUR/mjesečno',
+    'subscribe.taskDescription': 'Otključajte neograničen broj zadataka i bilješki',
     'subscribe.taskDetails':
       'Otključajte A-To-Do Pro:\n– Neograničen broj zadataka, ponavljajućih ili ne\n– Neograničen broj bilješki na svakom zadatku\n– Bez podsjetnika za pretplatu koji zatrpavaju popis',
 
@@ -878,6 +878,8 @@ function applyStaticTranslations() {
     el.title = t(el.dataset.i18nTitle);
   });
   document.documentElement.lang = currentUserLanguage;
+  // Anchor-price badges inside the text just swapped in (anchor-prices.js).
+  fillAnchorPrices(document, currentUserLanguage);
   updateOutboundLegalLinks();
 }
 
@@ -7871,6 +7873,15 @@ function setI18nKey(el, key) {
   el.textContent = t(key);
 }
 
+// The same for a string holding markup -- the subscribe modal's price
+// hints, with their anchor-price badges (see anchor-prices.js).
+function setI18nHtmlKey(el, key) {
+  delete el.dataset.i18n;
+  el.dataset.i18nHtml = key;
+  el.innerHTML = t(key);
+  fillAnchorPrices(el, currentUserLanguage);
+}
+
 // Up to the first two words' initials (e.g. "Nikola Novak" -> "NN", "Nikola"
 // -> "N"), or the placeholder "JD" (as in "John Doe") when there's no
 // nickname at all to derive anything from -- the fallback avatar content
@@ -8171,7 +8182,7 @@ function showSubscribeModal(reasonText) {
     subscribeReasonEl.textContent = reasonText;
     const trial = currentUserTrialAvailable;
     setI18nKey(subscribeStartTrialBtn, trial ? 'subscribe.cta' : 'subscribe.ctaPaid');
-    setI18nKey(subscribePriceHintEl, trial ? 'subscribe.priceHint' : 'subscribe.priceHintPaid');
+    setI18nHtmlKey(subscribePriceHintEl, trial ? 'subscribe.priceHint' : 'subscribe.priceHintPaid');
     subscribeOverlay.classList.remove('hidden');
   });
 }

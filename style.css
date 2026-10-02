@@ -2936,3 +2936,54 @@ option {
     padding-left: 0;
   }
 }
+
+/* Anchor-price badge next to a price (see anchor-prices.js): a small anchor
+   icon and the anchor price, explained by a tooltip on hover or focus (a
+   tap focuses it -- it has tabindex -- so touch screens get it too). Kept in
+   sync between style.css and landing.css, which share no rules. */
+.anchor-price {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  opacity: 0.75;
+  cursor: help;
+  outline: none;
+}
+.anchor-price:hover,
+.anchor-price:focus-visible { opacity: 1; }
+.anchor-price::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(20, 24, 30, 0.95);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0s linear 0.15s;
+  z-index: 10;
+}
+.anchor-price:hover::after,
+.anchor-price:focus::after {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.15s, visibility 0s;
+}

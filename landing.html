@@ -72,7 +72,7 @@
       <div class="pricing-grid">
         <div class="pricing-card">
           <h3 data-i18n="pricing.freeTitle">Free</h3>
-          <div class="price">&euro;0</div>
+          <div class="price">&euro;0 <span data-anchor-plan="free"></span></div>
           <ul>
             <li data-i18n="pricing.freeLimit1">Up to 10 one-off tasks</li>
             <li data-i18n="pricing.freeLimit2">Up to 5 recurring tasks</li>
@@ -82,7 +82,7 @@
         </div>
         <div class="pricing-card">
           <h3 data-i18n="pricing.monthlyTitle">Pro -- Monthly</h3>
-          <div class="price">&euro;2 <span data-i18n="pricing.perMonth">/ month</span></div>
+          <div class="price">&euro;2 <span data-i18n="pricing.perMonth">/ month</span> <span data-anchor-plan="monthly"></span></div>
           <ul>
             <li data-i18n="pricing.proBenefit1">Unlimited tasks, recurring or not</li>
             <li data-i18n="pricing.proBenefit2">Unlimited notes on every task</li>
@@ -92,7 +92,7 @@
         </div>
         <div class="pricing-card highlight">
           <h3 data-i18n="pricing.yearlyTitle">Pro -- Yearly</h3>
-          <div class="price">&euro;20 <span data-i18n="pricing.perYear">/ year</span></div>
+          <div class="price">&euro;20 <span data-i18n="pricing.perYear">/ year</span> <span data-anchor-plan="annual"></span></div>
           <p class="save" data-i18n="pricing.save">Save ~17% vs. monthly</p>
           <ul>
             <li data-i18n="pricing.proBenefit1">Unlimited tasks, recurring or not</li>
@@ -101,6 +101,12 @@
           </ul>
           <button type="button" class="btn btn-primary" data-plan="annual" data-i18n="pricing.subscribeYearly">Subscribe yearly</button>
         </div>
+      </div>
+      <div class="price-list-download">
+        <label for="price-list-version" data-i18n="priceList.label">Price list (CSV)</label>
+        <select id="price-list-version" disabled></select>
+        <button type="button" id="price-list-download-btn" class="btn btn-secondary" data-i18n="priceList.download" disabled>Download</button>
+        <p id="price-list-status" class="price-list-status hidden"></p>
       </div>
     </div>
   </section>
@@ -112,6 +118,7 @@
   <script src="config.js"></script>
   <script src="auth.js"></script>
   <script src="site-i18n.js"></script>
+  <script src="anchor-prices.js"></script>
   <script src="landing.js"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 // Terms of Service page -- static legal content, no auth.js dependency,
-// just site-i18n.js for language handling. Same one-key-per-section
+// just site-i18n.js for language handling (and anchor-prices.js for the
+// anchor-price badges next to the prices in section 2). Same one-key-per-section
 // approach as privacy.js -- see its own comment for why.
 
 const TERMS_I18N = {
@@ -14,7 +15,7 @@ const TERMS_I18N = {
     'terms.s1':
       "<h2>1. The Service</h2><p>A-To-Do is a to-do list application with recurring tasks, overdue/failed-appointment tracking, work timers, and per-task notes. It's offered on a Free plan and a paid Pro plan.</p>",
     'terms.s2':
-      '<h2>2. Plans and pricing</h2><ul><li><strong>Free:</strong> up to 10 one-off tasks, 5 recurring tasks, and 5 notes per task.</li><li><strong>Pro:</strong> unlimited tasks and notes, billed at &euro;2/month or &euro;20/year, whichever you choose at checkout.</li></ul><p>We may change these prices or limits going forward; if we do, we\'ll give existing subscribers reasonable advance notice before it applies to their next billing period.</p>',
+      '<h2>2. Plans and pricing</h2><ul><li><strong>Free:</strong> up to 10 one-off tasks, 5 recurring tasks, and 5 notes per task.</li><li><strong>Pro:</strong> unlimited tasks and notes, billed at &euro;2/month <span data-anchor-plan="monthly"></span> or &euro;20/year <span data-anchor-plan="annual"></span>, whichever you choose at checkout.</li></ul><p>We may change these prices or limits going forward; if we do, we\'ll give existing subscribers reasonable advance notice before it applies to their next billing period.</p>',
     'terms.s3':
       "<h2>3. Accounts</h2><p>You need an account (email and password) to use the Service. You're responsible for keeping your password confidential and for anything that happens under your account. Let us know if you believe your account has been accessed without your permission.</p>",
     'terms.s4':
@@ -49,7 +50,7 @@ const TERMS_I18N = {
     'terms.s1':
       '<h2>1. Usluga</h2><p>A-To-Do je aplikacija za popis obveza s ponavljajućim zadacima, praćenjem zakašnjelih/neuspjelih termina, mjeračima vremena rada i bilješkama po zadatku. Nudi se u besplatnom planu i plaćenom Pro planu.</p>',
     'terms.s2':
-      '<h2>2. Planovi i cijene</h2><ul><li><strong>Besplatno:</strong> do 10 jednokratnih zadataka, 5 ponavljajućih zadataka i 5 bilješki po zadatku.</li><li><strong>Pro:</strong> neograničen broj zadataka i bilješki, naplata &euro;2/mjesečno ili &euro;20/godišnje, prema vašem odabiru pri plaćanju.</li></ul><p>Ove cijene ili ograničenja mogu se ubuduće promijeniti; ako se to dogodi, postojećim pretplatnicima dat ćemo razumnu obavijest unaprijed prije nego što se primijeni na njihovo sljedeće razdoblje naplate.</p>',
+      '<h2>2. Planovi i cijene</h2><ul><li><strong>Besplatno:</strong> do 10 jednokratnih zadataka, 5 ponavljajućih zadataka i 5 bilješki po zadatku.</li><li><strong>Pro:</strong> neograničen broj zadataka i bilješki, naplata &euro;2/mjesečno <span data-anchor-plan="monthly"></span> ili &euro;20/godišnje <span data-anchor-plan="annual"></span>, prema vašem odabiru pri plaćanju.</li></ul><p>Ove cijene ili ograničenja mogu se ubuduće promijeniti; ako se to dogodi, postojećim pretplatnicima dat ćemo razumnu obavijest unaprijed prije nego što se primijeni na njihovo sljedeće razdoblje naplate.</p>',
     'terms.s3':
       '<h2>3. Računi</h2><p>Za korištenje Usluge potreban vam je račun (e-mail i lozinka). Odgovorni ste za čuvanje tajnosti svoje lozinke i za sve što se dogodi putem vašeg računa. Obavijestite nas ako smatrate da je vašem računu pristupljeno bez vašeg dopuštenja.</p>',
     'terms.s4':
@@ -75,4 +76,4 @@ const TERMS_I18N = {
   },
 };
 
-initSitePage(TERMS_I18N);
+initSitePage(TERMS_I18N, (lang) => fillAnchorPrices(document, lang));

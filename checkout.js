@@ -9,8 +9,8 @@
 // there's nothing to confirm/wait for on a cancelled payment. Depends on
 // auth.js (see checkout.html) for apiFetch/AUTH_TOKEN_KEY/
 // getCurrentUserIdFromStoredToken/createCheckoutSession/
-// getCheckoutSessionStatus, and site-i18n.js for initSitePage/
-// getStoredMarketingLanguage.
+// getCheckoutSessionStatus, site-i18n.js for initSitePage/
+// getStoredMarketingLanguage, and anchor-prices.js for fillAnchorPrices.
 
 function planPrice(billingInterval) {
   return billingInterval === 'annual' ? '€20/year' : '€2/month';
@@ -44,7 +44,12 @@ const returningSessionId = params.get('session_id');
 // data-i18n swap.
 function renderPlanSummary(lang) {
   const summary = (CHECKOUT_I18N[lang] || CHECKOUT_I18N.en)['checkout.summary'];
-  document.getElementById('checkout-plan-summary').textContent = summary.replace('{price}', planPrice(plan));
+  const summaryEl = document.getElementById('checkout-plan-summary');
+  summaryEl.textContent = summary.replace('{price}', planPrice(plan));
+  const anchor = document.createElement('span');
+  anchor.dataset.anchorPlan = plan;
+  summaryEl.append(' ', anchor);
+  fillAnchorPrices(summaryEl, lang);
 }
 
 // Polls on an interval until the session's status isn't 'pending' anymore
