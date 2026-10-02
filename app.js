@@ -65,9 +65,10 @@ const I18N = {
     'register.passwordMismatch': "Passwords don't match.",
     'register.passwordTooShort': 'Password must be at least 8 characters.',
     'register.invalidEmail': 'Enter a valid email address.',
-    'register.emailTaken': 'An account with that email already exists.',
+    'register.emailTaken': 'An account with that email already exists. Would you like to <a href="#" class="js-taken-login">log in</a>?',
     'register.genericError': 'Something went wrong – please try again.',
     'register.checkEmail': "We've sent a verification link to {email}. Click it within 6 hours to activate your account.",
+    'register.checkEmailCheckout': "We've sent a verification link to {email}. Click it within 6 hours – it'll log you in and take you straight on to payment.",
 
     'common.close': 'Close',
     'common.cancel': 'Cancel',
@@ -469,9 +470,10 @@ const I18N = {
     'register.passwordMismatch': 'Lozinke se ne podudaraju.',
     'register.passwordTooShort': 'Lozinka mora imati najmanje 8 znakova.',
     'register.invalidEmail': 'Unesite valjanu e-mail adresu.',
-    'register.emailTaken': 'Račun s tom e-mail adresom već postoji.',
+    'register.emailTaken': 'Račun s tom e-mail adresom već postoji. Želite li se <a href="#" class="js-taken-login">prijaviti</a>?',
     'register.genericError': 'Nešto je pošlo po zlu – pokušajte ponovno.',
     'register.checkEmail': 'Poslali smo poveznicu za potvrdu na {email}. Kliknite je unutar 6 sati kako biste aktivirali račun.',
+    'register.checkEmailCheckout': 'Poslali smo poveznicu za potvrdu na {email}. Kliknite je unutar 6 sati – prijavit će vas i odvesti ravno na plaćanje.',
 
     'common.close': 'Zatvori',
     'common.cancel': 'Odustani',
@@ -1797,20 +1799,26 @@ function isValidEmail(email) {
 // client-side first, purely to skip a pointless round trip for an
 // obviously malformed address -- the server re-validates regardless (see
 // api-spec.yaml) and is the real authority either way.
-async function registerUser(email, password) {
+// checkoutPlan: the plan a visitor from the landing page's pricing buttons
+// chose (see checkoutPlanFromUrl) -- the emailed link then logs them in
+// and continues to checkout for it.
+async function registerUser(email, password, checkoutPlan = null) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!isValidEmail(normalizedEmail)) throw codeError('INVALID_EMAIL');
-  await apiFetch('/auth/register', { method: 'POST', body: { email: normalizedEmail, password } });
+  const body = { email: normalizedEmail, password };
+  if (checkoutPlan) body.checkoutPlan = checkoutPlan;
+  await apiFetch('/auth/register', { method: 'POST', body });
 }
 
 // POST /auth/verify-email -- resolves a verification link's token. Returns
-// { ok: true, email } or { ok: false, code } rather than throwing, since
+// { ok: true, email, token?, user? } (token/user: verifying also logged the
+// new account in) or { ok: false, code } rather than throwing, since
 // handleEmailVerificationLink (below) shows a specific message for an
 // already-used/expired link rather than treating it as an unexpected error.
 async function verifyEmailToken(token) {
   try {
-    const { email } = await apiFetch('/auth/verify-email', { method: 'POST', body: { token } });
-    return { ok: true, email };
+    const { email, token: sessionToken, user } = await apiFetch('/auth/verify-email', { method: 'POST', body: { token } });
+    return { ok: true, email, token: sessionToken || null, user: user || null };
   } catch (err) {
     return { ok: false, code: err.code };
   }
@@ -9059,27 +9067,75 @@ async function startApp(needsLanguageDetection) {
   }
 }
 
+// The plan a visitor chose on the landing page's pricing buttons, carried
+// along as `?next=checkout&plan=...` through registration (and its emailed
+// verification link) and login -- null for an ordinary visit. Whoever logs
+// in with it goes straight on to checkout instead of into the app.
+function checkoutPlanFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('next') !== 'checkout') return null;
+  return params.get('plan') === 'annual' ? 'annual' : 'monthly';
+}
+
+// A session just started (login, the register screen's "log in" link, or a
+// verification link) -- either on to checkout, for a visitor who came to
+// subscribe, or into the app.
+async function enterSession(token, user, { restored = false } = {}) {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const plan = checkoutPlanFromUrl();
+  if (plan) {
+    location.href = `checkout.html?plan=${encodeURIComponent(plan)}`;
+    return;
+  }
+  applyUserSession(user);
+  loginScreenEl.classList.add('hidden');
+  registerScreenEl.classList.add('hidden');
+  appMainEl.classList.remove('hidden');
+  await startApp(user.language == null);
+  // Logging in to a deleted (closed) account reopens it empty -- see
+  // api-spec.yaml's POST /auth/login -- which would otherwise just look
+  // like every task vanished.
+  if (restored) showInfoModal(t('login.accountRestored'), 'success');
+}
+
+// Logs in with an email and password and enters the session; throws what
+// login()/getMe() throw for the caller to report (or not).
+async function logInWith(email, password) {
+  const { token, restored } = await login(email, password);
+  // Always resolved right after login() -- see getMe's own comment on why
+  // the inactivity/existence check lives there instead of in login()
+  // itself, and why that's safe to rely on here.
+  const user = await getMe(token);
+  await enterSession(token, user, { restored });
+}
+
 // Handles a `?verify=<token>` URL (the link the backend emails on
-// registration, see POST /auth/register in api-spec.yaml) if one's present
-// -- shows the result on the login screen and strips the token back out of
-// the URL either way (via replaceState, no reload/history entry) so
-// refreshing the page afterward doesn't try to re-consume the same
-// already-used token. Runs before any token check in boot() below: this can
-// land on a browser that's never logged in at all (a brand new account) or
-// one that's currently logged in elsewhere/already logged out -- either way
-// it's independent of whatever boot() does next. Async now that
-// verifyEmailToken is a real API call -- boot() below deliberately doesn't
-// await this, since it only ever affects the login screen's own message,
-// nothing boot() itself goes on to do.
+// registration, see POST /auth/register in api-spec.yaml) if one's present,
+// stripping the token back out of the URL either way (via replaceState, no
+// reload/history entry) so refreshing the page afterward doesn't try to
+// re-consume the same already-used token. Verifying also logs the new
+// account in (and on to checkout, if the link carries a plan -- see
+// checkoutPlanFromUrl): resolves true when it did. Otherwise (an expired
+// or used link) it shows why on the login screen and resolves false.
+// boot() awaits this before anything else signs in, so a session the tab
+// already had can't race the new one.
 async function handleEmailVerificationLink() {
   const params = new URLSearchParams(location.search);
   const token = params.get('verify');
-  if (!token) return;
+  if (!token) return false;
   params.delete('verify');
   const newSearch = params.toString();
   history.replaceState(null, '', location.pathname + (newSearch ? `?${newSearch}` : '') + location.hash);
 
   const result = await verifyEmailToken(token);
+  if (result.ok && result.token) {
+    try {
+      await enterSession(result.token, await getMe(result.token));
+      return true;
+    } catch (err) {
+      console.error('Failed to start the session after verifying:', err);
+    }
+  }
   loginScreenEl.classList.remove('hidden');
   if (result.ok) {
     showAuthMessage(loginMessageEl, 'success', t('login.verifiedSuccess', { email: result.email }));
@@ -9151,11 +9207,22 @@ function boot() {
     return;
   }
   showPostBootNotice();
-  handleEmailVerificationLink();
   handleEmailChangeVerificationLink();
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) {
-    loginScreenEl.classList.remove('hidden');
+  const continueBoot = (afterVerificationLink = false) => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
+      // A visitor who came to subscribe most likely has no account yet:
+      // registration first (it has a link to log in instead) -- unless a
+      // verification link's result is showing on the login screen.
+      if (checkoutPlanFromUrl() && !afterVerificationLink) registerScreenEl.classList.remove('hidden');
+      else loginScreenEl.classList.remove('hidden');
+      detectPreLoginLanguage();
+      return;
+    }
+    appMainEl.classList.remove('hidden');
+    resumeStoredSession(token);
+  };
+  const detectPreLoginLanguage = () => {
     if (!preLoginLangExplicit) {
       detectLanguageAndTimeFormatFromLocation().then(({ language }) => {
         // Don't clobber a real login (the account's own language now
@@ -9165,10 +9232,14 @@ function boot() {
         applyPreLoginLanguage(language);
       });
     }
+  };
+  if (new URLSearchParams(location.search).has('verify')) {
+    handleEmailVerificationLink().then((loggedIn) => {
+      if (!loggedIn) continueBoot(true);
+    });
     return;
   }
-  appMainEl.classList.remove('hidden');
-  resumeStoredSession(token);
+  continueBoot();
 }
 
 // boot()'s existing-token path. Only an answer about the account itself
@@ -9189,9 +9260,9 @@ function resumeStoredSession(token) {
       // Deliberately checked only after getMe() resolves, not before -- an
       // expired/deleted account (see getMe's own comment) should land back
       // on the login screen, not get waved through to checkout.
-      const bootParams = new URLSearchParams(location.search);
-      if (bootParams.get('next') === 'checkout') {
-        location.href = `checkout.html?plan=${encodeURIComponent(bootParams.get('plan') || 'monthly')}`;
+      const plan = checkoutPlanFromUrl();
+      if (plan) {
+        location.href = `checkout.html?plan=${encodeURIComponent(plan)}`;
         return;
       }
       applyUserSession(user);
@@ -9227,36 +9298,13 @@ document.getElementById('login-form').onsubmit = async (e) => {
   clearAuthMessage(loginMessageEl);
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  let token, user, restored;
+  // A visitor from landing.html's pricing buttons (see landing.js) goes on
+  // to checkout once logged in -- see enterSession.
   try {
-    ({ token, restored } = await login(email, password));
-    // Always resolved right after login() -- see getMe's own comment on why
-    // the inactivity/existence check lives there instead of in login()
-    // itself, and why that's safe to rely on here.
-    user = await getMe(token);
+    await logInWith(email, password);
   } catch (err) {
     showAuthMessage(loginMessageEl, 'error', describeAuthError(err));
-    return;
   }
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-
-  // Arrived here via landing.html's pricing buttons while logged out (see
-  // landing.js) -- now that login succeeded, continue straight on to the
-  // checkout it was interrupted for, instead of opening the app.
-  const params = new URLSearchParams(location.search);
-  if (params.get('next') === 'checkout') {
-    location.href = `checkout.html?plan=${encodeURIComponent(params.get('plan') || 'monthly')}`;
-    return;
-  }
-
-  applyUserSession(user);
-  loginScreenEl.classList.add('hidden');
-  appMainEl.classList.remove('hidden');
-  await startApp(user.language == null);
-  // Logging in to a deleted (closed) account reopens it empty -- see
-  // api-spec.yaml's POST /auth/login -- which would otherwise just look
-  // like every task vanished.
-  if (restored) showInfoModal(t('login.accountRestored'), 'success');
 };
 
 document.getElementById('show-register-link').onclick = (e) => {
@@ -9271,6 +9319,30 @@ document.getElementById('show-login-link').onclick = (e) => {
   registerScreenEl.classList.add('hidden');
   loginScreenEl.classList.remove('hidden');
 };
+// Registering with an email that's already an account: offers to log in
+// instead -- a click tries the email and password just entered right away
+// (on to checkout for a visitor who came to subscribe, see enterSession);
+// if they don't log in, it quietly switches to the login screen with the
+// email filled in. The same for every visitor, subscribing or not.
+function showEmailTakenMessage(email, password) {
+  showAuthMessage(registerMessageEl, 'error', '');
+  registerMessageEl.innerHTML = t('register.emailTaken');
+  registerMessageEl.querySelector('.js-taken-login').onclick = async (e) => {
+    e.preventDefault();
+    try {
+      await logInWith(email, password);
+    } catch {
+      clearAuthMessage(registerMessageEl);
+      registerScreenEl.classList.add('hidden');
+      clearAuthMessage(loginMessageEl);
+      loginScreenEl.classList.remove('hidden');
+      document.getElementById('login-email').value = email;
+      document.getElementById('login-password').value = '';
+      document.getElementById('login-password').focus();
+    }
+  };
+}
+
 document.getElementById('register-success-back-btn').onclick = () => {
   registerSuccessEl.classList.add('hidden');
   registerFormEl.classList.remove('hidden');
@@ -9294,16 +9366,16 @@ registerFormEl.onsubmit = async (e) => {
     return;
   }
   try {
-    await registerUser(email, password);
+    await registerUser(email, password, checkoutPlanFromUrl());
   } catch (err) {
-    showAuthMessage(
-      registerMessageEl,
-      'error',
-      err.code === 'INVALID_EMAIL' ? t('register.invalidEmail') : err.code === 'EMAIL_TAKEN' ? t('register.emailTaken') : t('register.genericError')
-    );
+    if (err.code === 'EMAIL_TAKEN') {
+      showEmailTakenMessage(email, password);
+      return;
+    }
+    showAuthMessage(registerMessageEl, 'error', err.code === 'INVALID_EMAIL' ? t('register.invalidEmail') : t('register.genericError'));
     return;
   }
-  registerSuccessMessageEl.textContent = t('register.checkEmail', { email });
+  registerSuccessMessageEl.textContent = t(checkoutPlanFromUrl() ? 'register.checkEmailCheckout' : 'register.checkEmail', { email });
   registerFormEl.classList.add('hidden');
   registerSuccessEl.classList.remove('hidden');
 };
