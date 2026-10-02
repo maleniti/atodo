@@ -4968,7 +4968,7 @@ function updateTodoDayHighlight() {
     }
   }
   const todayISO = Recurrence.dateToISO(new Date());
-  const showTodayBtn = current.dateISO !== todayISO && !!todayTargetDayRef();
+  const showTodayBtn = isBrowsingOtherTodoMonth() || (current.dateISO !== todayISO && !!todayTargetDayRef());
   for (const ref of todoDayRefs) ref.todayBtn.classList.toggle('hidden', ref !== current || !showTodayBtn);
 
   // Every other day: opacity by closeness to the reading point, and its
@@ -5176,13 +5176,21 @@ todoMonthNextBtn.onclick = () => {
   todoScrollToTodayOnRender = true;
   renderTodo();
 };
-todoMonthLabelEl.onclick = () => {
+// Whether the list shows a month other than the current one -- then every
+// day's "Today" button (see updateTodoDayHighlight) leads back to it.
+function isBrowsingOtherTodoMonth() {
+  return todoViewMode !== 'next-recurrence' && viewedMonthKey !== monthKeyOf(Recurrence.dateToISO(new Date()));
+}
+
+// Back to the current month, opened on today (see todoScrollToTodayOnRender).
+function jumpTodoToCurrentMonth() {
   const currentMonthKey = monthKeyOf(Recurrence.dateToISO(new Date()));
   if (viewedMonthKey === currentMonthKey) return;
   viewedMonthKey = currentMonthKey;
   todoScrollToTodayOnRender = true;
   renderTodo();
-};
+}
+todoMonthLabelEl.onclick = jumpTodoToCurrentMonth;
 
 todoViewportEl.addEventListener('scroll', updateTodoDayHighlight);
 window.addEventListener('resize', () => {
@@ -5786,7 +5794,10 @@ function renderTodo() {
     todayBtn.type = 'button';
     todayBtn.className = 'menu-btn-small todo-day-today-btn hidden';
     todayBtn.textContent = t('todo.backToToday');
-    todayBtn.onclick = () => scrollTodoToToday();
+    todayBtn.onclick = () => {
+      if (isBrowsingOtherTodoMonth()) jumpTodoToCurrentMonth();
+      else scrollTodoToToday();
+    };
     header.appendChild(todayBtn);
 
     group.appendChild(header);
