@@ -115,11 +115,11 @@ async function runCheckout() {
     const { checkoutUrl } = await createCheckoutSession(plan, successUrl, cancelUrl);
     location.href = checkoutUrl;
   } catch (err) {
-    // The cancel page explains these two specifically (see cancel.js);
+    // The cancel page explains these specifically (see cancel.js);
     // anything else is just "no charge made" -- logged, since nothing on
     // that page says what actually went wrong.
     console.error('Checkout failed:', err);
-    const reason = { PAYMENTS_UNAVAILABLE: 'unavailable', MAINTENANCE: 'unavailable', ALREADY_SUBSCRIBED: 'subscribed' }[err && err.code];
+    const reason = { PAYMENTS_UNAVAILABLE: 'unavailable', MAINTENANCE: 'unavailable', ALREADY_SUBSCRIBED: 'subscribed', SUBSCRIPTION_CANCELLING: 'resumable' }[err && err.code];
     location.href = `cancel.html?plan=${encodeURIComponent(plan)}${reason ? `&reason=${reason}` : ''}`;
   }
 }

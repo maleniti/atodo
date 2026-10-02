@@ -18,8 +18,12 @@
   <div class="flow-page">
     <div class="flow-card">
       <h1 data-i18n="cancel.title">No charge made</h1>
-      <p data-i18n="cancel.body">Your payment was cancelled and you haven't been charged. You can pick a plan again any time.</p>
-      <a class="btn btn-primary" href="landing.html#pricing" data-i18n="cancel.backToPricing">Back to pricing</a>
+      <p id="cancel-body" data-i18n="cancel.body">Your payment was cancelled and you haven't been charged. You can pick a plan again any time.</p>
+      <div class="flow-actions">
+        <button type="button" id="resume-btn" class="btn btn-primary hidden" data-i18n="cancel.resume">Resume subscription</button>
+        <a id="todo-list-link" class="btn btn-primary js-login-link hidden" href="index.html" data-i18n="cancel.toTodoList">Go to my to-do list</a>
+        <a id="pricing-link" class="btn btn-primary" href="landing.html#pricing" data-i18n="cancel.backToPricing">Back to pricing</a>
+      </div>
     </div>
   </div>
 
@@ -27,6 +31,8 @@
     A-To-Do &middot; <a href="privacy.html" data-i18n="nav.privacy">Privacy Policy</a> &middot; <a href="terms.html" data-i18n="nav.terms">Terms of Service</a>
   </footer>
 
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
   <script src="site-i18n.js"></script>
   <script src="cancel.js"></script>
 </body>

@@ -159,6 +159,15 @@ async function cancelSubscription() {
   return apiFetch('/subscriptions/cancel', { method: 'POST' });
 }
 
+// POST /subscriptions/resume -- undoes cancelSubscription (or a
+// cancellation in Stripe's portal) while the paid period is still running:
+// it renews again at its end, nothing charged now; also calls off a
+// scheduled account deletion. Throws codeError('NO_CANCELLED_SUBSCRIPTION')
+// when there's nothing to resume. Returns { token, user }.
+async function resumeSubscription() {
+  return apiFetch('/subscriptions/resume', { method: 'POST' });
+}
+
 // POST /users/me/schedule-deletion -- the alternative to DELETE /users/me
 // for a paying subscriber who doesn't want to forfeit the rest of a period
 // they already paid for (see the Settings "Delete account" flow in app.js):

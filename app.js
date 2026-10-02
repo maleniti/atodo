@@ -323,6 +323,8 @@ const I18N = {
     'settings.billingMonthly': 'monthly',
     'settings.billingAnnual': 'annually',
     'settings.cancelSubscription': 'Cancel subscription',
+    'settings.resumeSubscription': 'Resume subscription',
+    'settings.resumeSubscriptionFailed': "Your subscription couldn't be resumed. Please try again.",
     'settings.manageBilling': 'Manage billing…',
     'settings.manageBillingUnavailable': 'Billing management is temporarily unavailable. Please try again later.',
     'settings.manageBillingFailed': "Couldn't open billing management. Please try again.",
@@ -728,6 +730,8 @@ const I18N = {
     'settings.billingMonthly': 'mjesečno',
     'settings.billingAnnual': 'godišnje',
     'settings.cancelSubscription': 'Otkaži pretplatu',
+    'settings.resumeSubscription': 'Nastavi pretplatu',
+    'settings.resumeSubscriptionFailed': 'Pretplatu nije bilo moguće nastaviti. Pokušajte ponovno.',
     'settings.manageBilling': 'Upravljaj plaćanjem…',
     'settings.manageBillingUnavailable': 'Upravljanje plaćanjem trenutno nije dostupno. Pokušajte ponovno kasnije.',
     'settings.manageBillingFailed': 'Upravljanje plaćanjem nije se moglo otvoriti. Pokušajte ponovno.',
@@ -3282,6 +3286,19 @@ async function subscribeCurrentUserToTrial() {
 // subscription status.
 async function cancelCurrentUserSubscription() {
   const { token, user } = await cancelSubscription();
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  currentUserSubscription = user.subscription;
+  currentUserTrialAvailable = !!user.trialAvailable;
+  renderSettingsSubscriptionSection();
+  renderSubscribeHeaderButton();
+}
+
+// Undoes a cancellation while the paid period still runs (see
+// resumeSubscription in auth.js): renews again at its end, nothing charged
+// now -- the only way back for a cancelled subscriber, since checkout
+// refuses a second subscription over time already paid for.
+async function resumeCurrentUserSubscription() {
+  const { token, user } = await resumeSubscription();
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   currentUserSubscription = user.subscription;
   currentUserTrialAvailable = !!user.trialAvailable;
@@ -7964,6 +7981,7 @@ const settingsAvatarFileInput = document.getElementById('settings-avatar-file-in
 const settingsSubscriptionStatusEl = document.getElementById('settings-subscription-status');
 const settingsSubscribeBtn = document.getElementById('settings-subscribe-btn');
 const settingsCancelSubscriptionBtn = document.getElementById('settings-cancel-subscription-btn');
+const settingsResumeSubscriptionBtn = document.getElementById('settings-resume-subscription-btn');
 const settingsManageBillingBtn = document.getElementById('settings-manage-billing-btn');
 const settingsScheduledDeletionNoticeEl = document.getElementById('settings-scheduled-deletion-notice');
 const settingsCancelScheduledDeletionBtn = document.getElementById('settings-cancel-scheduled-deletion-btn');
@@ -8038,8 +8056,9 @@ function renderSettingsSubscriptionSection() {
   settingsSubscribeBtn.classList.toggle('hidden', active);
   setI18nKey(settingsSubscribeBtn, currentUserTrialAvailable ? 'subscribe.cta' : 'subscribe.ctaPaid');
   settingsCancelSubscriptionBtn.classList.toggle('hidden', !(plan === 'pro' && active && !subscription.cancelAtPeriodEnd));
-  // Stripe's portal (card, cancelling -- or un-cancelling, which only it
-  // offers) -- for any live Pro plan, i.e. one paid through Stripe.
+  settingsResumeSubscriptionBtn.classList.toggle('hidden', !(plan === 'pro' && active && subscription.cancelAtPeriodEnd));
+  // Stripe's portal (card, cancelling or un-cancelling) -- for any live Pro
+  // plan, i.e. one paid through Stripe.
   settingsManageBillingBtn.classList.toggle('hidden', !(plan === 'pro' && active));
   // See scheduleAccountDeletion in auth.js -- only meaningful while the
   // subscription it's tied to is still active (once it lapses, getMe()
@@ -8149,6 +8168,10 @@ document.getElementById('settings-save').onclick = () => {
 
 settingsSubscribeBtn.onclick = () => (currentUserTrialAvailable ? subscribeCurrentUserToTrial() : goToPricing());
 settingsCancelSubscriptionBtn.onclick = () => cancelCurrentUserSubscription();
+settingsResumeSubscriptionBtn.onclick = () => resumeCurrentUserSubscription().catch((err) => {
+  console.error('Resuming the subscription failed:', err);
+  showInfoModal(t('settings.resumeSubscriptionFailed'), 'error');
+});
 settingsManageBillingBtn.onclick = () => openBillingPortal();
 
 // Leaves for Stripe's hosted Customer Portal (see createBillingPortalSession
