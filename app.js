@@ -1895,15 +1895,21 @@ function unfocusOccurrence() {
 // another month) and then as the list scrolls, in either direction, within
 // the viewed month (next-recurrence isn't month-bound). Each day is a list
 // of items, each carrying what its row shows and which actions it allows.
+//
+// Every day loaded is kept until the view or month changes (resetTodoList),
+// so the list never shrinks under the reader. A kept day is still fetched
+// again when it's on screen and its copy is older than TODO_DAY_FRESH_MS
+// (or an action may have changed it, see refreshTodoList) -- changes made on
+// another device show up as the list is read.
 // ---------------------------------------------------------------------------
 
+const TODO_DAY_FRESH_MS = 30 * 1000;
 let todoDays = new Map(); // dateISO -> items
 let todoDayOrder = []; // loaded dates, ascending
+// When each loaded day was last fetched (0: may be out of date).
+let todoFetchedAt = new Map();
 // The nearest days with items just outside what's loaded (null: none).
 let todoEdges = { before: null, after: null };
-// Days whose items may be out of date (an action changed something while
-// they were scrolled out of view) -- re-fetched when they come back.
-let todoStaleDays = new Set();
 // Bumped whenever the list starts over (view or month changed), so answers
 // to an earlier list's requests are ignored.
 let todoGeneration = 0;
@@ -1925,13 +1931,13 @@ function insertTodoDay(date, items) {
     todoDayOrder.sort();
   }
   todoDays.set(date, items);
-  todoStaleDays.delete(date);
+  todoFetchedAt.set(date, Date.now());
 }
 
 function removeTodoDay(date) {
   todoDays.delete(date);
   todoDayOrder = todoDayOrder.filter((d) => d !== date);
-  todoStaleDays.delete(date);
+  todoFetchedAt.delete(date);
 }
 
 // Starts the list over: the first day to show, then as many more as fill
@@ -1940,8 +1946,8 @@ async function resetTodoList() {
   const generation = ++todoGeneration;
   todoDays = new Map();
   todoDayOrder = [];
+  todoFetchedAt = new Map();
   todoEdges = { before: null, after: null };
-  todoStaleDays = new Set();
   todoScrollToTodayOnRender = true;
   const todayISO = Dates.todayISO();
   const start = todoViewMode === 'next-recurrence' || viewedMonthKey === todayISO.slice(0, 7) ? todayISO : `${viewedMonthKey}-01`;
@@ -1966,7 +1972,8 @@ async function resetTodoList() {
 
 // Loads more days while the list doesn't fill its view plus a margin -- after
 // the last loaded day, and before the first (so there's something to scroll
-// up to). Called again as the list scrolls (see the scroll handler).
+// up to). Called again as the list scrolls (see the scroll handler). Adding
+// days above keeps what's on screen in place (see renderTodo's anchoring).
 async function fillTodoList(generation = todoGeneration) {
   if (todoLoading) return;
   todoLoading = true;
@@ -1985,12 +1992,9 @@ async function fillTodoList(generation = todoGeneration) {
       } else if (todoInViewedRange(todoEdges.before) && above < viewport) {
         const day = await fetchTodoDay(todoEdges.before, 'before');
         if (generation !== todoGeneration) return;
-        // Prepending moves everything down -- keep what's on screen in place.
-        const heightBefore = todoViewportEl.scrollHeight;
         if (day.date && todoInViewedRange(day.date)) insertTodoDay(day.date, day.items);
         todoEdges.before = day.date && todoInViewedRange(day.date) ? day.previousDate : null;
         renderTodo();
-        todoViewportEl.scrollTop += todoViewportEl.scrollHeight - heightBefore;
       } else {
         break;
       }
@@ -2002,64 +2006,74 @@ async function fillTodoList(generation = todoGeneration) {
   }
 }
 
-// After a change: the days in and near view are re-fetched -- walking from
-// the first of them through the last, so a day that became empty drops out
-// and one that gained items appears -- and every other loaded day is marked
-// stale, re-fetched when it's scrolled back into view.
-let todoRefreshQueued = false;
-async function refreshTodoList() {
-  if (todoRefreshQueued) return;
-  todoRefreshQueued = true;
-  await Promise.resolve();
-  todoRefreshQueued = false;
-  const generation = todoGeneration;
+// After a change: every loaded day may be out of date. The ones on screen
+// are fetched again right away, the rest once they're scrolled back into
+// view (refreshVisibleTodoDays).
+function refreshTodoList() {
   if (!todoDayOrder.length) {
     resetTodoList();
     return;
   }
-  const near = nearTodoDates();
-  const first = near[0] || todoDayOrder[0];
-  const last = near[near.length - 1] || first;
-  for (const date of todoDayOrder) if (date < first || date > last) todoStaleDays.add(date);
+  for (const date of todoDayOrder) todoFetchedAt.set(date, 0);
+  refreshVisibleTodoDays();
+}
+
+// Fetches the on-screen days again whose copies are out of date, as one
+// walk from the first through the last (see walkTodoSpan). One walk at a
+// time: asked again meanwhile, it looks again once the walk is done.
+let todoWalkBusy = false;
+let todoWalkPending = false;
+function refreshVisibleTodoDays() {
+  if (todoWalkBusy) {
+    todoWalkPending = true;
+    return;
+  }
+  const now = Date.now();
+  const due = visibleTodoDates().filter((date) => now - (todoFetchedAt.get(date) || 0) > TODO_DAY_FRESH_MS);
+  if (due.length) walkTodoSpan(due[0], due[due.length - 1]);
+}
+
+// Re-fetches the loaded days from `first` through `last` day by day ('after'
+// answers with the next day that has items), so a day that has become
+// empty drops out and one that has gained items appears in between.
+async function walkTodoSpan(first, last) {
+  todoWalkBusy = true;
+  const generation = todoGeneration;
   try {
     const seen = new Set();
     let date = first;
-    // The day before `first` may have changed too, if `first` was the first loaded.
     for (let guard = 0; guard < 62 && date && date <= last; guard++) {
       const day = await fetchTodoDay(date, 'after');
       if (generation !== todoGeneration) return;
-      if (!day.date || !todoInViewedRange(day.date)) break;
-      if (day.date > last && seen.size) break;
+      const lastLoaded = todoDayOrder[todoDayOrder.length - 1];
+      if (!day.date || !todoInViewedRange(day.date) || day.date > last) {
+        // Nothing more in the span; past the last loaded day, that's where
+        // loading resumes.
+        if (last >= lastLoaded) todoEdges.after = day.date && todoInViewedRange(day.date) ? day.date : null;
+        break;
+      }
+      if (day.date <= todoDayOrder[0]) todoEdges.before = day.previousDate;
       insertTodoDay(day.date, day.items);
       seen.add(day.date);
-      if (date === todoDayOrder[0] || day.date === todoDayOrder[0]) todoEdges.before = day.previousDate;
       if (day.date >= todoDayOrder[todoDayOrder.length - 1]) todoEdges.after = day.nextDate;
       date = day.nextDate;
     }
     for (const d of todoDayOrder.slice()) if (d >= first && d <= last && !seen.has(d)) removeTodoDay(d);
-    if (!todoDayOrder.length) {
-      resetTodoList();
-      return;
-    }
   } catch (err) {
     console.error('Failed to refresh the list:', err);
+  } finally {
+    todoWalkBusy = false;
+  }
+  if (generation !== todoGeneration) return;
+  if (!todoDayOrder.length) {
+    resetTodoList();
+    return;
   }
   renderTodo();
   fillTodoList(generation);
-}
-
-// Re-fetches a stale day as it scrolls back into view.
-async function refreshStaleTodoDay(date) {
-  todoStaleDays.delete(date);
-  const generation = todoGeneration;
-  try {
-    const day = await fetchTodoDay(date, 'after');
-    if (generation !== todoGeneration) return;
-    if (day.date !== date) removeTodoDay(date);
-    if (day.date && todoInViewedRange(day.date)) insertTodoDay(day.date, day.items);
-    renderTodo();
-  } catch (err) {
-    console.error('Failed to refresh a day:', err);
+  if (todoWalkPending) {
+    todoWalkPending = false;
+    refreshVisibleTodoDays();
   }
 }
 
@@ -3594,8 +3608,8 @@ function todayTargetDayRef() {
 // Nothing from today on = the top of the list.
 function scrollTodoToToday(behavior = 'smooth') {
   const ref = todayTargetDayRef();
-  // Today isn't among the loaded days (they were dropped as the list
-  // scrolled far away, see trimTodoList) -- the list starts over on it.
+  // Today isn't among the loaded days (loading hasn't reached it) -- the
+  // list starts over on it.
   const todayISO = Dates.todayISO();
   if ((!ref && todoInViewedRange(todoEdges.after)) || (ref && ref.dateISO > todayISO && todoEdges.before && todoEdges.before >= todayISO)) {
     resetTodoList();
@@ -4091,9 +4105,9 @@ function playTimerChime() {
 }
 
 // Draws the loaded days (see resetTodoList/fillTodoList) -- a group per
-// day, its items in two columns. Days far from the view are dropped again
-// afterwards (trimTodoList), so the list only ever holds what's on screen
-// and a margin around it.
+// day, its items in two columns. A redraw keeps the first day on screen
+// where it was (days added or changed above it would otherwise shift
+// everything), unless the list is about to open on today anyway.
 function renderTodo() {
   updateTodoViewToggleButton();
   updateTodoMonthNav();
@@ -4106,6 +4120,7 @@ function renderTodo() {
     return;
   }
 
+  const anchor = todoScrollToTodayOnRender ? null : todoScrollAnchor();
   todoListEl.innerHTML = '';
   const todayISO = Dates.todayISO();
   todoDayRefs = []; // highlightedTodoDate stays: the highlight carries on from it (see updateTodoDayHighlight)
@@ -4196,64 +4211,61 @@ function renderTodo() {
   if (todoScrollToTodayOnRender && todoViewportEl.clientHeight > 0) {
     todoScrollToTodayOnRender = false;
     scrollTodoToToday('auto');
+  } else if (anchor) {
+    restoreTodoScrollAnchor(anchor);
   }
   updateTodoDayHighlight();
   ensureTimerTicking();
 }
 
-// Drops loaded days well out of view (more than TODO_KEEP_SCREENS
-// viewports above or below it), keeping the list's size bounded however far
-// it's scrolled; they're fetched again on the way back (fillTodoList). Above
-// the view, the scroll position is adjusted so nothing on screen moves.
-const TODO_KEEP_SCREENS = 3;
-function trimTodoList() {
-  const viewport = todoViewportEl.clientHeight;
-  if (!viewport || todoDayRefs.length < 3) return;
+// The first day at least partly on screen, and how far its top is from the
+// top of the view -- restored after a redraw (restoreTodoScrollAnchor).
+function todoScrollAnchor() {
   const viewTop = todoViewportEl.getBoundingClientRect().top;
-  const dropBefore = [];
-  const dropAfter = [];
   for (const ref of todoDayRefs) {
     const rect = ref.group.getBoundingClientRect();
-    if (rect.bottom - viewTop < -TODO_KEEP_SCREENS * viewport) dropBefore.push(ref.dateISO);
-    else if (rect.top - viewTop > (TODO_KEEP_SCREENS + 1) * viewport) dropAfter.push(ref.dateISO);
+    if (rect.bottom > viewTop) return { dateISO: ref.dateISO, offset: rect.top - viewTop };
   }
-  if (!dropBefore.length && !dropAfter.length) return;
-  // The nearest day that has items, just outside what stays loaded, is
-  // where loading resumes in that direction.
-  if (dropBefore.length) todoEdges.before = dropBefore[dropBefore.length - 1];
-  if (dropAfter.length) todoEdges.after = dropAfter[0];
-  const heightOf = (dates) => todoDayRefs.filter((ref) => dates.includes(ref.dateISO)).reduce((sum, ref) => sum + ref.group.offsetHeight, 0);
-  const droppedAfterHeight = heightOf(dropAfter);
-  const heightBefore = todoViewportEl.scrollHeight;
-  for (const date of [...dropBefore, ...dropAfter]) removeTodoDay(date);
-  renderTodo();
-  // Only what was above the view shifts it: measure that part alone.
-  if (dropBefore.length) todoViewportEl.scrollTop -= heightBefore - todoViewportEl.scrollHeight - droppedAfterHeight;
+  return null;
 }
 
-// The loaded days in and near view -- what a refresh re-fetches (see
-// refreshTodoList).
-function nearTodoDates() {
+// The same day back where it was -- or, if it's gone, the next one.
+function restoreTodoScrollAnchor(anchor) {
+  const ref = todoDayRefs.find((r) => r.dateISO >= anchor.dateISO);
+  if (!ref) return;
+  const viewTop = todoViewportEl.getBoundingClientRect().top;
+  const shift = ref.group.getBoundingClientRect().top - viewTop - anchor.offset;
+  if (Math.abs(shift) >= 1) todoViewportEl.scrollTop += shift;
+}
+
+// The loaded days on screen (or just about to be) -- what's fetched again
+// when out of date (see refreshVisibleTodoDays).
+function visibleTodoDates() {
   const viewport = todoViewportEl.clientHeight;
   if (!viewport) return todoDayOrder.slice();
   const viewTop = todoViewportEl.getBoundingClientRect().top;
   return todoDayRefs
     .filter((ref) => {
       const rect = ref.group.getBoundingClientRect();
-      return rect.bottom - viewTop > -viewport && rect.top - viewTop < 2 * viewport;
+      return rect.bottom - viewTop > -viewport / 2 && rect.top - viewTop < 1.5 * viewport;
     })
     .map((ref) => ref.dateISO);
 }
 
-// While scrolling: load more as an end comes near, drop what's gone far,
-// and re-fetch a stale day that's come back into view.
+// Back in a tab that's been in the background: whatever was on screen may
+// have changed meanwhile (on another device, say).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentUserId && todoDayOrder.length) refreshVisibleTodoDays();
+});
+
+// While scrolling: load more as an end comes near, and fetch again what's
+// come into view if its copy is out of date.
 let todoScrollWorkTimer = null;
 todoViewportEl.addEventListener('scroll', () => {
   clearTimeout(todoScrollWorkTimer);
   todoScrollWorkTimer = setTimeout(() => {
     fillTodoList();
-    if (!todoLoading) trimTodoList();
-    for (const date of nearTodoDates()) if (todoStaleDays.has(date)) refreshStaleTodoDay(date);
+    refreshVisibleTodoDays();
   }, 120);
 });
 

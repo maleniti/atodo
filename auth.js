@@ -39,7 +39,7 @@ const API_BASE = `${(window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || ''}/a
 // any non-2xx response into a codeError() carrying the server's own `code`,
 // so every existing `err.code === '...'` check throughout app.js keeps
 // working unchanged.
-async function apiFetch(path, { method = 'GET', body, token } = {}) {
+async function apiFetch(path, { method = 'GET', body, token, attempt = 0 } = {}) {
   // The browser's time zone: the server works out "today" and due times in
   // it (see dates.js).
   const headers = {};
@@ -59,6 +59,16 @@ async function apiFetch(path, { method = 'GET', body, token } = {}) {
     throw codeError('NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.');
   }
 
+  // Reads are rate-limited by their own short window (a list loading day
+  // after day as it scrolls can reach it): a read refused that way waits
+  // until the window says it may go again -- RateLimit-Reset, in seconds --
+  // and goes again, a few times. (POST imports have their own TOO_FAST.)
+  if (res.status === 429 && method === 'GET' && attempt < 4) {
+    const resetSeconds = Number(res.headers.get('RateLimit-Reset')) || 1;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(10, resetSeconds) * 1000));
+    return apiFetch(path, { method, body, token, attempt: attempt + 1 });
+  }
+
   if (res.status === 204) return null;
   let data = null;
   try {
@@ -71,7 +81,7 @@ async function apiFetch(path, { method = 'GET', body, token } = {}) {
     // A gateway error without a code of its own is the platform mid-update
     // (the API container restarting behind nginx) -- same as the
     // MAINTENANCE the API and nginx's maintenance mode send explicitly.
-    const code = (data && data.code) || ([502, 503, 504].includes(res.status) ? 'MAINTENANCE' : 'UNKNOWN_ERROR');
+    const code = (data && data.code) || ([502, 503, 504].includes(res.status) ? 'MAINTENANCE' : res.status === 429 ? 'TOO_MANY_REQUESTS' : 'UNKNOWN_ERROR');
     throw codeError(code, data && data.message);
   }
   return data;
