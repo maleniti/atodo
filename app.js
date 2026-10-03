@@ -85,6 +85,8 @@ const I18N = {
     'menu.settings': 'Settings…',
     'menu.privacyPolicy': 'Privacy Policy',
     'menu.termsOfService': 'Terms of Service',
+    'menu.faq': 'FAQ',
+    'menu.support': 'Contact support',
     'menu.logout': 'Log out',
     'menu.logoutTitle': 'Log out (for testing the login screen)',
 
@@ -492,6 +494,8 @@ const I18N = {
     'menu.settings': 'Postavke…',
     'menu.privacyPolicy': 'Pravila privatnosti',
     'menu.termsOfService': 'Uvjeti korištenja',
+    'menu.faq': 'Česta pitanja',
+    'menu.support': 'Kontakt podrške',
     'menu.logout': 'Odjava',
     'menu.logoutTitle': 'Odjava (za testiranje zaslona za prijavu)',
 

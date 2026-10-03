@@ -125,6 +125,8 @@ function escapeLandingHtml(text) {
 const LANDING_I18N = {
   en: {
     'nav.login': 'Log in',
+    'nav.faq': 'FAQ',
+    'nav.support': 'Contact support',
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
     'hero.title': 'The to-do list that actually keeps up with you',
@@ -168,6 +170,8 @@ const LANDING_I18N = {
   },
   hr: {
     'nav.login': 'Prijava',
+    'nav.faq': 'Česta pitanja',
+    'nav.support': 'Kontakt podrške',
     'nav.privacy': 'Pravila privatnosti',
     'nav.terms': 'Uvjeti korištenja',
     'hero.title': 'Popis obveza koji zaista prati vaš tempo',

@@ -5,10 +5,12 @@
 const TERMS_I18N = {
   en: {
     'nav.login': 'Log in',
+    'nav.faq': 'FAQ',
+    'nav.support': 'Contact support',
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
     'terms.pageTitle': 'Terms of Service',
-    'terms.updated': 'Last updated: 2 October 2026',
+    'terms.updated': 'Last updated: 3 October 2026',
     'terms.intro':
       '<p>These Terms of Service ("Terms") govern your use of the A-To-Do to-do list application (the "Service"), operated by [Legal entity name] ("we", "us"). By creating an account or otherwise using the Service, you agree to these Terms.</p>',
     'terms.s1':
@@ -36,14 +38,16 @@ const TERMS_I18N = {
     'terms.s12':
       '<h2>12. Governing law</h2><p>These Terms are governed by the laws of [Jurisdiction], without regard to its conflict-of-laws principles.</p>',
     'terms.s13':
-      '<h2>13. Contact us</h2><p>Questions about these Terms? Contact us at <a href="mailto:support@a-to-do.example">support@a-to-do.example</a>.</p>',
+      '<h2>13. Contact us</h2><p>Questions about these Terms? Write to us through our <a href="support.html">support form</a> - many answers are already in the <a href="faq.html">FAQ</a>.</p>',
   },
   hr: {
     'nav.login': 'Prijava',
+    'nav.faq': 'Česta pitanja',
+    'nav.support': 'Kontakt podrške',
     'nav.privacy': 'Pravila privatnosti',
     'nav.terms': 'Uvjeti korištenja',
     'terms.pageTitle': 'Uvjeti korištenja',
-    'terms.updated': 'Zadnje ažurirano: 2. listopada 2026.',
+    'terms.updated': 'Zadnje ažurirano: 3. listopada 2026.',
     'terms.intro':
       '<p>Ovi Uvjeti korištenja ("Uvjeti") uređuju vaše korištenje aplikacije za popis obveza A-To-Do ("Usluga"), koju operativno vodi [Naziv pravnog subjekta] ("mi"). Otvaranjem računa ili korištenjem Usluge na drugi način, prihvaćate ove Uvjete.</p>',
     'terms.s1':
@@ -71,7 +75,7 @@ const TERMS_I18N = {
     'terms.s12':
       '<h2>12. Mjerodavno pravo</h2><p>Ovi Uvjeti podliježu zakonima [Jurisdikcija], bez obzira na njihova pravila o sukobu zakona.</p>',
     'terms.s13':
-      '<h2>13. Kontaktirajte nas</h2><p>Imate pitanja o ovim Uvjetima? Kontaktirajte nas na <a href="mailto:support@a-to-do.example">support@a-to-do.example</a>.</p>',
+      '<h2>13. Kontaktirajte nas</h2><p>Imate pitanja o ovim Uvjetima? Pišite nam putem našeg <a href="support.html">obrasca za podršku</a> - mnogi su odgovori već u <a href="faq.html">čestim pitanjima</a>.</p>',
   },
 };
 

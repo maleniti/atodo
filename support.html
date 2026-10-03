@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact support -- A-To-Do</title>
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="landing.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="landing.html">A-To-Do</a>
+    <div class="site-header-right">
+      <div class="lang-toggle"><button type="button" data-lang="en">EN</button><button type="button" data-lang="hr">HR</button></div>
+      <a class="login-link js-login-link" href="index.html" data-i18n="nav.login">Log in</a>
+    </div>
+  </header>
+
+  <main class="legal-content support-page">
+    <h1 data-i18n="support.title">Contact support</h1>
+    <p class="support-intro" data-i18n-html="support.intro"></p>
+
+    <form id="support-form" class="support-form">
+      <div class="support-row">
+        <div class="support-field">
+          <label for="support-name" data-i18n="support.name">Name</label>
+          <input id="support-name" type="text" required autocomplete="name">
+        </div>
+        <div class="support-field">
+          <label for="support-email" data-i18n="support.email">Email</label>
+          <input id="support-email" type="email" required autocomplete="email">
+        </div>
+      </div>
+      <p id="support-account-note" class="support-note hidden"></p>
+
+      <div class="support-field">
+        <label for="support-kind" data-i18n="support.kind">What is it about?</label>
+        <select id="support-kind" required>
+          <option value="" disabled selected data-i18n="support.kindChoose">choose one…</option>
+          <option value="billing" data-i18n="support.kindBilling">Billing &amp; payments</option>
+          <option value="account" data-i18n="support.kindAccount">Account, login &amp; data</option>
+          <option value="bug" data-i18n="support.kindBug">Something isn't working (bug)</option>
+          <option value="feature" data-i18n="support.kindFeature">Feature suggestion</option>
+          <option value="complaint" data-i18n="support.kindComplaint">Complaint</option>
+          <option value="other" data-i18n="support.kindOther">Something else</option>
+        </select>
+      </div>
+
+      <div class="support-field">
+        <label for="support-msg" data-i18n="support.msg">Message</label>
+        <textarea id="support-msg" rows="7" required maxlength="10000"></textarea>
+        <p id="support-kind-hint" class="support-note"></p>
+      </div>
+
+      <div class="support-consent">
+        <input id="support-consent" type="checkbox" required>
+        <label for="support-consent" data-i18n-html="support.consent"></label>
+      </div>
+
+      <div class="support-actions">
+        <span id="support-status" class="support-status" data-i18n="support.replyTime">We'll reply by email as soon as we can.</span>
+        <button type="submit" id="support-submit" class="btn btn-primary" data-i18n="support.send">Send</button>
+      </div>
+    </form>
+  </main>
+
+  <footer class="site-footer">
+    A-To-Do &middot; <a class="js-login-link" href="index.html" data-i18n="nav.login">Log in</a> &middot; <a href="faq.html" data-i18n="nav.faq">FAQ</a> &middot; <a href="support.html" data-i18n="nav.support">Contact support</a> &middot; <a href="privacy.html" data-i18n="nav.privacy">Privacy Policy</a> &middot; <a href="terms.html" data-i18n="nav.terms">Terms of Service</a>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="version.js"></script>
+  <script src="auth.js"></script>
+  <script src="site-i18n.js"></script>
+  <script src="support.js"></script>
+</body>
+</html>

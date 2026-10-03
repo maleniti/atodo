@@ -348,3 +348,54 @@ a { color: inherit; }
   visibility: visible;
   transition: opacity 0.15s, visibility 0s;
 }
+
+/* support.html's form and faq.html's questions -- both inside .legal-content
+   (the legal pages' readable column). */
+.support-intro { margin-bottom: 24px; }
+.support-form { display: flex; flex-direction: column; gap: 16px; }
+.support-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.support-field { display: flex; flex-direction: column; gap: 6px; }
+.support-field label { font-size: 13px; color: #e8eaed; }
+.support-field input,
+.support-field select,
+.support-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #1a1f26;
+  color: #e8eaed;
+  font: inherit;
+  font-size: 14px;
+}
+.support-field textarea { resize: vertical; min-height: 140px; }
+.support-field input:focus,
+.support-field select:focus,
+.support-field textarea:focus { outline: none; border-color: #8ab4f8; }
+.legal-content .support-note { font-size: 12px; color: #9aa0a6; margin: 0; }
+.support-note.hidden { display: none; }
+.support-consent { display: flex; gap: 10px; align-items: flex-start; }
+.support-consent input { margin-top: 3px; }
+.support-consent label { font-size: 13px; color: #c4c7c5; }
+.support-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+.support-status { font-size: 13px; color: #9aa0a6; }
+.support-status.success { color: #81c995; }
+.support-status.error { color: #f28b82; }
+.support-actions .btn:disabled { opacity: 0.6; cursor: default; }
+
+.faq-page details {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 8px;
+}
+.faq-page summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  color: #e8eaed;
+  font-size: 15px;
+  font-weight: 600;
+}
+.faq-page details[open] summary { border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.faq-page .faq-answer { padding: 4px 16px 8px; }
