@@ -5333,15 +5333,12 @@ function buildTodoItemRow(item, isToday) {
     (item.failed ? ' failed' : '') +
     (isActiveHere ? ' focused' : '') +
     (effectiveTask.allDay ? ' all-day' : '') +
-    // Kept through .completed (still green, just crossed out like any other
-    // completed task -- see .todo-item.appointment .todo-item-name's own
-    // source-order comment in style.css) but not through .failed -- an
-    // appointment past its due date is tagged .failed instead (red, crossed
-    // out), and that should win over the still-green appointment tint.
-    (effectiveTask.appointment && !item.failed ? ' appointment' : '') +
-    // Same idea for a passive task's own tint -- once it's marked failed
-    // (see toggleTaskFailedMark), .failed's own red styling takes over.
-    (effectiveTask.passive && !item.failed ? ' passive' : '') +
+    // An appointment and a passive task keep their own tint through
+    // .completed and .failed alike: still crossed out, but green / the
+    // passive color rather than white or red (see the source order of
+    // .todo-item.appointment/.passive .todo-item-name in style.css).
+    (effectiveTask.appointment ? ' appointment' : '') +
+    (effectiveTask.passive ? ' passive' : '') +
     // The "pending/overdue" and "all tasks" views show a dismissed
     // occurrence right alongside ones that aren't (see
     // computeTodoDisplayItems/computeAllTasksItems, both of which ignore
