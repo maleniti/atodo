@@ -3606,12 +3606,18 @@ function todayTargetDayRef() {
 // highlighted day there however short it is (a day's top higher up could
 // already be past its threshold, highlighting the next one instead).
 // Nothing from today on = the top of the list.
-function scrollTodoToToday(behavior = 'smooth') {
+//
+// From the "Today" button (canStartOver): if today, in the viewed range,
+// isn't among the loaded days yet, the list starts over on it. Never from
+// renderTodo's own opening scroll -- starting over there would render and
+// land right back here. (Days outside the viewed range don't count: the
+// server names the nearest day either side even across months.)
+function scrollTodoToToday(behavior = 'smooth', { canStartOver = false } = {}) {
   const ref = todayTargetDayRef();
-  // Today isn't among the loaded days (loading hasn't reached it) -- the
-  // list starts over on it.
   const todayISO = Dates.todayISO();
-  if ((!ref && todoInViewedRange(todoEdges.after)) || (ref && ref.dateISO > todayISO && todoEdges.before && todoEdges.before >= todayISO)) {
+  const unloadedAfter = !ref && todoInViewedRange(todoEdges.after);
+  const unloadedBefore = !!ref && ref.dateISO > todayISO && todoInViewedRange(todoEdges.before) && todoEdges.before >= todayISO;
+  if (canStartOver && todoInViewedRange(todayISO) && (unloadedAfter || unloadedBefore)) {
     resetTodoList();
     return;
   }
@@ -4164,7 +4170,7 @@ function renderTodo() {
     todayBtn.textContent = t('todo.backToToday');
     todayBtn.onclick = () => {
       if (isBrowsingOtherTodoMonth()) jumpTodoToCurrentMonth();
-      else scrollTodoToToday();
+      else scrollTodoToToday('smooth', { canStartOver: true });
     };
     header.appendChild(todayBtn);
 
