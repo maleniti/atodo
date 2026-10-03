@@ -14,7 +14,8 @@ separate repository (see [How it fits together](#how-it-fits-together)).
 - **Tasks and recurrence** — one-off and recurring tasks (every N days,
   weekly on chosen weekdays, monthly by day or by "2nd Tuesday", …), with an
   end date, all-day or timed, and "recur until completed" tasks that carry
-  over day by day until done.
+  over day by day until done. A timed task can be fixed to a time zone (a
+  call at 09:00 New York time shows at 15:00 in Zagreb).
 - **Overdue vs. failed** — a missed task carries over as overdue; one marked
   as an appointment becomes failed once its time has passed.
 - **Occurrences** — every occurrence of a recurring task has its own state,
@@ -56,7 +57,9 @@ separate repository (see [How it fits together](#how-it-fits-together)).
 | **male-niti** | The platform: builds and deploys everything with Docker Compose (`./mn`), including the TLS proxy, database backups, maintenance mode and versioned releases. |
 
 The client keeps nothing of value in the browser: tasks, settings and
-subscriptions live on the backend. `localStorage` only holds the session
+subscriptions live on the backend, and so do the task rules (recurrence,
+overdue, timers, the free plan's limits). The client loads the list one day
+at a time, as far as the screen needs, and sends one request per change. `localStorage` only holds the session
 token and a few display preferences from before login.
 
 ## Files
@@ -64,7 +67,7 @@ token and a few display preferences from before login.
 | Files | Purpose |
 |---|---|
 | `index.html`, `app.js`, `style.css` | The app itself. |
-| `recurrence.js`, `occurrence.js` | Recurrence date math and the task/occurrence data model — pure logic, unit-tested. |
+| `dates.js` | Calendar helpers and the browser's time zone. |
 | `auth.js` | The API client every page uses (`apiFetch`), plus thin wrappers for the auth and subscription endpoints. |
 | `anchor-prices.js` | Loads the current prices and fills every price and anchor-price badge. |
 | `sharedInputBehavior.js` | Text-selection behaviour for every input. |
@@ -119,14 +122,9 @@ not here.
 
 ## Tests
 
-```bash
-node recurrence.test.js
-node occurrence.test.js
-```
-
-Plain Node scripts using `node:assert`; each stops at the first failure.
-They cover the recurrence and occurrence logic only — the rest of the
-client is tested by hand against a running backend.
+The task rules and their tests live in the backend (male-niti-api,
+`npm test`). The client has no automated tests; it's tested by hand against
+a running backend.
 
 ## Deployment
 
@@ -137,16 +135,14 @@ male-niti's README.
 
 ## Known limitations
 
-- **The whole task list travels in every request** — see the plan below.
-  Until then, a save is limited to 10 MB.
-- **Last save wins between devices.** Saving replaces the account's whole
-  task list, without checking whether another device or tab saved in the
-  meantime, so two devices editing at once can overwrite each other's
-  changes.
-- **Unsaved changes live in the open tab only.** A save that fails (no
-  connection, an update in progress) stays queued and is retried, with a
-  "not saved" banner and a warning before leaving the page — but closing the
-  tab loses it.
+- **Changes from another device show up as the list is read**, not
+  instantly: a day on screen is fetched again when its copy is over 30
+  seconds old, after a change, or when the tab comes back into view. The
+  side panel and other open views refresh after your own changes.
+- **Unsent changes live in the open tab only.** A change that can't reach
+  the server (no connection, an update in progress) stays queued and is
+  retried, with a "not saved" banner and a warning before leaving the page —
+  but closing the tab loses it.
 - **Import replaces everything.** Importing a data export replaces the
   account's whole task list; there is no merging.
 - **No plan switching.** Moving between monthly and yearly isn't supported
@@ -162,41 +158,10 @@ male-niti's README.
 - **Support replies are sent by email by hand**, and support messages are
   not deleted automatically.
 - **Two languages**: English and Croatian.
-- **Little automated testing**: only the recurrence and occurrence logic
-  has unit tests.
+- **Little automated testing**: only the backend's task rules have unit
+  tests.
 
 ## Planned
-
-### Saving and loading individual tasks
-
-Today the client loads and saves the account's entire task list at once —
-every task, every occurrence, and their notes and activity logs. That's
-simple and keeps the client the single place where changes are computed,
-but the requests grow with the account's history:
-
-| Endpoint | What it carries |
-|---|---|
-| `GET /atodo/v1/tasks` | The whole task list, on every app load. |
-| `PUT /atodo/v1/tasks` | The whole task list, after every change — a checkbox, a note, a timer checkpoint. Allowed up to 10 MB (the backend's limit for this route and the TLS proxy's `client_max_body_size`); everything else is limited to 100 kB. |
-| `PUT /atodo/v1/tasks`, via Settings → Import data | A whole imported list at once. |
-
-(Settings → Download my data is built in the browser from what's already
-loaded, so it isn't a request.)
-
-The plan is to change the API and the client to work with individual tasks
-and occurrences instead:
-
-- **API** — endpoints for one task or occurrence at a time (create, update,
-  delete), with a revision per record so a save made on a stale copy is
-  detected instead of silently overwriting another device's change; loading
-  limited to what's being shown (e.g. a month, or active tasks) rather than
-  the whole history; import as a batch operation of its own.
-- **Client** — saving only what changed, keeping the queue-and-retry
-  behaviour for each change, and reconciling with the server when another
-  device has changed the same task.
-
-This removes the size limit, makes saves cheap regardless of history, and
-fixes the "last save wins" problem between devices.
 
 ### Under consideration
 
