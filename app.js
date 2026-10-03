@@ -3091,7 +3091,11 @@ async function openTaskEditor(taskId, { tab = 'details', occurrenceDate = null }
   const decoded = decodePatternResult(result);
   if (!decoded) return;
 
-  // Both are no-ops server-side when nothing in them changed.
+  // Both are no-ops server-side when nothing in them changed. The pattern
+  // goes first: refused (making a one-off recurring past the free plan's
+  // limit, say -- reportActionError offers a subscription), nothing of the
+  // edit is saved.
+  if (!(await taskAction(taskId, '/pattern', { method: 'PUT', body: decoded }))) return;
   const allDay = result.allDay.length > 0;
   taskAction(taskId, '', {
     method: 'PATCH',
@@ -3106,7 +3110,6 @@ async function openTaskEditor(taskId, { tab = 'details', occurrenceDate = null }
       passive: result.passive.length > 0,
     },
   });
-  taskAction(taskId, '/pattern', { method: 'PUT', body: decoded });
 }
 
 function prependEditorHint(pane, key) {
