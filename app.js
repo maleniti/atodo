@@ -3389,7 +3389,16 @@ function resolveItem(item) {
   const undo = item[resolvedKey];
   const action = item.passive ? (undo ? 'unfail' : 'fail') : undo ? 'reopen' : 'complete';
   item[resolvedKey] = !undo;
-  if (!undo) item.timer = null;
+  // What the row offers changes with it right away, as the server will
+  // have it -- so it can be taken back at once, before the list is fetched
+  // again (which waits a moment after a completion, see `linger`).
+  const opposite = { complete: 'reopen', reopen: 'complete', fail: 'unfail', unfail: 'fail' };
+  item.actions = (item.actions || []).map((a) => (a === action ? opposite[action] : a));
+  if (!undo) {
+    item.timer = null;
+    item.active = false;
+    item.actions = item.actions.filter((a) => !['timer', 'pauseTimer', 'resumeTimer', 'cancelTimer', 'focus', 'unfocus'].includes(a));
+  }
   renderTodo();
   if (!isNarrowLayout()) selectTaskForSidePanel(item.taskId, item.occurrenceDate);
   occurrenceAction(item, action, { linger: !undo });
@@ -3552,15 +3561,15 @@ function updateTodoDayHighlight() {
   }
 
   const current = todoDayRefs[index];
-  // A full re-render rebuilt every row (see renderTodo), so the classes are
-  // re-applied whenever the day changes or nothing's applied yet.
-  if (current.dateISO !== highlightedTodoDate || !todoDayRefs.some((ref) => ref.header.classList.contains('todo-highlight-applied'))) {
+  // renderTodo builds every day in the current highlight state already
+  // (see there), so the classes only change when the day does -- or when
+  // nothing was highlighted yet (the first drawing dims all but today).
+  if (current.dateISO !== highlightedTodoDate || current.header.classList.contains('not-today')) {
     highlightedTodoDate = current.dateISO;
     for (const ref of todoDayRefs) {
       const dimmed = ref !== current;
       ref.group.classList.toggle('highlighted', !dimmed);
       ref.header.classList.toggle('not-today', dimmed);
-      ref.header.classList.add('todo-highlight-applied');
       for (const row of ref.columns.querySelectorAll('.todo-item')) row.classList.toggle('not-today', dimmed);
     }
   }
@@ -3886,10 +3895,45 @@ function formatItemDueTime(item) {
   return item.zoneDueTime ? `${local} · ${t('todo.zoneTime', { time: formatTimeOfDay(item.zoneDueTime), city: timeZoneCity(item.timeZone) })}` : local;
 }
 
+// The row's meta line: the due time (or overdue/failed since), or while a
+// timer is attached, the timer -- "X of Y" for a countdown, elapsed time for
+// a count-up timer or a countdown run past zero into overtime.
+function todoItemMetaText(item) {
+  if (item.timer) {
+    const timer = item.timer;
+    const remaining = currentTimerRemaining(timer);
+    if (timer.mode === 'countup') return t('todo.timerElapsed', { elapsed: formatElapsedDuration(timerElapsedSeconds(timer)) });
+    if (remaining < 0) {
+      return t('todo.timerElapsedPlanned', {
+        elapsed: formatElapsedDuration(timerElapsedSeconds(timer)),
+        planned: formatElapsedDuration(timer.totalSeconds),
+      });
+    }
+    return t('todo.timerRemainingOfTotal', {
+      remaining: formatTimerDuration(Math.max(0, remaining)),
+      total: formatTimerDuration(timer.totalSeconds),
+    });
+  }
+  if (item.allDay) {
+    if (item.kind === 'tomorrow') return t('todo.tomorrowAllDay');
+    if (item.failed) return t('todo.failedWasDue', { date: item.occurrenceDate });
+    if (item.overdue && !item.completed) return t('todo.overdueSince', { date: item.occurrenceDate });
+    return t('todo.allDay');
+  }
+  if (item.kind === 'tomorrow') return t('todo.tomorrowAt', { time: formatItemDueTime(item) });
+  if (item.failed) return t('todo.failedWasDueAt', { date: item.occurrenceDate, time: formatItemDueTime(item) });
+  if (item.overdue && !item.completed) return t('todo.overdueSinceAt', { date: item.occurrenceDate, time: formatItemDueTime(item) });
+  return t('todo.due', { time: formatItemDueTime(item) });
+}
+
+const todoTimerBarWidth = (item) => `${Math.max(0, Math.min(100, timerProgressPercent(item.timer)))}%`;
+
 // Builds a single to-do row from one of the server's items (see
 // views.toItem: what it shows, and which actions it allows) -- appended
-// into either of a day's two columns.
-function buildTodoItemRow(item, isToday) {
+// into either of a day's two columns. `dimmed`: every day but the
+// highlighted one (see updateTodoDayHighlight) -- built that way from the
+// start, since switching it on a fresh row would play its transition.
+function buildTodoItemRow(item, dimmed) {
   const has = (action) => (item.actions || []).includes(action);
   const virtual = isSubscriptionPromptItem(item);
   const label = virtual ? t('subscribe.taskName') : item.label;
@@ -3898,6 +3942,7 @@ function buildTodoItemRow(item, isToday) {
   const row = document.createElement('div');
   row.__taskId = itemTaskId(item); // for refreshSelectedHighlight's cheap re-tag, see there
   row.__occurrenceDate = item.occurrenceDate;
+  row.__item = item; // for the timer's in-place ticks, see timerTick
   row.className =
     'todo-item' +
     (item.completed ? ' completed' : '') +
@@ -3915,7 +3960,7 @@ function buildTodoItemRow(item, isToday) {
     // recurrence" never shows one.
     (item.dismissed ? ' dismissed' : '') +
     (selected ? ' selected' : '') +
-    (isToday ? '' : ' not-today');
+    (dimmed ? ' not-today' : '');
 
   // A reverse progress bar behind the row's own content -- full at the
   // start, empties out to nothing as the timer counts down to zero.
@@ -3925,7 +3970,7 @@ function buildTodoItemRow(item, isToday) {
   if (item.timer) {
     const bar = document.createElement('div');
     bar.className = 'todo-timer-bar';
-    bar.style.width = `${Math.max(0, Math.min(100, timerProgressPercent(item.timer)))}%`;
+    bar.style.width = todoTimerBarWidth(item);
     row.appendChild(bar);
   }
 
@@ -3977,42 +4022,7 @@ function buildTodoItemRow(item, isToday) {
 
   const meta = document.createElement('div');
   meta.className = 'todo-item-meta' + (item.overdue && !item.completed ? ' overdue' : '') + (item.failed ? ' failed' : '');
-  if (item.timer) {
-    // Takes over the whole meta line while a timer is attached: "X of Y"
-    // for a countdown; elapsed time for a count-up timer or a countdown run
-    // past zero into overtime.
-    const timer = item.timer;
-    const remaining = currentTimerRemaining(timer);
-    if (timer.mode === 'countup') {
-      meta.textContent = t('todo.timerElapsed', { elapsed: formatElapsedDuration(timerElapsedSeconds(timer)) });
-    } else if (remaining < 0) {
-      meta.textContent = t('todo.timerElapsedPlanned', {
-        elapsed: formatElapsedDuration(timerElapsedSeconds(timer)),
-        planned: formatElapsedDuration(timer.totalSeconds),
-      });
-    } else {
-      meta.textContent = t('todo.timerRemainingOfTotal', {
-        remaining: formatTimerDuration(Math.max(0, remaining)),
-        total: formatTimerDuration(timer.totalSeconds),
-      });
-    }
-  } else {
-    meta.textContent = item.allDay
-      ? item.kind === 'tomorrow'
-        ? t('todo.tomorrowAllDay')
-        : item.failed
-          ? t('todo.failedWasDue', { date: item.occurrenceDate })
-          : item.overdue && !item.completed
-            ? t('todo.overdueSince', { date: item.occurrenceDate })
-            : t('todo.allDay')
-      : item.kind === 'tomorrow'
-        ? t('todo.tomorrowAt', { time: formatItemDueTime(item) })
-        : item.failed
-          ? t('todo.failedWasDueAt', { date: item.occurrenceDate, time: formatItemDueTime(item) })
-          : item.overdue && !item.completed
-            ? t('todo.overdueSinceAt', { date: item.occurrenceDate, time: formatItemDueTime(item) })
-            : t('todo.due', { time: formatItemDueTime(item) });
-  }
+  meta.textContent = todoItemMetaText(item);
   text.appendChild(meta);
 
   // An empty description line after the meta when there's none, so every
@@ -4130,19 +4140,26 @@ function renderTodo() {
   }
 
   const anchor = todoScrollToTodayOnRender ? null : todoScrollAnchor();
+  // Each day is drawn as it looked before -- highlighted or dimmed, its
+  // fade and name panel where they were (see updateTodoDayHighlight) --
+  // rather than from a default that's corrected right after: every row has
+  // a transition, so a correction would play as a flicker on each redraw.
+  const previousRefs = new Map(todoDayRefs.map((ref) => [ref.dateISO, ref]));
   todoListEl.innerHTML = '';
   const todayISO = Dates.todayISO();
   todoDayRefs = []; // highlightedTodoDate stays: the highlight carries on from it (see updateTodoDayHighlight)
 
   for (const dateISO of todoDayOrder) {
     const isToday = dateISO === todayISO;
+    const dimmed = highlightedTodoDate ? dateISO !== highlightedTodoDate : !isToday;
+    const previous = previousRefs.get(dateISO);
     const dayItems = todoDays.get(dateISO);
 
     // One group per day, holding all of it -- the highlighted day's header
     // sticks within it (see .todo-day.highlighted), and the name panel is
     // positioned in it (see updateTodoDayHighlight).
     const group = document.createElement('div');
-    group.className = 'todo-day';
+    group.className = 'todo-day' + (dimmed ? '' : ' highlighted');
     todoListEl.appendChild(group);
 
     // Zero-height marker where this day's section starts --
@@ -4153,7 +4170,7 @@ function renderTodo() {
     group.appendChild(sentinel);
 
     const header = document.createElement('div');
-    header.className = 'todo-day-header' + (isToday ? '' : ' not-today');
+    header.className = 'todo-day-header' + (dimmed ? ' not-today' : '');
 
     const headerLabel = document.createElement('span');
     headerLabel.textContent = describeDayLabel(dateISO, todayISO);
@@ -4169,7 +4186,7 @@ function renderTodo() {
     // Shown only on the highlighted day, and only if that isn't today.
     const todayBtn = document.createElement('button');
     todayBtn.type = 'button';
-    todayBtn.className = 'menu-btn-small todo-day-today-btn hidden';
+    todayBtn.className = 'menu-btn-small todo-day-today-btn' + (previous && !previous.todayBtn.classList.contains('hidden') ? '' : ' hidden');
     todayBtn.textContent = t('todo.backToToday');
     todayBtn.onclick = () => {
       if (isBrowsingOtherTodoMonth()) jumpTodoToCurrentMonth();
@@ -4203,8 +4220,14 @@ function renderTodo() {
     for (const columnItems of columnItemLists) {
       const column = document.createElement('div');
       column.className = 'todo-day-column';
-      for (const item of columnItems) column.appendChild(buildTodoItemRow(item, isToday));
+      for (const item of columnItems) column.appendChild(buildTodoItemRow(item, dimmed));
       columns.appendChild(column);
+    }
+    if (previous) {
+      columns.style.opacity = previous.columns.style.opacity;
+      panel.style.opacity = previous.panel.style.opacity;
+      panel.style.top = previous.panel.style.top;
+      panel.classList.toggle('panel-out', previous.panel.classList.contains('panel-out'));
     }
     group.appendChild(columns);
     group.appendChild(panel);
@@ -4278,11 +4301,11 @@ todoViewportEl.addEventListener('scroll', () => {
   }, 120);
 });
 
-// A running timer's display needs to tick every second -- re-rendering just
-// the rows in place would duplicate buildTodoItemRow, so the whole list is
-// redrawn, once a second, while (and only while) a loaded item's timer is
-// actually running (a "Set" timer waiting for its focus has nothing to
-// tick). A countdown reaching zero (without "continue past zero") or any
+// A running timer's display needs to tick every second -- its row's bar and
+// meta line are updated in place (redrawing the list would restart every
+// row's transitions), once a second, while (and only while) a loaded item's
+// timer is actually running (a "Set" timer waiting for its focus has
+// nothing to tick). A countdown reaching zero (without "continue past zero") or any
 // timer reaching the MAX_TIMER_SECONDS cap is the server's to stop: the list
 // is refreshed then, and the server's answer carries the chime (see
 // applyActionResult/fetchTodoDay).
@@ -4315,7 +4338,15 @@ function timerTick() {
       timerExpiryRefreshed = false;
     }
   }
-  renderTodo();
+  // Just the timed rows' bar and meta line, in place -- not a redraw.
+  for (const row of todoListEl.querySelectorAll('.todo-item')) {
+    const rowItem = row.__item;
+    if (!rowItem || !rowItem.timer) continue;
+    const bar = row.querySelector('.todo-timer-bar');
+    if (bar) bar.style.width = todoTimerBarWidth(rowItem);
+    const meta = row.querySelector('.todo-item-meta');
+    if (meta) meta.textContent = todoItemMetaText(rowItem);
+  }
 }
 
 // ---------------------------------------------------------------------------
