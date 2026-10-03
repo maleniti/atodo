@@ -10,16 +10,6 @@
 // without its own copies -- there's exactly one definition of each, here.
 // ---------------------------------------------------------------------------
 
-// Still generated client-side, unlike an account's id -- a task's id is
-// needed synchronously in the middle of a lot of local task-list logic
-// (recurring-series splits, manual occurrences, merging a series, ...) that
-// would otherwise have to await a round trip partway through building a
-// single save. See PUT /tasks in api-spec.yaml, which accepts
-// client-generated ids rather than inventing its own.
-function uid() {
-  return Math.random().toString(36).slice(2, 9);
-}
-
 const AUTH_TOKEN_KEY = 'advanced-todo-auth-token';
 
 // Matches every error response's shape in api-spec.yaml ({ code, message })
@@ -50,7 +40,11 @@ const API_BASE = `${(window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || ''}/a
 // so every existing `err.code === '...'` check throughout app.js keeps
 // working unchanged.
 async function apiFetch(path, { method = 'GET', body, token } = {}) {
+  // The browser's time zone: the server works out "today" and due times in
+  // it (see dates.js).
   const headers = {};
+  const timeZone = typeof Dates !== 'undefined' ? Dates.timeZone() : '';
+  if (timeZone) headers['X-Timezone'] = timeZone;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const authToken = token !== undefined ? token : localStorage.getItem(AUTH_TOKEN_KEY);
   if (authToken) headers.Authorization = `Bearer ${authToken}`;

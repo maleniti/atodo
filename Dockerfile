@@ -1,6 +1,6 @@
 FROM nginx:alpine
 
-COPY index.html style.css app.js recurrence.js occurrence.js sharedInputBehavior.js auth.js /usr/share/nginx/html/
+COPY index.html style.css app.js dates.js sharedInputBehavior.js auth.js /usr/share/nginx/html/
 COPY landing.html landing.css landing.js checkout.html checkout.js success.html success.js cancel.html cancel.js privacy.html privacy.js terms.html terms.js site-i18n.js anchor-prices.js faq.html faq.js support.html support.js /usr/share/nginx/html/
 
 COPY favicon.ico favicon.svg apple-touch-icon.png logo-on-dark.svg /usr/share/nginx/html/

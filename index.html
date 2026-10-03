@@ -244,6 +244,17 @@
     </div>
   </div>
 
+  <div id="import-progress-overlay" class="modal-overlay hidden">
+    <div class="modal info-modal">
+      <div class="modal-title" data-i18n="data.importTitle">Importing data</div>
+      <div id="import-progress-message" class="modal-message"></div>
+      <div class="import-progress-track"><div id="import-progress-bar" class="import-progress-bar"></div></div>
+      <div class="modal-actions">
+        <button id="import-progress-cancel" class="modal-cancel" data-i18n="common.cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="todo-manage-overlay" class="modal-overlay hidden">
     <div class="modal todo-manage-modal">
       <button id="todo-manage-close" class="modal-close-btn" title="Close" data-i18n-title="common.close">
@@ -528,8 +539,7 @@
   <script src="config.js"></script>
   <script src="version.js"></script>
   <script src="sharedInputBehavior.js"></script>
-  <script src="recurrence.js"></script>
-  <script src="occurrence.js"></script>
+  <script src="dates.js"></script>
   <script src="auth.js"></script>
   <script src="anchor-prices.js"></script>
   <script src="app.js"></script>
