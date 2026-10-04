@@ -1914,6 +1914,11 @@ let todoEdges = { before: null, after: null };
 // to an earlier list's requests are ignored.
 let todoGeneration = 0;
 let todoLoading = false;
+// While the list is opening (resetTodoList until its first fill is done),
+// each render puts today back at the reading point -- the first day alone
+// can't scroll that far, and days loaded above it would push it down --
+// unless the reader has started scrolling themselves.
+let todoOpening = false;
 
 const todoInViewedRange = (date) => !!date && (todoViewMode === 'next-recurrence' || date.slice(0, 7) === viewedMonthKey);
 
@@ -1949,6 +1954,7 @@ async function resetTodoList() {
   todoFetchedAt = new Map();
   todoEdges = { before: null, after: null };
   todoScrollToTodayOnRender = true;
+  todoOpening = true;
   const todayISO = Dates.todayISO();
   const start = todoViewMode === 'next-recurrence' || viewedMonthKey === todayISO.slice(0, 7) ? todayISO : `${viewedMonthKey}-01`;
   let day;
@@ -1958,7 +1964,10 @@ async function resetTodoList() {
     if (generation === todoGeneration && !todoInViewedRange(day.date)) day = await fetchTodoDay(start, 'before');
   } catch (err) {
     console.error('Failed to load the list:', err);
-    if (generation === todoGeneration) renderTodoLoadError(err);
+    if (generation === todoGeneration) {
+      todoOpening = false;
+      renderTodoLoadError(err);
+    }
     return;
   }
   if (generation !== todoGeneration) return;
@@ -1968,6 +1977,7 @@ async function resetTodoList() {
   }
   renderTodo();
   await fillTodoList(generation);
+  if (generation === todoGeneration) todoOpening = false;
 }
 
 // Loads more days while the list doesn't fill its view plus a margin -- after
@@ -3430,8 +3440,15 @@ const todoViewToggleOpts = Array.from(todoViewToggleEl.querySelectorAll('.todo-v
 // { dateISO, sentinel, header, columns } per visible day, in display order
 // -- rebuilt on every renderTodo(). See updateTodoDayHighlight.
 let todoDayRefs = [];
-// Which day is highlighted right now (see updateTodoDayHighlight).
+// Which day is highlighted right now (see updateTodoDayHighlight) -- the
+// day being read (readingTodoDate), or one the mouse is over.
 let highlightedTodoDate = null;
+// The day the reading point is in, by the scroll position alone (with its
+// hysteresis) -- what's highlighted whenever no hovered day takes over.
+let readingTodoDate = null;
+// Where the mouse is over the list (client coordinates), or null when it's
+// elsewhere -- see hoveredTodoDayRef.
+let todoPointer = null;
 // Set whenever the list should open positioned on today -- the first
 // render, and switching view or month -- rather than keep its scroll.
 let todoScrollToTodayOnRender = true;
@@ -3458,6 +3475,11 @@ let todoScrollToTodayOnRender = true;
 //    viewport -- the day below, highlighted, almost scrolled out of view.
 // Applied repeatedly on each update, so a fast scroll or a jump settles in
 // one go.
+//
+// The mouse can take the highlight over: a day under it that's well in view
+// (all its tasks visible, or its first in the upper half -- see
+// hoveredTodoDayRef) is highlighted instead, and once the mouse leaves the
+// list (or that day scrolls out of reach) the day being read is again.
 //
 // Only the highlighted day shows its header -- sticky at the top while the
 // day is on screen, with its "+" and a "Today" button whenever it isn't
@@ -3535,13 +3557,14 @@ function sizeTodoListSpacers() {
 function updateTodoDayHighlight() {
   if (todoDayRefs.length === 0) {
     highlightedTodoDate = null;
+    readingTodoDate = null;
     return;
   }
   const { height, bandBottom, reading } = todoReadingGeometry();
 
-  // Start from the day highlighted so far (still listed after a render?),
+  // Start from the day being read so far (still listed after a render?),
   // or else from whichever day the reading point is in.
-  let index = todoDayRefs.findIndex((ref) => ref.dateISO === highlightedTodoDate);
+  let index = todoDayRefs.findIndex((ref) => ref.dateISO === readingTodoDate);
   if (index < 0) {
     index = 0;
     for (let i = 0; i < todoDayRefs.length; i++) if (todoDayExtent(i).top <= reading) index = i;
@@ -3560,7 +3583,9 @@ function updateTodoDayHighlight() {
     break;
   }
 
-  const current = todoDayRefs[index];
+  readingTodoDate = todoDayRefs[index].dateISO;
+  // A day the mouse is over takes the highlight while it's well in view.
+  const current = hoveredTodoDayRef() || todoDayRefs[index];
   // renderTodo builds every day in the current highlight state already
   // (see there), so the classes only change when the day does -- or when
   // nothing was highlighted yet (the first drawing dims all but today).
@@ -3680,7 +3705,7 @@ document.addEventListener('keydown', (e) => {
   if (target instanceof Element && target.closest('input, textarea, select, button, [contenteditable]')) return;
   if (document.querySelector('.modal-overlay:not(.hidden)') || !todoViewportEl.offsetParent || !todoDayRefs.length) return;
   e.preventDefault();
-  let index = todoKeyStepIndex ?? todoDayRefs.findIndex((ref) => ref.dateISO === highlightedTodoDate);
+  let index = todoKeyStepIndex ?? todoDayRefs.findIndex((ref) => ref.dateISO === readingTodoDate);
   if (index < 0) index = 0;
   if (forward) {
     index = Math.min(index + 1, todoDayRefs.length - 1);
@@ -3806,6 +3831,47 @@ function jumpTodoToCurrentMonth() {
 todoMonthLabelEl.onclick = jumpTodoToCurrentMonth;
 
 todoViewportEl.addEventListener('scroll', updateTodoDayHighlight);
+
+// The day under the mouse, if it's well in view -- all of its tasks inside
+// the list's visible part, or its first task in the upper half of it -- and
+// so highlighted in place of the day being read (updateTodoDayHighlight).
+// Looked up from the pointer's last position each time, so a day scrolling
+// under a still mouse counts too. By position, not by the element under the
+// pointer: a day reaches down to the next day's top, so the gap between them
+// (the next header's margin) doesn't hand the highlight back on its way.
+function hoveredTodoDayRef() {
+  if (!todoPointer) return null;
+  // Not through something covering the list (a menu, a modal).
+  const el = document.elementFromPoint(todoPointer.x, todoPointer.y);
+  if (!el || !todoViewportEl.contains(el)) return null;
+  const y = todoPointer.y;
+  const ref = todoDayRefs.find((r, i) => {
+    const top = r.group.getBoundingClientRect().top;
+    const next = todoDayRefs[i + 1];
+    const end = next ? next.group.getBoundingClientRect().top : r.group.getBoundingClientRect().bottom;
+    return y >= top && y < end;
+  });
+  if (!ref) return null;
+  const view = todoViewportEl.getBoundingClientRect();
+  const rows = ref.columns.getBoundingClientRect();
+  const allVisible = rows.top >= view.top && rows.bottom <= view.bottom;
+  const startsInUpperHalf = rows.top >= view.top && rows.top < view.top + view.height / 2;
+  return allVisible || startsInUpperHalf ? ref : null;
+}
+
+// Mouse only: a touch has no hover.
+todoViewportEl.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse') return;
+  const hadPointer = !!todoPointer;
+  const before = hadPointer ? hoveredTodoDayRef() : null;
+  todoPointer = { x: e.clientX, y: e.clientY };
+  if (!hadPointer || hoveredTodoDayRef() !== before) updateTodoDayHighlight();
+});
+todoViewportEl.addEventListener('pointerleave', () => {
+  if (!todoPointer) return;
+  todoPointer = null;
+  updateTodoDayHighlight();
+});
 window.addEventListener('resize', () => {
   sizeTodoListSpacers();
   updateTodoDayHighlight();
@@ -4148,6 +4214,7 @@ function renderTodo() {
     return;
   }
 
+  if (todoOpening) todoScrollToTodayOnRender = true;
   const anchor = todoScrollToTodayOnRender ? null : todoScrollAnchor();
   // Each day is drawn as it looked before -- highlighted or dimmed, its
   // fade and name panel where they were (see updateTodoDayHighlight) --
@@ -4297,6 +4364,16 @@ function visibleTodoDates() {
 // have changed meanwhile (on another device, say).
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && currentUserId && todoDayOrder.length) refreshVisibleTodoDays();
+});
+
+// The reader scrolling themselves ends the list's opening (see
+// todoOpening): from then on it stays where they put it.
+const stopTodoOpening = () => {
+  todoOpening = false;
+};
+for (const type of ['wheel', 'touchmove', 'mousedown']) todoViewportEl.addEventListener(type, stopTodoOpening, { passive: true });
+document.addEventListener('keydown', (e) => {
+  if (['PageUp', 'PageDown', ' ', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) stopTodoOpening();
 });
 
 // While scrolling: load more as an end comes near, and fetch again what's
