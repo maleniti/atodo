@@ -4050,6 +4050,15 @@ function buildTodoItemRow(item, dimmed) {
       if (!isNarrowLayout()) selectTaskForSidePanel(item.taskId, item.occurrenceDate);
     };
     row.appendChild(workOnBtn);
+  } else {
+    // An invisible stand-in, so a row that can't be focused (done, failed,
+    // not due yet, ...) is as tall as one with the eye -- every row the same
+    // height.
+    const placeholder = document.createElement('span');
+    placeholder.className = 'todo-work-on-btn todo-work-on-placeholder';
+    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.innerHTML = WORK_ON_ICON;
+    row.appendChild(placeholder);
   }
 
   // A carried-over occurrence can be cleared without resolving it (and,

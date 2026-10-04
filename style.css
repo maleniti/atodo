@@ -2027,6 +2027,13 @@ html[data-theme="light"] .not-today > .todo-item-text {
   align-items: center;
   justify-content: center;
 }
+/* Holds the eye's place on a row that can't be focused, so every row is
+   the same height (see buildTodoItemRow). */
+.todo-work-on-placeholder {
+  box-sizing: border-box;
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .menu-item {
   display: flex;
