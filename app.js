@@ -245,7 +245,7 @@ const I18N = {
     'taskForm.appointmentDesc':
       "Appointment – its due date is an expiration, not a standing reminder: if not done by then, it's marked failed (crossed out, red) instead of staying overdue. Can still be checked off as done afterward.",
     'taskForm.passiveDesc':
-      "Passive – a plain reminder, not an actionable task: can't be focused on or timed, and its checkbox marks it failed instead of done. Never auto-resolves once overdue – stays visible until you mark it failed or, once it's no longer due today, dismiss it.",
+      "Passive – a plain reminder, not an actionable task: can't be focused on or timed, and its checkbox marks it failed instead of done. With a due time, it counts as done once that time has passed (you can still mark it failed); an all-day one stays visible until you mark it failed or, once it's no longer due today, dismiss it.",
     'taskForm.recurUntilCompletedDesc':
       "Recur until completed – never marked overdue or failed: if not done by its due time, it's rescheduled to the next day instead (same time), and the missed occurrence stays visible alongside the new one until either is checked off. A recurring task's next occurrence is then counted from whenever it's actually completed, not the original schedule.",
     'taskForm.endDateBeforeDue': "End date can't be before the due date.",
@@ -663,7 +663,7 @@ const I18N = {
     'taskForm.appointmentDesc':
       "Termin – datum dospijeća je rok, a ne stalni podsjetnik: ako nije obavljen do tada, označava se kao neuspješan (precrtano, crveno) umjesto da ostane zakašnjelo. Ipak se može naknadno označiti kao obavljeno.",
     'taskForm.passiveDesc':
-      "Pasivno – običan podsjetnik, a ne izvediv zadatak: ne može se fokusirati niti mjeriti vrijeme, a njegova kvačica označava neuspjeh umjesto dovršenosti. Nikad se automatski ne rješava nakon isteka roka – ostaje vidljivo dok ga ne označite neuspješnim ili, kad više nije na redu za danas, ga uklonite.",
+      "Pasivno – običan podsjetnik, a ne izvediv zadatak: ne može se fokusirati niti mjeriti vrijeme, a njegova kvačica označava neuspjeh umjesto dovršenosti. S rokom u određeno vrijeme smatra se obavljenim čim to vrijeme prođe (i dalje ga možete označiti neuspješnim); cjelodnevno ostaje vidljivo dok ga ne označite neuspješnim ili, kad više nije na redu za danas, ga uklonite.",
     'taskForm.recurUntilCompletedDesc':
       "Ponavljaj do dovršetka – nikad se ne označava kao zakašnjelo ili neuspješno: ako nije obavljeno do roka, premješta se na sljedeći dan (isto vrijeme), a propušteni rok ostaje vidljiv uz novi sve dok jedan od njih ne označite obavljenim. Sljedeća pojava ponavljajućeg zadatka tada se računa od trenutka kad je stvarno dovršen, a ne prema izvornom rasporedu.",
     'taskForm.endDateBeforeDue': 'Datum završetka ne može biti prije datuma dospijeća.',
@@ -2880,6 +2880,10 @@ function patternFieldSpecs(task, dueDateValue) {
     value: task.recurUntilCompleted ? ['recurUntilCompleted'] : [],
     options: [{ value: 'recurUntilCompleted', label: t('taskForm.recurUntilCompletedDesc') }],
     required: false,
+    // A passive task is never completed, so it can't recur until it is (see
+    // the passive field's own disableIf). Only while the other is ticked and
+    // this isn't -- older data with both ticked can still untick either.
+    disableIf: (v) => !!v.passive && v.passive.length > 0 && v.recurUntilCompleted.length === 0,
   };
   return { dueDate, repeat, recurUntilCompleted };
 }
@@ -2939,6 +2943,7 @@ async function openTaskForm(_unused, initialDueDate, seriesOptions = {}) {
         value: [],
         options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
         required: false,
+        disableIf: (v) => !!v.recurUntilCompleted && v.recurUntilCompleted.length > 0 && v.passive.length === 0,
       },
       pattern.recurUntilCompleted,
     ],
@@ -3074,6 +3079,7 @@ async function openTaskEditor(taskId, { tab = 'details', occurrenceDate = null }
         value: task.passive ? ['passive'] : [],
         options: [{ value: 'passive', label: t('taskForm.passiveDesc') }],
         required: false,
+        disableIf: (v) => !!v.recurUntilCompleted && v.recurUntilCompleted.length > 0 && v.passive.length === 0,
       },
       'details'
     ),
@@ -3104,22 +3110,27 @@ async function openTaskEditor(taskId, { tab = 'details', occurrenceDate = null }
   // Both are no-ops server-side when nothing in them changed. The pattern
   // goes first: refused (making a one-off recurring past the free plan's
   // limit, say -- reportActionError offers a subscription), nothing of the
-  // edit is saved.
-  if (!(await taskAction(taskId, '/pattern', { method: 'PUT', body: decoded }))) return;
+  // edit is saved. Except when the edit turns "passive" off and "recur until
+  // completed" on: the server only takes the latter once the task isn't
+  // passive any more, so the details go first then.
   const allDay = result.allDay.length > 0;
-  taskAction(taskId, '', {
-    method: 'PATCH',
-    body: {
-      name: result.name,
-      description: result.description,
-      details: result.details,
-      dueTime: allDay ? null : result.dueTime,
-      allDay,
-      timeZone: allDay ? null : result.timeZone || null,
-      appointment: result.appointment.length > 0,
-      passive: result.passive.length > 0,
-    },
-  });
+  const details = {
+    name: result.name,
+    description: result.description,
+    details: result.details,
+    dueTime: allDay ? null : result.dueTime,
+    allDay,
+    timeZone: allDay ? null : result.timeZone || null,
+    appointment: result.appointment.length > 0,
+    passive: result.passive.length > 0,
+  };
+  const saveDetails = () => taskAction(taskId, '', { method: 'PATCH', body: details });
+  const savePattern = () => taskAction(taskId, '/pattern', { method: 'PUT', body: decoded });
+  if (task.passive && !details.passive && decoded.recurUntilCompleted && !task.recurUntilCompleted) {
+    if (await saveDetails()) savePattern();
+  } else if (await savePattern()) {
+    saveDetails();
+  }
 }
 
 function prependEditorHint(pane, key) {
@@ -3399,6 +3410,13 @@ function resolveItem(item) {
   const undo = item[resolvedKey];
   const action = item.passive ? (undo ? 'unfail' : 'fail') : undo ? 'reopen' : 'complete';
   item[resolvedKey] = !undo;
+  // Checking off a failed appointment (or an overdue task) shows it done at
+  // once -- the check mark, not the red X -- and it leaves the list only
+  // when it's fetched again a moment later.
+  if (!item.passive && !undo) {
+    item.failed = false;
+    item.overdue = false;
+  }
   // What the row offers changes with it right away, as the server will
   // have it -- so it can be taken back at once, before the list is fetched
   // again (which waits a moment after a completion, see `linger`).
@@ -4837,10 +4855,11 @@ const AGENDA_HOUR_HEIGHT = 44; // px per hour of the rendered timeline
 function resolveAgendaColor(task, completed, failed) {
   let color = '#e8eaed';
   if (completed) color = '#fff';
-  if (failed) color = '#f28b82';
   if (task.allDay) color = '#8ab4f8';
-  if (task.appointment && !failed) color = '#81c995';
-  if (task.passive && !failed) color = '#bcaaa4';
+  if (task.appointment) color = '#81c995';
+  if (task.passive) color = '#bcaaa4';
+  // Failed is red whatever else the task is (all-day included).
+  if (failed) color = '#f28b82';
   return color;
 }
 
