@@ -257,6 +257,29 @@ main {
   color: var(--text-muted);
 }
 
+/* The current time (see positionAgendaNowLine): from the hour labels' gutter
+   across the tracks, a dot at its start, above every block (a dragged one
+   included) but never in the way of a click. */
+.agenda-now-line {
+  position: absolute;
+  left: 30px;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--danger);
+  z-index: 3;
+  pointer-events: none;
+}
+.agenda-now-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
 /* Everything actually representing a task (bands/blocks) lives in here, not
    directly in .agenda-timeline -- inset from the left by the hour label's
    own gutter (see .agenda-hour-label) so labels stay legible instead of

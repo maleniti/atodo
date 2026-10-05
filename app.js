@@ -5084,6 +5084,18 @@ function buildAgendaBlock(block) {
   return el;
 }
 
+// The current time across the agenda (it always shows today), moved along
+// every AGENDA_NOW_LINE_MS rather than only on a redraw.
+const AGENDA_NOW_LINE_MS = 30 * 1000;
+function positionAgendaNowLine() {
+  const line = agendaTimelineEl.querySelector('.agenda-now-line');
+  if (!line) return;
+  const now = new Date();
+  line.style.top = `${((now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60) / 60) * AGENDA_HOUR_HEIGHT}px`;
+  line.title = formatTimeOfDay(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+}
+setInterval(positionAgendaNowLine, AGENDA_NOW_LINE_MS);
+
 function renderTodayAgenda() {
   const items = agendaItems.map((item) => ({ ...item, color: resolveAgendaColor(item, item.completed, item.failed) }));
 
@@ -5096,8 +5108,12 @@ function renderTodayAgenda() {
   // full width, gutter included); .agenda-tracks is the one static child
   // that must survive this clear -- everything actually representing a task
   // goes in there instead (see .agenda-tracks, style.css).
-  agendaTimelineEl.querySelectorAll('.agenda-hour-line').forEach((el) => el.remove());
+  agendaTimelineEl.querySelectorAll('.agenda-hour-line, .agenda-now-line').forEach((el) => el.remove());
   for (let h = 0; h < 24; h++) agendaTimelineEl.appendChild(buildAgendaHourLine(h));
+  const nowLine = document.createElement('div');
+  nowLine.className = 'agenda-now-line';
+  agendaTimelineEl.appendChild(nowLine);
+  positionAgendaNowLine();
 
   agendaTracksEl.innerHTML = '';
   const timedItems = items.filter((i) => !i.allDay);
