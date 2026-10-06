@@ -441,6 +441,7 @@ const I18N = {
     'data.importTooLarge': 'That file is too large to import.',
     'taskForm.timeZone': 'Time zone',
     'taskForm.timeZoneFluid': 'Fluid -- local time wherever you are',
+    'todo.showTimerTask': 'Show this task',
     'todo.zoneTime': '{time} {city}',
   },
   hr: {
@@ -859,6 +860,7 @@ const I18N = {
     'data.importTooLarge': 'Ta je datoteka prevelika za uvoz.',
     'taskForm.timeZone': 'Vremenska zona',
     'taskForm.timeZoneFluid': 'Promjenjiva -- lokalno vrijeme gdje god bili',
+    'todo.showTimerTask': 'Prikaži ovaj zadatak',
     'todo.zoneTime': '{time} {city}',
   },
 };
@@ -1914,6 +1916,10 @@ let todoEdges = { before: null, after: null };
 // to an earlier list's requests are ignored.
 let todoGeneration = 0;
 let todoLoading = false;
+// The focused occurrence as the server last named it (with every day and the
+// agenda, see GET /days' `focused`) -- wherever it is, loaded or not: the
+// only one whose timer can be running (see updateTodoTimerChip).
+let focusedTodoItem = null;
 // While the list is opening (resetTodoList until its first fill is done),
 // each render puts today back at the reading point -- the first day alone
 // can't scroll that far, and days loaded above it would push it down --
@@ -1924,6 +1930,7 @@ const todoInViewedRange = (date) => !!date && (todoViewMode === 'next-recurrence
 
 async function fetchTodoDay(date, direction = 'after') {
   const day = await apiFetch(`/days?view=${encodeURIComponent(todoViewMode)}&date=${date}&direction=${direction}`);
+  if ('focused' in day) focusedTodoItem = day.focused;
   // Every read first brings timers up to date server-side -- one that ran
   // out since is announced here.
   if (day.expiredTimers && day.expiredTimers.length) playTimerChime();
@@ -4342,6 +4349,7 @@ function renderTodo() {
   }
   updateTodoDayHighlight();
   ensureTimerTicking();
+  updateTodoTimerChip();
 }
 
 // The first day at least partly on screen, and how far its top is from the
@@ -4419,7 +4427,8 @@ function runningTimerItem() {
   for (const items of todoDays.values()) {
     for (const item of items) if (item.timer && item.timer.runningSince != null) return item;
   }
-  return null;
+  // Not among the loaded days (another month, say): the focused one's.
+  return focusedTodoItem && focusedTodoItem.timer && focusedTodoItem.timer.runningSince != null ? focusedTodoItem : null;
 }
 function ensureTimerTicking() {
   const shouldTick = !!runningTimerItem();
@@ -4451,6 +4460,101 @@ function timerTick() {
     const meta = row.querySelector('.todo-item-meta');
     if (meta) meta.textContent = todoItemMetaText(rowItem);
   }
+  updateTodoTimerChip();
+}
+
+// ---------------------------------------------------------------------------
+// The running timer's chip (#todo-timer-chip, in the toolbar): while the
+// row with a running timer isn't on screen -- scrolled away, or not loaded at
+// all (another month, another view) -- its name and timer show there, as on
+// the row, ticking with it (see timerTick). A click scrolls to the row,
+// loading days (or switching to its month) on the way if need be.
+// ---------------------------------------------------------------------------
+
+const todoTimerChipEl = document.getElementById('todo-timer-chip');
+const todoTimerChipBarEl = todoTimerChipEl.querySelector('.todo-timer-chip-bar');
+const todoTimerChipNameEl = todoTimerChipEl.querySelector('.todo-timer-chip-name');
+const todoTimerChipMetaEl = todoTimerChipEl.querySelector('.todo-timer-chip-meta');
+
+function todoRowFor(item) {
+  return [...todoListEl.querySelectorAll('.todo-item')].find((r) => r.__taskId === item.taskId && r.__occurrenceDate === item.occurrenceDate) || null;
+}
+
+function updateTodoTimerChip() {
+  const item = runningTimerItem();
+  let show = !!item;
+  if (item) {
+    const row = todoRowFor(item);
+    if (row) {
+      const rect = row.getBoundingClientRect();
+      const view = todoViewportEl.getBoundingClientRect();
+      show = rect.bottom <= view.top || rect.top >= view.bottom;
+    }
+  }
+  todoTimerChipEl.classList.toggle('hidden', !show);
+  if (!show) return;
+  todoTimerChipEl.__item = item;
+  todoTimerChipEl.title = t('todo.showTimerTask');
+  todoTimerChipBarEl.style.width = todoTimerBarWidth(item);
+  todoTimerChipNameEl.textContent = item.label;
+  todoTimerChipMetaEl.textContent = todoItemMetaText(item);
+}
+
+todoViewportEl.addEventListener('scroll', updateTodoTimerChip);
+window.addEventListener('resize', updateTodoTimerChip);
+todoTimerChipEl.onclick = () => {
+  if (todoTimerChipEl.__item) revealTodoItem(todoTimerChipEl.__item);
+};
+
+// Scrolls an item's row into view -- first switching to its month (unless
+// the view isn't month-bound) and loading the days up to it, if it isn't
+// loaded yet.
+async function revealTodoItem(item) {
+  let row = todoRowFor(item);
+  if (!row) {
+    const date = item.displayDate;
+    if (!todoInViewedRange(date)) {
+      viewedMonthKey = monthKeyOf(date);
+      await resetTodoList();
+    }
+    await loadTodoDaysThrough(date);
+    row = todoRowFor(item);
+  }
+  if (!row) return;
+  todoOpening = false;
+  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+// Loads days from the loaded ones' edge until `date` is loaded (or there's
+// nothing more in that direction), then draws them.
+async function loadTodoDaysThrough(date) {
+  for (let wait = 0; wait < 100 && todoLoading; wait++) await new Promise((resolve) => setTimeout(resolve, 50));
+  const generation = todoGeneration;
+  todoLoading = true;
+  try {
+    for (let guard = 0; guard < 62 && !todoDays.has(date); guard++) {
+      const first = todoDayOrder[0];
+      const last = todoDayOrder[todoDayOrder.length - 1];
+      if (last && date > last && todoInViewedRange(todoEdges.after) && todoEdges.after <= date) {
+        const day = await fetchTodoDay(todoEdges.after, 'after');
+        if (generation !== todoGeneration) return;
+        if (day.date && todoInViewedRange(day.date)) insertTodoDay(day.date, day.items);
+        todoEdges.after = day.date && todoInViewedRange(day.date) ? day.nextDate : null;
+      } else if (first && date < first && todoInViewedRange(todoEdges.before) && todoEdges.before >= date) {
+        const day = await fetchTodoDay(todoEdges.before, 'before');
+        if (generation !== todoGeneration) return;
+        if (day.date && todoInViewedRange(day.date)) insertTodoDay(day.date, day.items);
+        todoEdges.before = day.date && todoInViewedRange(day.date) ? day.previousDate : null;
+      } else {
+        break;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load the list:', err);
+  } finally {
+    todoLoading = false;
+  }
+  if (generation === todoGeneration) renderTodo();
 }
 
 // ---------------------------------------------------------------------------
@@ -4597,7 +4701,9 @@ async function refreshSidePanel() {
   if (!currentUserId) return;
   if (!sidePanelTaskId) {
     try {
-      agendaItems = (await apiFetch(`/agenda?date=${Dates.todayISO()}`)).items;
+      const agendaAnswer = await apiFetch(`/agenda?date=${Dates.todayISO()}`);
+      agendaItems = agendaAnswer.items;
+      if ('focused' in agendaAnswer) focusedTodoItem = agendaAnswer.focused;
     } catch (err) {
       console.error('Failed to load the agenda:', err);
     }

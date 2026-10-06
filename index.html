@@ -147,6 +147,13 @@
 
       <div id="todo-section" class="todo-section hidden">
         <div class="todo-toolbar">
+          <!-- A running timer whose row isn't on screen (see
+               updateTodoTimerChip): click to scroll to it. -->
+          <button type="button" id="todo-timer-chip" class="todo-timer-chip hidden">
+            <span class="todo-timer-chip-bar"></span>
+            <span class="todo-timer-chip-name"></span>
+            <span class="todo-timer-chip-meta"></span>
+          </button>
           <div id="todo-month-nav" class="todo-month-nav">
             <button type="button" id="todo-month-prev" class="todo-month-nav-btn" title="Previous month" data-i18n-title="month.prev"></button>
             <span id="todo-month-label" class="todo-month-label"></span>

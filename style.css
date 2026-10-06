@@ -1073,6 +1073,53 @@ main {
   gap: 2px;
 }
 
+/* A running timer whose row is out of view (see updateTodoTimerChip): the
+   rest of the toolbar's width, left of the month and view controls, its row's
+   name and timer on one line over the same progress bar. On narrow screens it
+   gets a line of its own, below them (see the max-width: 1000px query). */
+.todo-timer-chip {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--glass-pill-bg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.todo-timer-chip-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(57, 200, 20, 0.5);
+}
+.todo-timer-chip-name {
+  position: relative;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: var(--glass-text-shadow);
+}
+.todo-timer-chip-meta {
+  position: relative;
+  flex: none;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-shadow: var(--glass-text-shadow);
+}
+
 /* Same opaque pill tone as .todo-view-toggle's own track (not a near-
    invisible 0.06 tint) -- was too faint to read as a button in its own
    right sitting next to that toggle. */
@@ -2954,6 +3001,12 @@ option {
      above in the file) -- needs to match its specificity to actually win. */
   .agenda-toggle-btn,
   .modal-close-btn.agenda-close-btn { display: flex; }
+  /* The running timer's own line, below the month and view controls. */
+  .todo-toolbar { flex-wrap: wrap; }
+  .todo-timer-chip {
+    order: 1;
+    flex-basis: 100%;
+  }
 }
 
 @media (max-width: 640px) {
