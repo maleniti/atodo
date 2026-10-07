@@ -25,6 +25,9 @@
   --success: #81c995;
   --passive: #bcaaa4;
   --border-hairline: rgba(255, 255, 255, 0.08);
+  /* Every modal's outer edge -- a plain gray line in the dark theme, where
+     the hairline was too faint to tell the modal from what's behind it. */
+  --modal-border: gray;
   --hover-tint: rgba(255, 255, 255, 0.06);
   --scrollbar-thumb: rgba(255, 255, 255, 0.18);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
@@ -52,6 +55,7 @@
   --success: #188038;
   --passive: #8d6e63; /* the dark theme's taupe (#bcaaa4) is too light to read against a light page */
   --border-hairline: rgba(0, 0, 0, 0.12);
+  --modal-border: var(--border-hairline); /* no pronounced edge needed on a light page */
   --hover-tint: rgba(0, 0, 0, 0.05);
   --scrollbar-thumb: rgba(0, 0, 0, 0.18);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
@@ -2236,7 +2240,7 @@ html[data-theme="light"] .not-today > .todo-item-text {
   background: rgba(0, 0, 0, 0);
   backdrop-filter: blur(20px) saturate(160%) brightness(55%);
   -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(55%);
-  border: 1px solid var(--border-hairline);
+  border: 1px solid var(--modal-border);
   border-radius: 12px;
   padding: 18px;
   width: 420px;
