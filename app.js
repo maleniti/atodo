@@ -2352,6 +2352,62 @@ function closeTodoContextMenu() {
 // document-wide listener would immediately close the very menu that same
 // event just opened).
 document.addEventListener('click', closeTodoContextMenu);
+
+// Touch screens: a long press opens a row's (or an agenda item's) context
+// menu, as a right-click does. Android browsers fire contextmenu on a long
+// press by themselves; iOS WebKit (Safari, and Firefox there too) never does
+// -- so attachLongPress times one, a little longer than Android's, and stands
+// down when the browser's own contextmenu arrives first. The tap a long
+// press can end in is swallowed, so it neither closes the menu just opened
+// nor selects the task.
+const LONG_PRESS_MS = 600;
+const LONG_PRESS_SLOP_PX = 10;
+let lastTouchAt = 0;
+let lastContextMenuAt = 0;
+let swallowClicksUntil = 0;
+document.addEventListener('touchstart', () => {
+  lastTouchAt = Date.now();
+}, { capture: true, passive: true });
+document.addEventListener('contextmenu', () => {
+  lastContextMenuAt = Date.now();
+  // A long press's own contextmenu (Android): its touch may still end in a tap.
+  if (Date.now() - lastTouchAt < 1500) swallowClicksUntil = Date.now() + 800;
+}, true);
+document.addEventListener('click', (e) => {
+  if (Date.now() >= swallowClicksUntil) return;
+  swallowClicksUntil = 0;
+  e.stopPropagation();
+  e.preventDefault();
+}, true);
+
+function attachLongPress(el, onLongPress) {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  el.addEventListener('touchstart', (e) => {
+    cancel();
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    const startedAt = Date.now();
+    timer = setTimeout(() => {
+      timer = null;
+      if (lastContextMenuAt >= startedAt) return; // the browser opened it already
+      swallowClicksUntil = Date.now() + 800;
+      onLongPress({ clientX: startX, clientY: startY, preventDefault() {} });
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    if (t && Math.hypot(t.clientX - startX, t.clientY - startY) > LONG_PRESS_SLOP_PX) cancel();
+  }, { passive: true });
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchcancel', cancel);
+}
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeTodoContextMenu();
 });
@@ -4173,9 +4229,12 @@ function buildTodoItemRow(item, dimmed) {
   row.oncontextmenu = (e) => {
     e.preventDefault();
     if (virtual) return;
-    selectTaskForSidePanel(item.taskId, item.occurrenceDate);
+    // On a narrow screen selecting would open the side panel over the list
+    // (it's a full-screen drawer there) -- the menu alone, then.
+    if (!isNarrowLayout()) selectTaskForSidePanel(item.taskId, item.occurrenceDate);
     showTodoContextMenu(e, item);
   };
+  attachLongPress(row, row.oncontextmenu);
 
   // Plain click selects the task for the side panel (again: deselects).
   // Doesn't re-render the list itself (see refreshSelectedHighlight) --
@@ -5004,6 +5063,7 @@ function attachAgendaContextMenu(el, item) {
     e.preventDefault();
     showTodoContextMenu(e, item);
   };
+  attachLongPress(el, el.oncontextmenu);
 }
 
 function buildAgendaAllDayPill(item) {

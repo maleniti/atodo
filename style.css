@@ -2274,15 +2274,24 @@ html[data-theme="light"] .not-today > .todo-item-text {
    cursor behavior. */
 main,
 .modal {
+  -webkit-user-select: none; /* iOS WebKit (Safari, and Firefox there) still needs the prefix */
   user-select: none;
   cursor: default;
+}
+/* iOS's long-press callout (copy/look up/share) -- a long press opens the
+   row's own context menu instead (see attachLongPress). */
+main {
+  -webkit-touch-callout: none;
 }
 .modal a,
 .todo-manage-item {
   cursor: pointer;
 }
+main input:not([type="checkbox"]):not([type="range"]),
+main textarea,
 .modal input:not([type="checkbox"]):not([type="range"]),
 .modal textarea {
+  -webkit-user-select: text; /* without it, iOS won't let you type in a field under a user-select: none */
   user-select: text;
   cursor: text;
 }
