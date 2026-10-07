@@ -392,8 +392,32 @@ main {
   gap: 6px;
 }
 
+/* "Notes", and the round pen button next to it that shows every note's
+   edit/delete buttons (lit up while it does). */
+.side-panel-notes-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.side-panel-edit-notes-btn {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-hairline);
+  border-radius: 50%;
+  background: var(--glass-pill-bg);
+  color: var(--text-label);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.side-panel-edit-notes-btn:hover { color: var(--text-primary); }
 #side-panel-edit-toggle-btn.active {
   background: var(--accent);
+  border-color: var(--accent);
   color: var(--accent-on);
 }
 

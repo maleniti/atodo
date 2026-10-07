@@ -164,9 +164,8 @@ const I18N = {
     'sidePanel.noActivity': 'No activity yet.',
     'sidePanel.editNote': 'Edit note',
     'sidePanel.noteLabel': 'Note',
-    'sidePanel.done': 'Done',
-    'sidePanel.stopEditing': 'Stop editing/deleting notes',
-    'sidePanel.editOrDelete': 'Edit or delete notes',
+    'sidePanel.editNotes': 'Edit notes',
+    'sidePanel.stopEditingNotes': 'Stop editing notes',
 
     'timer.setTitle': 'Set a timer',
     'timer.countUp': 'Count up (no fixed duration – stops automatically after 6 hours)',
@@ -589,9 +588,8 @@ const I18N = {
     'sidePanel.noActivity': 'Još nema aktivnosti.',
     'sidePanel.editNote': 'Uredi bilješku',
     'sidePanel.noteLabel': 'Bilješka',
-    'sidePanel.done': 'Gotovo',
-    'sidePanel.stopEditing': 'Prestani uređivati/brisati bilješke',
-    'sidePanel.editOrDelete': 'Uredi ili izbriši bilješke',
+    'sidePanel.editNotes': 'Uredi bilješke',
+    'sidePanel.stopEditingNotes': 'Prestani uređivati bilješke',
 
     'timer.setTitle': 'Postavi mjerač vremena',
     'timer.countUp': 'Broji unaprijed (bez fiksnog trajanja – automatski se zaustavlja nakon 6 sati)',
@@ -5443,8 +5441,7 @@ function renderSidePanel() {
   const scopeIndex = SIDE_PANEL_SCOPES.indexOf(sidePanelScope);
   sidePanelScopeOpts.forEach((btn, i) => btn.classList.toggle('active', i === scopeIndex));
   updateSidePanelScopeThumb(scopeIndex);
-  sidePanelEditToggleBtn.textContent = sidePanelEditMode ? t('sidePanel.done') : t('common.edit');
-  sidePanelEditToggleBtn.title = sidePanelEditMode ? t('sidePanel.stopEditing') : t('sidePanel.editOrDelete');
+  sidePanelEditToggleBtn.title = sidePanelEditMode ? t('sidePanel.stopEditingNotes') : t('sidePanel.editNotes');
   sidePanelEditToggleBtn.classList.toggle('active', sidePanelEditMode);
 
   // A task beyond the free plan's limits shows a padlock on "Add note"

@@ -213,7 +213,6 @@
               <button type="button" class="side-panel-scope-opt" data-scope="task" title="This task, every occurrence" data-i18n="sidePanel.task" data-i18n-title="sidePanel.taskTitle">Task</button>
               <button type="button" class="side-panel-scope-opt" data-scope="series" title="Every task in this series" data-i18n="sidePanel.series" data-i18n-title="sidePanel.seriesTitle">Series</button>
             </div>
-            <button id="side-panel-edit-toggle-btn" class="menu-btn-small"></button>
           </div>
           <!-- Deselects the task, bringing the agenda back (and, on narrow
                screens, closing the full-screen drawer this panel is there). -->
@@ -226,7 +225,11 @@
         <div id="side-panel-occurrence-actions" class="side-panel-occurrence-actions hidden"></div>
         <textarea id="side-panel-comment-input" class="modal-input side-panel-comment-input" placeholder="Add a note about this task&hellip;" data-i18n-placeholder="sidePanel.commentPlaceholder"></textarea>
         <button id="side-panel-comment-add" class="menu-btn-small">Add note</button>
-        <div class="side-panel-section-heading" data-i18n="sidePanel.notes">Notes</div>
+        <div class="side-panel-section-heading side-panel-notes-heading">
+          <span data-i18n="sidePanel.notes">Notes</span>
+          <!-- Shows each note's edit/delete buttons (see sidePanelEditMode). -->
+          <button type="button" id="side-panel-edit-toggle-btn" class="side-panel-edit-notes-btn" title="Edit notes" data-i18n-title="sidePanel.editNotes"><svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+        </div>
         <div id="side-panel-comments" class="side-panel-comments"></div>
         <div class="side-panel-section-heading" data-i18n="sidePanel.activity">Activity</div>
         <div id="side-panel-log" class="side-panel-log"></div>
