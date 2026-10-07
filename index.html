@@ -112,7 +112,14 @@
   <main id="app-main" class="hidden">
     <div class="todo-column">
       <div class="app-header">
-        <h1 id="app-title">To-Do List</h1>
+        <!-- What the list shows and for which day (see renderAppTitle): the
+             highlighted day's name, plus its "+" (a task due that day) and
+             "Today" (when it isn't today) -- in place of per-day headers. -->
+        <div class="app-title-row">
+          <h1 id="app-title"><span class="app-title-view">To-Do List</span> <span class="app-title-date"></span></h1>
+          <button type="button" id="app-title-add" class="todo-day-add-btn hidden">+</button>
+          <button type="button" id="app-title-today" class="menu-btn-small todo-day-today-btn hidden" data-i18n="todo.backToToday">Today</button>
+        </div>
         <div class="app-header-actions">
           <a id="app-header-subscribe-btn" class="app-header-subscribe-btn hidden" href="landing.html#pricing" data-i18n="subscribe.headerCta">Subscribe</a>
           <div class="user-menu">

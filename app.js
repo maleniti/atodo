@@ -91,7 +91,12 @@ const I18N = {
     'menu.logoutTitle': 'Log out (for testing the login screen)',
 
     'app.titleGeneric': 'To-Do List',
-    'app.titleWithName': "{name}'s To-Do List",
+    'title.pending': 'Pending and overdue tasks for',
+    'title.next-recurrence': 'Upcoming tasks for',
+    'title.all': 'All tasks for',
+    'title.pendingNoDay': 'Pending and overdue tasks',
+    'title.next-recurrenceNoDay': 'Upcoming tasks',
+    'title.allNoDay': 'All tasks',
 
     'month.prev': 'Previous month',
     'month.next': 'Next month',
@@ -511,7 +516,12 @@ const I18N = {
     'menu.logoutTitle': 'Odjava (za testiranje zaslona za prijavu)',
 
     'app.titleGeneric': 'Popis obveza',
-    'app.titleWithName': 'Popis obveza – {name}',
+    'title.pending': 'Zadaci na čekanju i zakašnjeli za',
+    'title.next-recurrence': 'Nadolazeći zadaci za',
+    'title.all': 'Svi zadaci za',
+    'title.pendingNoDay': 'Zadaci na čekanju i zakašnjeli',
+    'title.next-recurrenceNoDay': 'Nadolazeći zadaci',
+    'title.allNoDay': 'Svi zadaci',
 
     'month.prev': 'Prethodni mjesec',
     'month.next': 'Sljedeći mjesec',
@@ -3648,18 +3658,22 @@ function updateTodoDayHighlight() {
   if (todoDayRefs.length === 0) {
     highlightedTodoDate = null;
     readingTodoDate = null;
+    renderAppTitle();
     return;
   }
   const { height, bandBottom, reading } = todoReadingGeometry();
 
   // Start from the day being read so far (still listed after a render?),
   // or else from whichever day the reading point is in.
-  let index = todoDayRefs.findIndex((ref) => ref.dateISO === readingTodoDate);
+  // Jumped to a day (see scrollTodoToDay): it's the one being read until
+  // the scroll ends.
+  const pinned = todoPinnedDate ? todoDayRefs.findIndex((ref) => ref.dateISO === todoPinnedDate) : -1;
+  let index = pinned >= 0 ? pinned : todoDayRefs.findIndex((ref) => ref.dateISO === readingTodoDate);
   if (index < 0) {
     index = 0;
     for (let i = 0; i < todoDayRefs.length; i++) if (todoDayExtent(i).top <= reading) index = i;
   }
-  for (let guard = 0; guard < todoDayRefs.length * 2; guard++) {
+  for (let guard = 0; pinned < 0 && guard < todoDayRefs.length * 2; guard++) {
     const next = index + 1;
     if (next < todoDayRefs.length && dayProgress(index, reading) >= switchThreshold(index, height) && todoDayExtent(next).top <= bandBottom + BAND_NEAR * height) {
       index = next;
@@ -3679,18 +3693,15 @@ function updateTodoDayHighlight() {
   // renderTodo builds every day in the current highlight state already
   // (see there), so the classes only change when the day does -- or when
   // nothing was highlighted yet (the first drawing dims all but today).
-  if (current.dateISO !== highlightedTodoDate || current.header.classList.contains('not-today')) {
+  if (current.dateISO !== highlightedTodoDate || !current.group.classList.contains('highlighted')) {
     highlightedTodoDate = current.dateISO;
     for (const ref of todoDayRefs) {
       const dimmed = ref !== current;
       ref.group.classList.toggle('highlighted', !dimmed);
-      ref.header.classList.toggle('not-today', dimmed);
       for (const row of ref.columns.querySelectorAll('.todo-item')) row.classList.toggle('not-today', dimmed);
     }
   }
-  const todayISO = Dates.dateToISO(new Date());
-  const showTodayBtn = isBrowsingOtherTodoMonth() || (current.dateISO !== todayISO && !!todayTargetDayRef());
-  for (const ref of todoDayRefs) ref.todayBtn.classList.toggle('hidden', ref !== current || !showTodayBtn);
+  renderAppTitle();
 
   // Every other day: opacity by closeness to the reading point, and its
   // name panel centered on the part of it that's visible.
@@ -3756,9 +3767,31 @@ function scrollTodoToToday(behavior = 'smooth', { canStartOver = false } = {}) {
 }
 
 // Puts a day's top at the reading point, so it becomes the highlighted one.
+// The day is highlighted right away and stays so while the scroll runs
+// (todoPinnedDate) -- otherwise the highlight would follow the reading point
+// through every day passed on the way and, with its hysteresis, could stop
+// short of this one (a short day's next day sits too close below it to
+// hand the highlight back).
+let todoPinnedDate = null;
+let todoPinTimer = null;
 function scrollTodoToDay(ref, behavior = 'smooth') {
+  todoPinnedDate = ref.dateISO;
+  readingTodoDate = ref.dateISO;
+  clearTimeout(todoPinTimer);
+  todoPinTimer = setTimeout(unpinTodoDay, behavior === 'smooth' ? 1500 : 100);
   todoViewportEl.scrollTo({ top: todoDayScrollTarget(ref), behavior });
+  updateTodoDayHighlight();
 }
+function unpinTodoDay() {
+  clearTimeout(todoPinTimer);
+  if (!todoPinnedDate) return;
+  readingTodoDate = todoPinnedDate;
+  todoPinnedDate = null;
+  updateTodoDayHighlight();
+}
+todoViewportEl.addEventListener('scrollend', () => {
+  if (todoPinnedDate) unpinTodoDay();
+});
 
 // Where a day's top is with the list at scrollTop 0.
 function todoDayTop(ref) {
@@ -4324,9 +4357,9 @@ function renderTodo() {
     const previous = previousRefs.get(dateISO);
     const dayItems = todoDays.get(dateISO);
 
-    // One group per day, holding all of it -- the highlighted day's header
-    // sticks within it (see .todo-day.highlighted), and the name panel is
-    // positioned in it (see updateTodoDayHighlight).
+    // One group per day, holding all of it -- the name panel is positioned
+    // in it (see updateTodoDayHighlight). The highlighted day's name is the
+    // page title's (see renderAppTitle); days are just divided by a line.
     const group = document.createElement('div');
     group.className = 'todo-day' + (dimmed ? '' : ' highlighted');
     todoListEl.appendChild(group);
@@ -4338,35 +4371,12 @@ function renderTodo() {
     sentinel.className = 'todo-day-sentinel';
     group.appendChild(sentinel);
 
-    const header = document.createElement('div');
-    header.className = 'todo-day-header' + (dimmed ? ' not-today' : '');
+    const divider = document.createElement('div');
+    divider.className = 'todo-day-divider';
+    group.appendChild(divider);
 
-    const headerLabel = document.createElement('span');
-    headerLabel.textContent = describeDayLabel(dateISO, todayISO);
-    header.appendChild(headerLabel);
-
-    const addBtn = document.createElement('button');
-    addBtn.className = 'todo-day-add-btn';
-    addBtn.textContent = '+';
-    addBtn.title = t('todo.addTaskDue', { date: dateISO });
-    addBtn.onclick = () => openTaskForm(null, dateISO);
-    header.appendChild(addBtn);
-
-    // Shown only on the highlighted day, and only if that isn't today.
-    const todayBtn = document.createElement('button');
-    todayBtn.type = 'button';
-    todayBtn.className = 'menu-btn-small todo-day-today-btn' + (previous && !previous.todayBtn.classList.contains('hidden') ? '' : ' hidden');
-    todayBtn.textContent = t('todo.backToToday');
-    todayBtn.onclick = () => {
-      if (isBrowsingOtherTodoMonth()) jumpTodoToCurrentMonth();
-      else scrollTodoToToday('smooth', { canStartOver: true });
-    };
-    header.appendChild(todayBtn);
-
-    group.appendChild(header);
-
-    // The day's name for when it isn't the highlighted one: the header's
-    // label, a line per comma-separated part.
+    // The day's name for when it isn't the highlighted one: its label, a
+    // line per comma-separated part.
     const panel = document.createElement('div');
     panel.className = 'todo-day-panel';
     const panelCard = document.createElement('div');
@@ -4400,7 +4410,7 @@ function renderTodo() {
     }
     group.appendChild(columns);
     group.appendChild(panel);
-    todoDayRefs.push({ dateISO, group, sentinel, header, columns, panel, todayBtn });
+    todoDayRefs.push({ dateISO, group, sentinel, columns, panel });
   }
 
   const bottomSpacer = document.createElement('div');
@@ -7320,11 +7330,45 @@ function applyUserSession(user) {
   todoViewMode = TODO_VIEW_MODES.includes(user.todoViewMode) ? user.todoViewMode : 'pending';
 }
 
-// Falls back to the generic title if a user's nickname isn't known yet (e.g.
-// briefly, before getMe() resolves) -- see startApp().
-function renderAppTitle() {
-  appTitleEl.textContent = currentUserNickname ? t('app.titleWithName', { name: currentUserNickname }) : t('app.titleGeneric');
+// The page title says what the list shows and for which day: the view
+// ("Pending and overdue tasks for", "Upcoming tasks for", "All tasks for")
+// and the highlighted day's name, as its own line on a narrow screen (see
+// .app-title-date). Next to it, the "+" adds a task due that day and "Today"
+// goes back to today when another day (or month) is being read. Kept up to
+// date by updateTodoDayHighlight, on every scroll and redraw -- so it only
+// writes what changed.
+const appTitleViewEl = appTitleEl.querySelector('.app-title-view');
+const appTitleDateEl = appTitleEl.querySelector('.app-title-date');
+const appTitleAddBtn = document.getElementById('app-title-add');
+const appTitleTodayBtn = document.getElementById('app-title-today');
+
+// "today, Saturday, October 3" -- describeDayLabel's, with a leading
+// Today/Yesterday/Tomorrow lowercased to follow the title's "for".
+function describeDayForTitle(dateISO) {
+  const label = describeDayLabel(dateISO, Dates.todayISO());
+  const relative = ['todo.today', 'todo.yesterday', 'todo.tomorrow'].some((key) => label.startsWith(t(key)));
+  return relative ? label.charAt(0).toLocaleLowerCase(currentLocaleTag()) + label.slice(1) : label;
 }
+
+function renderAppTitle() {
+  const loggedIn = !!currentUserId;
+  const day = loggedIn ? highlightedTodoDate : null;
+  const view = loggedIn ? t(day ? `title.${todoViewMode}` : `title.${todoViewMode}NoDay`) : t('app.titleGeneric');
+  const date = day ? describeDayForTitle(day) : '';
+  if (appTitleViewEl.textContent !== view) appTitleViewEl.textContent = view;
+  if (appTitleDateEl.textContent !== date) appTitleDateEl.textContent = date;
+  appTitleAddBtn.classList.toggle('hidden', !loggedIn);
+  appTitleAddBtn.title = t('todo.addTaskDue', { date: day || Dates.todayISO() });
+  const showToday = !!day && (isBrowsingOtherTodoMonth() || (day !== Dates.todayISO() && !!todayTargetDayRef()));
+  appTitleTodayBtn.classList.toggle('hidden', !showToday);
+}
+
+appTitleAddBtn.textContent = '+';
+appTitleAddBtn.onclick = () => openTaskForm(null, highlightedTodoDate || Dates.todayISO());
+appTitleTodayBtn.onclick = () => {
+  if (isBrowsingOtherTodoMonth()) jumpTodoToCurrentMonth();
+  else scrollTodoToToday('smooth', { canStartOver: true });
+};
 
 // The one-time "we now know who's logged in" entry point, run either right
 // after boot() finds an existing token or right after the login form

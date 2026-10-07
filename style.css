@@ -159,7 +159,7 @@ main {
   text-shadow: var(--glass-text-shadow);
 }
 /* Light theme flips the brightness direction on every glass panel below
-   (this one, .todo-day-header, .modal) the same way the .todo-item matrix
+   (this one, .modal) the same way the .todo-item matrix
    does: dark theme darkens whatever's behind the blur into a dark slab
    (brightness < 100%), light theme lightens it into a light slab instead
    (brightness > 100%) so the panel still reads as a legible surface either
@@ -664,6 +664,19 @@ main {
 }
 .save-status-banner .menu-btn-small { flex: none; }
 
+.app-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.app-title-row .todo-day-add-btn { width: 26px; height: 26px; font-size: 18px; }
+.app-title-row .todo-day-today-btn {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1;
+}
 .app-header h1 {
   font-size: 20px;
   font-weight: 700;
@@ -1293,85 +1306,19 @@ main {
    6px sliver anyway). */
 #todo-viewport:hover::-webkit-scrollbar { width: 10px; }
 
-/* Same small glass-card look as .todo-item (see its own comment for the
-   background/backdrop-filter/box-shadow reasoning) -- just shaped as a long,
-   narrow bar (100% wide, tall enough for one line of text) instead of a
-   whole row. No masking/fade tricks here: this panel is opaque-looking
-   enough on its own (same as every .todo-item already is) that the
-   highlighted day's sticky header (see .todo-day below) simply covers
-   whatever scrolls behind it just by being drawn there. */
-.todo-day-header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-heading);
-  padding: 6px 8px;
-  margin-bottom: 4px;
-  border-radius: 8px;
-  overflow: hidden; /* clips the glass background to this bar's own rounded corners */
-  background: rgba(0, 0, 0, 0);
-  backdrop-filter: blur(4px) saturate(150%) brightness(120%);
-  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(120%);
-  box-shadow:
-    inset 0 0px 0 rgba(255, 255, 255, 0.14),
-    inset 2px 0 0 var(--border-hairline),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
-    inset -2px 0 0 rgba(0, 0, 0, 0.2);
-  /* Same text-shadow as .todo-item-text -- see its own comment. */
-  text-shadow: var(--glass-text-shadow);
-}
-/* Same brightness-direction flip as .side-panel/.modal -- see .side-panel's
-   own comment. */
-:root[data-theme="light"] .todo-day-header {
-  backdrop-filter: blur(4px) saturate(150%) brightness(88%);
-  -webkit-backdrop-filter: blur(4px) saturate(150%) brightness(88%);
-}
-
-/* One day of the list (see renderTodo). Only the highlighted day shows its
-   header -- sticky within its own day, so it stays at the top while that
-   day is on screen; every other day's header is invisible but keeps its
-   space, so the list doesn't shift as the highlight moves. Those days get a
-   floating name panel instead, kept at the middle of whatever part of the
-   day is visible (see updateTodoDayHighlight). */
+/* One day of the list (see renderTodo). The highlighted day is named by
+   the page title (see renderAppTitle); every other day gets a floating name
+   panel, kept at the middle of whatever part of the day is visible (see
+   updateTodoDayHighlight). Days are separated by a plain line. */
 .todo-day {
   position: relative;
 }
-/* Fading in/out as the highlight moves -- a bit slower than the app's usual
-   0.15 s transitions, so the hand-over reads as one calm change. */
-.todo-day .todo-day-header {
-  transition: opacity 0.4s ease, visibility 0s linear 0s;
+.todo-day-divider {
+  height: 1px;
+  margin: 8px 4px 10px;
+  background: var(--border-hairline);
 }
-.todo-day:not(.highlighted) .todo-day-header {
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.4s ease, visibility 0s linear 0.4s;
-}
-/* In the light theme the header's glass (a brightening/darkening
-   backdrop-filter) wouldn't fade with the opacity above -- it snaps on/off
-   instead -- so it gets a plain translucent white instead, like the rows'
-   (see below). */
-:root[data-theme="light"] .todo-day .todo-day-header {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  background-color: rgba(255, 255, 255, 0.6) !important;
-}
-.todo-day.highlighted .todo-day-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-/* As tall as the "+" button next to it (a plain .menu-btn-small is 28px),
-   so a header is the same height with or without it. */
-.todo-day-header .todo-day-today-btn {
-  margin-left: auto;
-  height: 20px;
-  padding: 0 8px;
-  font-size: 11px;
-  line-height: 1;
-}
-
+.todo-day:first-child .todo-day-divider { visibility: hidden; margin-top: 0; }
 /* A day that isn't highlighted fades with distance from the reading point
    (opacity, see updateTodoDayHighlight) -- and any opacity below 1 makes
    the element a backdrop root, cutting a backdrop-filter inside it off from
@@ -1434,26 +1381,6 @@ main {
 /* Empty space after the last day (sized by sizeTodoListSpacers), so even a
    short last day can be scrolled up into the highlight band. */
 .todo-list-spacer { flex: none; }
-
-/* Dims only the label text, not the header element itself -- opacity on the
-   whole element would also fade its background, so a dimmed ("not today")
-   header handing off to the next one mid-scroll would look like a lighter,
-   less-opaque box than a same-day header's own hand-off, instead of every
-   hand-off looking identical regardless of which two days are involved. */
-.todo-day-header.not-today > span { opacity: 0.6; }
-
-.todo-day-header.not-today {
-  background-color: transparent;
-  backdrop-filter: blur(4px) saturate(50%) brightness(75%);
-  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(75%);
-}
-/* Inverted direction, like .todo-day-header's own light override above: a
-   dimmed/muted header should wash out toward the light page instead of
-   darkening further. */
-:root[data-theme="light"] .todo-day-header.not-today {
-  backdrop-filter: blur(4px) saturate(50%) brightness(108%);
-  -webkit-backdrop-filter: blur(4px) saturate(50%) brightness(108%);
-}
 
 .todo-day-add-btn {
   flex: none;
@@ -3005,6 +2932,9 @@ option {
    that series in its place, with a back button (see renderSeriesEditorPane,
    .series-open). */
 @media (max-width: 700px) {
+  /* Small enough for the day's name to fit its own line (see
+     .app-title-date) next to the header's buttons. */
+  .app-header h1 { font-size: 16px; }
   .modal,
   .todo-manage-modal {
     width: calc(100vw - 24px);
@@ -3052,6 +2982,8 @@ option {
      above in the file) -- needs to match its specificity to actually win. */
   .agenda-toggle-btn,
   .modal-close-btn.agenda-close-btn { display: flex; }
+  /* The title's day on a line of its own, under what the list shows. */
+  .app-title-date { display: block; }
   /* The running timer's own line, below the month and view controls. */
   .todo-toolbar { flex-wrap: wrap; }
   .todo-timer-chip {
