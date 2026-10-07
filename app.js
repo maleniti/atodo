@@ -146,6 +146,9 @@ const I18N = {
     'datePicker.prevMonth': 'Previous month',
     'datePicker.nextMonth': 'Next month',
     'menu.taskStats': 'Task stats',
+    'menu.deleteMeasurement': 'Delete this measurement',
+    'agenda.measuredFocus': 'Focused {from}–{to}',
+    'agenda.measuredTimer': 'Timed {from}–{to}',
 
     'sidePanel.agendaHeading': "Today's agenda",
     'sidePanel.agendaEmpty': 'No tasks today.',
@@ -570,6 +573,9 @@ const I18N = {
     'datePicker.prevMonth': 'Prethodni mjesec',
     'datePicker.nextMonth': 'Sljedeći mjesec',
     'menu.taskStats': 'Statistika zadatka',
+    'menu.deleteMeasurement': 'Izbriši ovo mjerenje',
+    'agenda.measuredFocus': 'Fokus {from}–{to}',
+    'agenda.measuredTimer': 'Mjereno {from}–{to}',
 
     'sidePanel.agendaHeading': 'Današnji raspored',
     'sidePanel.agendaEmpty': 'Danas nema zadataka.',
@@ -2446,6 +2452,9 @@ const TODO_ITEM_ACTIONS = {
   pause: [2, 'menu.pauseRecurrence', (item) => promptPauseRecurrence(item)],
   resume: [2, 'menu.resumeRecurrence', (item) => resumeRecurrenceNow(item)],
   stats: [3, 'menu.taskStats', (item) => showTaskStatsModal(item.taskId)],
+  // A measured frame on the agenda (see buildAgendaSessionBlock).
+  deleteMeasurement: [2, 'menu.deleteMeasurement', (item) =>
+    runAction(() => apiFetch(`/focus-sessions/${encodeURIComponent(item.sessionId)}`, { method: 'DELETE' })).catch(reportActionError)],
 };
 
 // A right-clicked item's own menu -- exactly the actions the server allows
@@ -4694,6 +4703,8 @@ let sidePanelEditMode = false;
 // slower answer for an earlier selection is ignored.
 let sidePanelData = null; // { key, detail, series }
 let agendaItems = []; // today's agenda (GET /agenda), shown with nothing selected
+// Its focus/timer sessions, where they ran (the running one's endMs: null).
+let agendaSessions = [];
 
 // Same breakpoint as the max-width: 1000px query (style.css) that turns the
 // side panel into a full-screen drawer -- used by call sites below that
@@ -4779,6 +4790,7 @@ async function refreshSidePanel() {
     try {
       const agendaAnswer = await apiFetch(`/agenda?date=${Dates.todayISO()}`);
       agendaItems = agendaAnswer.items;
+      agendaSessions = agendaAnswer.sessions || [];
       if ('focused' in agendaAnswer) focusedTodoItem = agendaAnswer.focused;
     } catch (err) {
       console.error('Failed to load the agenda:', err);
@@ -5271,6 +5283,16 @@ function buildAgendaBlock(block) {
 // every AGENDA_NOW_LINE_MS rather than only on a redraw.
 const AGENDA_NOW_LINE_MS = 30 * 1000;
 function positionAgendaNowLine() {
+  // A session still running grows with the clock: the agenda is redrawn.
+  if (!sidePanelTaskId && agendaSessions.some((s) => s.endMs == null) && !positionAgendaNowLine.redrawing) {
+    positionAgendaNowLine.redrawing = true;
+    try {
+      renderTodayAgenda();
+    } finally {
+      positionAgendaNowLine.redrawing = false;
+    }
+    return;
+  }
   const line = agendaTimelineEl.querySelector('.agenda-now-line');
   if (!line) return;
   const now = new Date();
@@ -5278,6 +5300,61 @@ function positionAgendaNowLine() {
   line.title = formatTimeOfDay(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
 }
 setInterval(positionAgendaNowLine, AGENDA_NOW_LINE_MS);
+
+// A focus/timer session drawn where it ran, from its task's due-time block's
+// look but fixed in place: not draggable, its own menu (deleting the
+// measurement, once it's stored), a clock icon if it was timed (allowed to
+// stick out of a frame too short to hold it). The running one grows with the
+// clock (see positionAgendaNowLine).
+const CLOCK_ICON =
+  '<svg viewBox="0 0 24 24" width="10" height="10"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M12 7v5l3.5 2" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>';
+
+function agendaSessionRange(session) {
+  const dayStart = new Date(`${agendaDate()}T00:00:00`).getTime();
+  const toMinutes = (ms) => Math.max(0, Math.min(24 * 60, (ms - dayStart) / 60000));
+  return { startMinutes: toMinutes(session.startMs), endMinutes: toMinutes(session.endMs == null ? Date.now() : session.endMs) };
+}
+
+function buildAgendaSessionBlock(block) {
+  const session = block.item;
+  const el = document.createElement('div');
+  el.className = 'agenda-block measured' + (session.endMs == null ? ' live' : '');
+  el.style.top = `${(block.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
+  el.style.height = `${Math.max(1, ((block.endMinutes - block.startMinutes) / 60) * AGENDA_HOUR_HEIGHT)}px`;
+  const widthPercent = 100 / block.totalColumns;
+  el.style.left = `${widthPercent * block.column}%`;
+  el.style.width = `calc(${widthPercent}% - 4px)`;
+  const color = resolveAgendaColor({ ...session, allDay: false }, false, false);
+  el.style.background = agendaHexToRgba(color, 0.3);
+  el.style.borderColor = agendaHexToRgba(color, 0.9);
+
+  const name = document.createElement('div');
+  name.className = 'agenda-block-name';
+  name.textContent = session.label;
+  el.appendChild(name);
+  if (session.kind === 'timer') {
+    const clock = document.createElement('span');
+    clock.className = 'agenda-session-clock';
+    clock.innerHTML = CLOCK_ICON;
+    el.appendChild(clock);
+  }
+
+  const time = (ms) => formatTimeOfDay(`${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}`);
+  el.title = `${session.label} · ${t(session.kind === 'timer' ? 'agenda.measuredTimer' : 'agenda.measuredFocus', {
+    from: time(session.startMs),
+    to: time(session.endMs == null ? Date.now() : session.endMs),
+  })}`;
+
+  // Only a stored session can be deleted (the running one isn't yet).
+  if (session.id) {
+    el.oncontextmenu = (e) => {
+      e.preventDefault();
+      showTodoContextMenu(e, { actions: ['deleteMeasurement'], sessionId: session.id });
+    };
+    attachLongPress(el, el.oncontextmenu);
+  }
+  return el;
+}
 
 function renderTodayAgenda() {
   const items = agendaItems.map((item) => ({ ...item, color: resolveAgendaColor(item, item.completed, item.failed) }));
@@ -5307,10 +5384,12 @@ function renderTodayAgenda() {
   const blocks = timedItems
     .filter((i) => !i.passive)
     .map((item) => ({ item, ...agendaBlockRange(item) }));
-  assignAgendaColumns(blocks);
+  const sessionBlocks = agendaSessions.map((session) => ({ item: session, session: true, ...agendaSessionRange(session) }));
+  assignAgendaColumns([...blocks, ...sessionBlocks]);
   for (const block of blocks) agendaTracksEl.appendChild(buildAgendaBlock(block));
+  for (const block of sessionBlocks) agendaTracksEl.appendChild(buildAgendaSessionBlock(block));
 
-  agendaEmptyEl.classList.toggle('hidden', items.length > 0);
+  agendaEmptyEl.classList.toggle('hidden', items.length > 0 || agendaSessions.length > 0);
 }
 
 // A note's own address: a task-level note (occurrenceDate null) or one on an

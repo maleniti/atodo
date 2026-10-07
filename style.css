@@ -335,6 +335,24 @@ main {
    un-draggable one keeps the plain default cursor rather than promising an
    interaction it'll silently ignore. */
 .agenda-block.draggable { cursor: grab; }
+/* A focus/timer session where it ran (see buildAgendaSessionBlock): an
+   outlined, lighter frame, as thin as it was short -- not draggable; its
+   clock icon (timed sessions) may stick out of a frame too thin for it. */
+.agenda-block.measured {
+  min-height: 0;
+  box-sizing: border-box;
+  border: 1px solid;
+  overflow: visible;
+}
+.agenda-block.measured .agenda-block-name { overflow: hidden; max-height: 100%; color: var(--text-primary); }
+.agenda-block.measured.live { border-style: dashed; }
+.agenda-session-clock {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  color: var(--text-primary);
+}
 .agenda-block.dragging {
   cursor: grabbing;
   z-index: 2;
