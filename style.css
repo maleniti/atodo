@@ -2987,6 +2987,18 @@ option {
    underneath (app-main's own narrow-overlay-open rule below) is hidden
    outright rather than left sitting there under the drawer's own
    translucent background. */
+/* Touch screens: iOS Safari zooms the page in on focusing a text field whose
+   text is under 16px (and doesn't zoom back out) -- so fields get 16px
+   there, and a little more height to match. Desktop keeps its smaller ones. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  .modal-input { height: 34px; }
+}
+
 @media (max-width: 1000px) {
   .todo-column { flex: 1; }
   .side-panel {
