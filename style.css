@@ -2359,6 +2359,9 @@ main,
 .series-row-mixed { color: var(--success); }
 .series-row[draggable="true"] { cursor: grab; }
 
+/* Narrow screens only (see the max-width: 700px query below). */
+.series-edit-back { display: none; margin-bottom: 10px; }
+
 .todo-manage-right {
   flex: 1;
   min-width: 0;
@@ -2987,6 +2990,29 @@ option {
    underneath (app-main's own narrow-overlay-open rule below) is hidden
    outright rather than left sitting there under the drawer's own
    translucent background. */
+/* Phones: every modal fits the screen, a margin to spare (they're fixed
+   widths otherwise -- 420px, Manage Tasks 640px). Manage Tasks shows one
+   pane at a time there: the series list, or -- once a series is picked --
+   that series in its place, with a back button (see renderSeriesEditorPane,
+   .series-open). */
+@media (max-width: 700px) {
+  .modal,
+  .todo-manage-modal {
+    width: calc(100vw - 24px);
+    box-sizing: border-box;
+  }
+  .todo-manage-panes { flex-direction: column; }
+  .todo-manage-left { width: auto; }
+  .todo-manage-right {
+    border-left: none;
+    padding-left: 0;
+  }
+  #todo-manage-months { max-height: none; }
+  .todo-manage-modal:not(.series-open) .todo-manage-right { display: none; }
+  .todo-manage-modal.series-open .todo-manage-left { display: none; }
+  .series-edit-back { display: inline-flex; }
+}
+
 /* Touch screens: iOS Safari zooms the page in on focusing a text field whose
    text is under 16px (and doesn't zoom back out) -- so fields get 16px
    there, and a little more height to match. Desktop keeps its smaller ones. */

@@ -256,6 +256,7 @@ const I18N = {
 
     'manage.title': 'To-do list',
     'manage.selectSeries': 'Select a series on the left to edit it.',
+    'manage.backToList': '‹ Back',
     'manage.addNewTask': '+ Add new task',
     'manage.seriesNamePlaceholder': 'Series name',
     'manage.saved': 'Saved',
@@ -675,6 +676,7 @@ const I18N = {
 
     'manage.title': 'Popis zadataka',
     'manage.selectSeries': 'Odaberite niz slijeva za njegovo uređivanje.',
+    'manage.backToList': '‹ Natrag',
     'manage.addNewTask': '+ Dodaj novi zadatak',
     'manage.seriesNamePlaceholder': 'Naziv niza',
     'manage.saved': 'Spremljeno',
@@ -5550,8 +5552,18 @@ function selectSeriesInManage(seriesId) {
   manageSelectedSeriesId = seriesId;
   manageSeriesData = null;
   renderTodoManageMonths();
+  renderSeriesEditorPane();
   refreshTodoManageModal();
 }
+
+// Narrow screens show one pane at a time (see .series-open, style.css): the
+// series list, or the picked series in its place -- back to the list here.
+document.getElementById('series-edit-back').onclick = () => {
+  manageSelectedSeriesId = null;
+  manageSeriesData = null;
+  renderTodoManageMonths();
+  renderSeriesEditorPane();
+};
 
 function renderTodoManageMonths() {
   todoManageMonthsEl.innerHTML = '';
@@ -5696,7 +5708,13 @@ function buildSeriesMemberRow(task) {
   return row;
 }
 
+const todoManageModalEl = todoManageOverlay.querySelector('.todo-manage-modal');
+
 function renderSeriesEditorPane() {
+  // Which pane a narrow screen shows -- and, switching, from its top.
+  const open = !!manageSelectedSeriesId;
+  if (todoManageModalEl.classList.contains('series-open') !== open) todoManageModalEl.scrollTop = 0;
+  todoManageModalEl.classList.toggle('series-open', open);
   clearTimeout(seriesEditSaveConfirmTimer);
   seriesEditSaveConfirmEl.classList.remove('visible');
   if (!manageSelectedSeriesId || !manageSeriesData) {
