@@ -2373,9 +2373,16 @@ document.addEventListener('contextmenu', () => {
   // A long press's own contextmenu (Android): its touch may still end in a tap.
   if (Date.now() - lastTouchAt < 1500) swallowClicksUntil = Date.now() + 800;
 }, true);
+// Clicks are caught before they reach what's under them: the tap a long
+// press ends in is swallowed (the menu it opened stays), and while a menu is
+// open, a click (or tap) anywhere outside it only closes it -- it doesn't
+// also select a row, which on a narrow screen opened the side panel over the
+// list.
 document.addEventListener('click', (e) => {
-  if (Date.now() >= swallowClicksUntil) return;
-  swallowClicksUntil = 0;
+  const swallow = Date.now() < swallowClicksUntil;
+  if (swallow) swallowClicksUntil = 0;
+  else if (activeTodoContextMenu && !activeTodoContextMenu.contains(e.target)) closeTodoContextMenu();
+  else return;
   e.stopPropagation();
   e.preventDefault();
 }, true);
