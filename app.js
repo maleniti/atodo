@@ -128,6 +128,7 @@ const I18N = {
     'todo.hideRemove': 'Hide (remove from the list)',
 
     'menu.timer': 'Timer',
+    'menu.autoTimer': 'Auto timer ({time})',
     'menu.pauseTimer': 'Pause timer',
     'menu.cancelTimer': 'Cancel timer',
     'menu.resumeTimer': 'Resume timer',
@@ -555,6 +556,7 @@ const I18N = {
     'todo.hideRemove': 'Sakrij (ukloni s popisa)',
 
     'menu.timer': 'Mjerač vremena',
+    'menu.autoTimer': 'Automatski mjerač ({time})',
     'menu.pauseTimer': 'Pauziraj mjerač vremena',
     'menu.cancelTimer': 'Odustani od mjerača vremena',
     'menu.resumeTimer': 'Nastavi mjerač vremena',
@@ -2434,11 +2436,19 @@ document.addEventListener('keydown', (e) => {
 });
 
 // What each of an item's actions (as the server lists them, see
-// views.actionsFor) does from a row or the agenda: [menu group, label key,
+// views.actionsFor) does from a row or the agenda: [menu group, label key
+// (or a function of the item, for a label naming something of it),
 // handler]. Groups render in order, separated by dividers -- timer
 // controls, state changes, editing, stats.
 const TODO_ITEM_ACTIONS = {
   timer: [0, 'menu.timer', (item) => startTaskTimerPrompt(item)],
+  // A countdown of the task's average measured time, started at once (the
+  // server works it out, see autoTimerSeconds there) -- named with that time.
+  autoTimer: [
+    0,
+    (item) => t('menu.autoTimer', { time: formatStatsDuration(item.autoTimerSeconds) }),
+    (item) => occurrenceAction(item, 'timer', { body: { auto: true } }),
+  ],
   pauseTimer: [0, 'menu.pauseTimer', () => unfocusOccurrence().catch(reportActionError)],
   resumeTimer: [0, 'menu.resumeTimer', (item) => focusOccurrence(item.taskId, item.occurrenceDate).catch(reportActionError)],
   cancelTimer: [0, 'menu.cancelTimer', (item) => cancelTaskTimer(item)],
@@ -2466,7 +2476,7 @@ function showTodoContextMenu(event, item) {
   const groups = [[], [], [], []];
   for (const action of item.actions || []) {
     const entry = TODO_ITEM_ACTIONS[action];
-    if (entry) groups[entry[0]].push({ label: t(entry[1]), onClick: () => entry[2](item) });
+    if (entry) groups[entry[0]].push({ label: typeof entry[1] === 'function' ? entry[1](item) : t(entry[1]), onClick: () => entry[2](item) });
   }
 
   for (const group of groups) {
