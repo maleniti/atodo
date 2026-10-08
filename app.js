@@ -5285,8 +5285,8 @@ function positionAgendaNowLine() {
 setInterval(positionAgendaNowLine, AGENDA_NOW_LINE_MS);
 
 // A focus/timer session drawn where it ran, from its task's due-time block's
-// look but fixed in place: not draggable, its own menu (deleting the
-// measurement, once it's stored), a clock icon if it was timed (allowed to
+// look but fixed in place: not draggable, its occurrence's menu plus deleting
+// the measurement (once it's stored), a clock icon if it was timed (allowed to
 // stick out of a frame too short to hold it). The running one grows with the
 // clock (see positionAgendaNowLine).
 const CLOCK_ICON =
@@ -5301,7 +5301,10 @@ function agendaSessionRange(session) {
 function buildAgendaSessionBlock(block) {
   const session = block.item;
   const el = document.createElement('div');
-  el.className = 'agenda-block measured' + (session.endMs == null ? ' live' : '');
+  // The occurrence it measured, when it's on today's agenda: its due-time
+  // block isn't drawn (renderTodayAgenda), so this one stands in for it.
+  const occurrence = block.occurrence;
+  el.className = 'agenda-block measured' + (session.endMs == null ? ' live' : '') + (occurrence && occurrence.completed ? ' completed' : '');
   el.style.top = `${(block.startMinutes / 60) * agendaHourHeight}px`;
   el.style.height = `${Math.max(1, ((block.endMinutes - block.startMinutes) / 60) * agendaHourHeight)}px`;
   const widthPercent = 100 / block.totalColumns;
@@ -5328,11 +5331,15 @@ function buildAgendaSessionBlock(block) {
     to: time(session.endMs == null ? Date.now() : session.endMs),
   })}`;
 
-  // Only a stored session can be deleted (the running one isn't yet).
-  if (session.id) {
+  // Its occurrence's own menu (if it's on the agenda) and, for a stored
+  // session, deleting the measurement (the running one isn't stored yet).
+  const sessionActions = session.id ? ['deleteMeasurement'] : [];
+  if (occurrence) {
+    attachAgendaContextMenu(el, { ...occurrence, actions: [...occurrence.actions, ...sessionActions], sessionId: session.id });
+  } else if (sessionActions.length) {
     el.oncontextmenu = (e) => {
       e.preventDefault();
-      showTodoContextMenu(e, { actions: ['deleteMeasurement'], sessionId: session.id });
+      showTodoContextMenu(e, { actions: sessionActions, sessionId: session.id });
     };
     attachLongPress(el, el.oncontextmenu);
   }
@@ -5417,10 +5424,22 @@ function renderTodayAgenda() {
     agendaTracksEl.appendChild(buildAgendaPassiveBand(item));
   }
 
+  // An occurrence measured today is drawn where it actually ran instead of
+  // where it was scheduled: its sessions replace its due-time block, and
+  // take over that block's menu and double-click (see
+  // buildAgendaSessionBlock).
+  const occurrenceKey = (x) => `${x.taskId}|${x.occurrenceDate}`;
+  const measured = new Set(agendaSessions.map(occurrenceKey));
+  const itemByKey = new Map(timedItems.map((item) => [occurrenceKey(item), item]));
   const blocks = timedItems
-    .filter((i) => !i.passive)
+    .filter((i) => !i.passive && !measured.has(occurrenceKey(i)))
     .map((item) => ({ item, ...agendaBlockRange(item) }));
-  const sessionBlocks = agendaSessions.map((session) => ({ item: session, session: true, ...agendaSessionRange(session) }));
+  const sessionBlocks = agendaSessions.map((session) => ({
+    item: session,
+    session: true,
+    occurrence: itemByKey.get(occurrenceKey(session)) || null,
+    ...agendaSessionRange(session),
+  }));
   assignAgendaColumns([...blocks, ...sessionBlocks]);
   for (const block of blocks) agendaTracksEl.appendChild(buildAgendaBlock(block));
   for (const block of sessionBlocks) agendaTracksEl.appendChild(buildAgendaSessionBlock(block));
