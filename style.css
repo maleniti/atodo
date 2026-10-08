@@ -1349,9 +1349,7 @@ main {
 #todo-viewport:hover::-webkit-scrollbar { width: 10px; }
 
 /* One day of the list (see renderTodo). The highlighted day is named by
-   the page title (see renderAppTitle); every other day gets a floating name
-   panel, kept at the middle of whatever part of the day is visible (see
-   updateTodoDayHighlight). Days are separated by a plain line. */
+   the page title (see renderAppTitle); days are separated by a plain line. */
 .todo-day {
   position: relative;
 }
@@ -1365,7 +1363,7 @@ main {
    (opacity, see updateTodoDayHighlight) -- and any opacity below 1 makes
    the element a backdrop root, cutting a backdrop-filter inside it off from
    whatever's behind the list: its glass look would snap instead of fading.
-   So these days' rows (and their name panel, below) trade the glass for a
+   So these days' rows trade the glass for a
    plain dark background, which fades smoothly. Focused keeps its blue tint
    and dismissed its hatching -- neither depends on the backdrop. */
 .todo-day:not(.highlighted) .todo-item {
@@ -1384,41 +1382,6 @@ main {
 :root[data-theme="light"] .todo-day:not(.highlighted) .todo-item.selected:not(.focused) {
   background-color: rgba(210, 210, 210, 0.55) !important;
 }
-
-/* Centered on the day; clicks pass through to the tasks underneath. The
-   outer box is placed and faded with distance by updateTodoDayHighlight
-   (inline top/opacity, no transition -- it has to keep up with the
-   scroll); the card inside fades in/out (with a slight zoom) as the day
-   stops/starts being the highlighted one, as slowly as the header. A solid
-   dark card rather than glass, so it can fade with its day (see above). */
-.todo-day-panel {
-  position: absolute;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1;
-  pointer-events: none;
-}
-.todo-day-panel-card {
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  padding: 4px 10px;
-  border-radius: 7px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text-heading);
-  text-shadow: var(--glass-text-shadow);
-  background: rgba(0, 0, 0, 0.55);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-}
-:root[data-theme="light"] .todo-day-panel-card {
-  background: rgba(255, 255, 255, 0.5);
-}
-.todo-day.highlighted .todo-day-panel-card {
-  opacity: 0;
-  transform: scale(0.92);
-}
-.todo-day-panel.panel-out { visibility: hidden; } /* still measurable, see updateTodoDayHighlight */
 
 /* Empty space after the last day (sized by sizeTodoListSpacers), so even a
    short last day can be scrolled up into the highlight band. */

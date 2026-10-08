@@ -3598,15 +3598,9 @@ let todoScrollToTodayOnRender = true;
 // hoveredTodoDayRef) is highlighted instead, and once the mouse leaves the
 // list (or that day scrolls out of reach) the day being read is again.
 //
-// Only the highlighted day shows its header -- sticky at the top while the
-// day is on screen, with its "+" and a "Today" button whenever it isn't
-// today. Every other day's header is hidden (it keeps its space, so the list
-// doesn't shift as the highlight moves); instead a panel floats at the
-// middle of whatever part of that day's tasks is visible, naming it -- and
-// disappears once it would stick out past the first or last of them. The
-// closer a day is to the reading point, the more opaque its tasks
-// (MIN_OPACITY far away, fully opaque at FADE_DISTANCE and closer) and,
-// fading faster, its panel (PANEL_MIN_OPACITY / PANEL_FADE_DISTANCE).
+// The highlighted day is named by the page title (see renderAppTitle). The
+// closer any other day is to the reading point, the more opaque its tasks
+// (MIN_OPACITY far away, fully opaque at FADE_DISTANCE and closer).
 
 const BAND_TOP = 0.2;
 const BAND_BOTTOM = 0.35;
@@ -3617,8 +3611,6 @@ const SHORT_DAY = 0.25;
 const BACK_GAP = 0.05; // hysteresis: this much further below the band before moving back
 const MIN_OPACITY = 0.3; // a non-highlighted day's tasks, far from the reading point
 const FADE_DISTANCE = 0.6; // ...becoming fully opaque this close to it, in visible heights
-const PANEL_MIN_OPACITY = 0.1; // a day's name panel fades faster than its tasks
-const PANEL_FADE_DISTANCE = 0.35;
 
 // The visible part of the list, in viewport coordinates, and the band in it.
 // Near the very top of the list the band rides higher, starting at the top
@@ -3720,9 +3712,7 @@ function updateTodoDayHighlight() {
   }
   renderAppTitle();
 
-  // Every other day: opacity by closeness to the reading point, and its
-  // name panel centered on the part of it that's visible.
-  const viewportRect = todoViewportEl.getBoundingClientRect();
+  // Every other day: opacity by closeness to the reading point.
   todoDayRefs.forEach((ref, i) => {
     if (ref === current) {
       ref.columns.style.opacity = '';
@@ -3732,22 +3722,6 @@ function updateTodoDayHighlight() {
     const distance = reading < top ? top - reading : reading > bottom ? reading - bottom : 0;
     const closeness = 1 - Math.min(1, distance / (FADE_DISTANCE * height));
     ref.columns.style.opacity = (MIN_OPACITY + (1 - MIN_OPACITY) * closeness).toFixed(3);
-    const panelCloseness = 1 - Math.min(1, distance / (PANEL_FADE_DISTANCE * height));
-    ref.panel.style.opacity = (PANEL_MIN_OPACITY + (1 - PANEL_MIN_OPACITY) * panelCloseness).toFixed(3);
-
-    // Centered on the visible part of the day's tasks -- and hidden once it
-    // would stick out above the first of them or below the last.
-    const rows = ref.columns.getBoundingClientRect();
-    const visibleTop = Math.max(rows.top, viewportRect.top);
-    const visibleBottom = Math.min(rows.bottom, viewportRect.bottom);
-    const center = (visibleTop + visibleBottom) / 2;
-    const halfHeight = ref.panel.offsetHeight / 2;
-    // Within the visible part of the rows -- so as the day scrolls out of
-    // view it goes once the visible slice can't hold it, rather than
-    // sticking out past the viewport's edge or the day's rows.
-    const fits = visibleBottom - visibleTop >= 2 * halfHeight && center - halfHeight >= rows.top && center + halfHeight <= rows.bottom;
-    ref.panel.classList.toggle('panel-out', !fits);
-    if (fits) ref.panel.style.top = `${center - ref.group.getBoundingClientRect().top}px`;
   });
 }
 
@@ -4359,8 +4333,8 @@ function renderTodo() {
 
   if (todoOpening) todoScrollToTodayOnRender = true;
   const anchor = todoScrollToTodayOnRender ? null : todoScrollAnchor();
-  // Each day is drawn as it looked before -- highlighted or dimmed, its
-  // fade and name panel where they were (see updateTodoDayHighlight) --
+  // Each day is drawn as it looked before -- highlighted or dimmed, with
+  // its fade (see updateTodoDayHighlight) --
   // rather than from a default that's corrected right after: every row has
   // a transition, so a correction would play as a flicker on each redraw.
   const previousRefs = new Map(todoDayRefs.map((ref) => [ref.dateISO, ref]));
@@ -4374,9 +4348,9 @@ function renderTodo() {
     const previous = previousRefs.get(dateISO);
     const dayItems = todoDays.get(dateISO);
 
-    // One group per day, holding all of it -- the name panel is positioned
-    // in it (see updateTodoDayHighlight). The highlighted day's name is the
-    // page title's (see renderAppTitle); days are just divided by a line.
+    // One group per day, holding all of it. The highlighted day's name is
+    // the page title's (see renderAppTitle); days are just divided by a
+    // line.
     const group = document.createElement('div');
     group.className = 'todo-day' + (dimmed ? '' : ' highlighted');
     todoListEl.appendChild(group);
@@ -4392,19 +4366,6 @@ function renderTodo() {
     divider.className = 'todo-day-divider';
     group.appendChild(divider);
 
-    // The day's name for when it isn't the highlighted one: its label, a
-    // line per comma-separated part.
-    const panel = document.createElement('div');
-    panel.className = 'todo-day-panel';
-    const panelCard = document.createElement('div');
-    panelCard.className = 'todo-day-panel-card';
-    for (const part of describeDayLabel(dateISO, todayISO).split(', ')) {
-      const line = document.createElement('div');
-      line.textContent = part;
-      panelCard.appendChild(line);
-    }
-    panel.appendChild(panelCard);
-
     // Two columns, filled in display order (the server's: all-day first,
     // then by due time, then by name) -- the first gets the earlier half,
     // and the extra item when the count is odd.
@@ -4419,15 +4380,9 @@ function renderTodo() {
       for (const item of columnItems) column.appendChild(buildTodoItemRow(item, dimmed));
       columns.appendChild(column);
     }
-    if (previous) {
-      columns.style.opacity = previous.columns.style.opacity;
-      panel.style.opacity = previous.panel.style.opacity;
-      panel.style.top = previous.panel.style.top;
-      panel.classList.toggle('panel-out', previous.panel.classList.contains('panel-out'));
-    }
+    if (previous) columns.style.opacity = previous.columns.style.opacity;
     group.appendChild(columns);
-    group.appendChild(panel);
-    todoDayRefs.push({ dateISO, group, sentinel, columns, panel });
+    todoDayRefs.push({ dateISO, group, sentinel, columns });
   }
 
   const bottomSpacer = document.createElement('div');
