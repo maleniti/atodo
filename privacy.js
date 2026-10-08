@@ -12,9 +12,10 @@ const PRIVACY_I18N = {
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
     'privacy.pageTitle': 'Privacy Policy',
-    'privacy.updated': 'Last updated: 3 October 2026',
+    'privacy.updated': 'Last updated: 8 October 2026',
     'privacy.intro':
-      '<p>This Privacy Policy explains what information A-To-Do ("we", "us") collects when you use the A-To-Do to-do list application (the "Service"), and what we do -- and don\'t do -- with it.</p>',
+      '<p>This Privacy Policy explains what information A-To-Do ("we", "us") collects when you use the A-To-Do to-do list application (the "Service"), and what we do -- and don\'t do -- with it.</p>' +
+      '<p>The controller of your personal data is <strong>Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak, Slakovec, Slakovec 80</strong>, 40305 Nedelišće, Croatia (short name: Male Niti, vl. Nikola Novak i Mateja Šafarić Novak), OIB 79072017892. You can reach us about your data at <a href="mailto:support@maleniti.com">support@maleniti.com</a> or through our <a href="support.html?topic=account">support form</a> (see section 9).</p>',
     'privacy.s1':
       "<h2>1. Information we collect</h2><ul><li><strong>Account information:</strong> the email address and password you register with. Your password is never stored in plain text.</li><li><strong>Content you create:</strong> the tasks, notes, and settings you enter into the Service.</li><li><strong>Payment information:</strong> if you subscribe to a paid plan, payment is handled entirely by our payment processor (Stripe). We never see or store your card details ourselves.</li><li><strong>Payment receipts:</strong> for every payment, the fiscalized receipt we're required by law to issue (see section 4).</li><li><strong>Support messages:</strong> what you send us through the <a href=\"support.html\">support form</a> -- your name, email address and message, the account it was sent from if you were logged in, and, to help us look into problems, the app version, the page you came from, your language and your browser.</li></ul>",
     'privacy.s2':
@@ -32,7 +33,8 @@ const PRIVACY_I18N = {
     'privacy.s8':
       '<h2>8. Changes to this policy</h2><p>We may update this Privacy Policy from time to time. We\'ll update the "Last updated" date above when we do. Continued use of the Service after a change means you accept the updated policy.</p>',
     'privacy.s9':
-      '<h2>9. Contact us</h2><p>Questions about this policy or your data? Write to us through our <a href="support.html?topic=account">support form</a>.</p>',
+      '<h2>9. Contact us</h2><p>Questions about this policy or your data? Write to us at <a href="mailto:support@maleniti.com">support@maleniti.com</a> or through our <a href="support.html?topic=account">support form</a>.</p>' +
+      '<p>If you believe we process your data unlawfully, you also have the right to lodge a complaint with the Croatian data protection authority, the Agencija za zaštitu osobnih podataka (<a href="https://azop.hr" rel="noopener">azop.hr</a>).</p>',
   },
   hr: {
     'nav.login': 'Prijava',
@@ -41,9 +43,10 @@ const PRIVACY_I18N = {
     'nav.privacy': 'Pravila privatnosti',
     'nav.terms': 'Uvjeti korištenja',
     'privacy.pageTitle': 'Pravila privatnosti',
-    'privacy.updated': 'Zadnje ažurirano: 3. listopada 2026.',
+    'privacy.updated': 'Zadnje ažurirano: 8. listopada 2026.',
     'privacy.intro':
-      '<p>Ova Pravila privatnosti objašnjavaju koje podatke A-To-Do ("mi") prikuplja kada koristite aplikaciju za popis obveza A-To-Do ("Usluga"), te što s njima radimo -- a što ne.</p>',
+      '<p>Ova Pravila privatnosti objašnjavaju koje podatke A-To-Do ("mi") prikuplja kada koristite aplikaciju za popis obveza A-To-Do ("Usluga"), te što s njima radimo -- a što ne.</p>' +
+      '<p>Voditelj obrade vaših osobnih podataka je <strong>Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak, Slakovec, Slakovec 80</strong>, 40305 Nedelišće, Hrvatska (skraćeni naziv: Male Niti, vl. Nikola Novak i Mateja Šafarić Novak), OIB 79072017892. U vezi sa svojim podacima možete nam se obratiti na <a href="mailto:support@maleniti.com">support@maleniti.com</a> ili putem našeg <a href="support.html?topic=account">obrasca za podršku</a> (vidi točku 9.).</p>',
     'privacy.s1':
       "<h2>1. Podaci koje prikupljamo</h2><ul><li><strong>Podaci o računu:</strong> e-mail adresa i lozinka s kojima se registrirate. Vaša lozinka nikada se ne pohranjuje u čitljivom obliku.</li><li><strong>Sadržaj koji stvarate:</strong> zadaci, bilješke i postavke koje unosite u Uslugu.</li><li><strong>Podaci o plaćanju:</strong> ako se pretplatite na plaćeni plan, plaćanje u potpunosti obrađuje naš obrađivač plaćanja (Stripe). Mi nikada ne vidimo niti pohranjujemo podatke vaše kartice.</li><li><strong>Računi za plaćanja:</strong> za svako plaćanje, fiskalizirani račun koji smo po zakonu dužni izdati (vidi odjeljak 4.).</li><li><strong>Poruke podršci:</strong> ono što nam pošaljete putem <a href=\"support.html\">obrasca za podršku</a> -- vaše ime, e-mail adresa i poruka, račun s kojeg je poslana ako ste bili prijavljeni te, kako bismo lakše istražili probleme, verzija aplikacije, stranica s koje ste došli, vaš jezik i preglednik.</li></ul>",
     'privacy.s2':
@@ -61,7 +64,8 @@ const PRIVACY_I18N = {
     'privacy.s8':
       '<h2>8. Izmjene ovih pravila</h2><p>Ova Pravila privatnosti povremeno možemo ažurirati. Datum "Zadnje ažurirano" iznad ćemo ažurirati kada to učinimo. Nastavak korištenja Usluge nakon izmjene znači da prihvaćate ažurirana pravila.</p>',
     'privacy.s9':
-      '<h2>9. Kontaktirajte nas</h2><p>Imate pitanja o ovim pravilima ili svojim podacima? Pišite nam putem našeg <a href="support.html?topic=account">obrasca za podršku</a>.</p>',
+      '<h2>9. Kontaktirajte nas</h2><p>Imate pitanja o ovim pravilima ili svojim podacima? Pišite nam na <a href="mailto:support@maleniti.com">support@maleniti.com</a> ili putem našeg <a href="support.html?topic=account">obrasca za podršku</a>.</p>' +
+      '<p>Smatrate li da vaše podatke obrađujemo nezakonito, imate pravo podnijeti pritužbu Agenciji za zaštitu osobnih podataka (<a href="https://azop.hr" rel="noopener">azop.hr</a>).</p>',
   },
 };
 

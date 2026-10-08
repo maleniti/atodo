@@ -10,9 +10,9 @@ const TERMS_I18N = {
     'nav.privacy': 'Privacy Policy',
     'nav.terms': 'Terms of Service',
     'terms.pageTitle': 'Terms of Service',
-    'terms.updated': 'Last updated: 3 October 2026',
+    'terms.updated': 'Last updated: 8 October 2026',
     'terms.intro':
-      '<p>These Terms of Service ("Terms") govern your use of the A-To-Do to-do list application (the "Service"), operated by [Legal entity name] ("we", "us"). By creating an account or otherwise using the Service, you agree to these Terms.</p>',
+      '<p>These Terms of Service ("Terms") govern your use of the A-To-Do to-do list application (the "Service"), operated by Male Niti, vl. Nikola Novak i Mateja Šafarić Novak ("we", "us"). By creating an account or otherwise using the Service, you agree to these Terms.</p>',
     'terms.s1':
       "<h2>1. The Service</h2><p>A-To-Do is a to-do list application with recurring tasks, overdue/failed-appointment tracking, work timers, and per-task notes. It's offered on a Free plan and a paid Pro plan.</p>",
     'terms.s2':
@@ -36,7 +36,7 @@ const TERMS_I18N = {
     'terms.s11':
       '<h2>11. Changes to these Terms</h2><p>We may update these Terms from time to time. We\'ll update the "Last updated" date above when we do. Continued use of the Service after a change means you accept the updated Terms.</p>',
     'terms.s12':
-      '<h2>12. Governing law</h2><p>These Terms are governed by the laws of [Jurisdiction], without regard to its conflict-of-laws principles.</p>',
+      '<h2>12. Governing law</h2><p>These Terms are governed by the laws of the Republic of Croatia, without regard to its conflict-of-laws principles. Disputes arising from them are resolved by the Municipal Court in Čakovec (Općinski sud u Čakovcu), without prejudice to the rights mandatory consumer protection law gives you, including to bring proceedings where you live.</p>',
     'terms.s13':
       '<h2>13. Contact us</h2><p>Questions about these Terms? Write to us through our <a href="support.html">support form</a> - many answers are already in the <a href="faq.html">FAQ</a>.</p>',
   },
@@ -47,9 +47,9 @@ const TERMS_I18N = {
     'nav.privacy': 'Pravila privatnosti',
     'nav.terms': 'Uvjeti korištenja',
     'terms.pageTitle': 'Uvjeti korištenja',
-    'terms.updated': 'Zadnje ažurirano: 3. listopada 2026.',
+    'terms.updated': 'Zadnje ažurirano: 8. listopada 2026.',
     'terms.intro':
-      '<p>Ovi Uvjeti korištenja ("Uvjeti") uređuju vaše korištenje aplikacije za popis obveza A-To-Do ("Usluga"), koju operativno vodi [Naziv pravnog subjekta] ("mi"). Otvaranjem računa ili korištenjem Usluge na drugi način, prihvaćate ove Uvjete.</p>',
+      '<p>Ovi Uvjeti korištenja ("Uvjeti") uređuju vaše korištenje aplikacije za popis obveza A-To-Do ("Usluga"), koju operativno vodi Male Niti, vl. Nikola Novak i Mateja Šafarić Novak ("mi"). Otvaranjem računa ili korištenjem Usluge na drugi način, prihvaćate ove Uvjete.</p>',
     'terms.s1':
       '<h2>1. Usluga</h2><p>A-To-Do je aplikacija za popis obveza s ponavljajućim zadacima, praćenjem zakašnjelih/neuspjelih termina, mjeračima vremena rada i bilješkama po zadatku. Nudi se u besplatnom planu i plaćenom Pro planu.</p>',
     'terms.s2':
@@ -73,7 +73,7 @@ const TERMS_I18N = {
     'terms.s11':
       '<h2>11. Izmjene ovih Uvjeta</h2><p>Ove Uvjete povremeno možemo ažurirati. Datum "Zadnje ažurirano" iznad ćemo ažurirati kada to učinimo. Nastavak korištenja Usluge nakon izmjene znači da prihvaćate ažurirane Uvjete.</p>',
     'terms.s12':
-      '<h2>12. Mjerodavno pravo</h2><p>Ovi Uvjeti podliježu zakonima [Jurisdikcija], bez obzira na njihova pravila o sukobu zakona.</p>',
+      '<h2>12. Mjerodavno pravo</h2><p>Ovi Uvjeti podliježu zakonima Republike Hrvatske, bez obzira na njezina pravila o sukobu zakona. Za sporove koji iz njih proizlaze nadležan je Općinski sud u Čakovcu, ne dirajući u prava koja vam daju prisilni propisi o zaštiti potrošača, uključujući pravo pokretanja postupka u mjestu prebivališta.</p>',
     'terms.s13':
       '<h2>13. Kontaktirajte nas</h2><p>Imate pitanja o ovim Uvjetima? Pišite nam putem našeg <a href="support.html">obrasca za podršku</a> - mnogi su odgovori već u <a href="faq.html">čestim pitanjima</a>.</p>',
   },
