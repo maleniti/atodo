@@ -220,6 +220,9 @@ main {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* One finger scrolls; two pinch-zoom the agenda itself (see zoomAgenda),
+     not the page. */
+  touch-action: pan-y;
   scrollbar-width: thin; /* Firefox */
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
@@ -237,7 +240,7 @@ main {
    container. */
 .agenda-timeline {
   position: relative;
-  height: 1056px;
+  height: 1056px; /* 24 hours at the default zoom -- set by renderTodayAgenda */
 }
 
 .agenda-hour-line {
@@ -260,6 +263,9 @@ main {
   font-size: 9px;
   color: var(--text-muted);
 }
+/* Half- and quarter-hour lines, when zoomed in far enough for them. */
+.agenda-hour-line.minor { border-top-style: dashed; opacity: 0.6; }
+.agenda-hour-line.minor .agenda-hour-label { font-size: 8px; }
 
 /* The current time (see positionAgendaNowLine): from the hour labels' gutter
    across the tracks, a dot at its start, above every block (a dragged one

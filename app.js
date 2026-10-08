@@ -5002,7 +5002,19 @@ function buildSidePanelEmptyRow(text) {
 // positioned/sized around its own due time (see agendaBlockRange below).
 // ---------------------------------------------------------------------------
 
-const AGENDA_HOUR_HEIGHT = 44; // px per hour of the rendered timeline
+// px per hour of the rendered timeline -- zoomable (Ctrl + wheel, or a
+// two-finger pinch, see zoomAgenda), remembered per device.
+const AGENDA_DEFAULT_HOUR_HEIGHT = 44;
+const AGENDA_MIN_HOUR_HEIGHT = 22;
+const AGENDA_MAX_HOUR_HEIGHT = 600;
+const AGENDA_ZOOM_STORAGE_KEY = 'atodo-agenda-hour-height';
+let agendaHourHeight = AGENDA_DEFAULT_HOUR_HEIGHT;
+try {
+  const stored = Number(localStorage.getItem(AGENDA_ZOOM_STORAGE_KEY));
+  if (stored) agendaHourHeight = Math.min(AGENDA_MAX_HOUR_HEIGHT, Math.max(AGENDA_MIN_HOUR_HEIGHT, stored));
+} catch {
+  // No storage (a private window, say): the default.
+}
 
 // Same colors, and the same override order, as .todo-item-name's own CSS
 // cascade (style.css) -- completed/failed/all-day/appointment/passive rules
@@ -5068,16 +5080,22 @@ function buildAgendaAllDayPill(item) {
   return pill;
 }
 
-function buildAgendaHourLine(hour) {
+// A line across the timeline at `minutes` past midnight, labelled -- the
+// full hours, and once zoomed in far enough the half or quarter hours too
+// (fainter, see .agenda-hour-line.minor).
+function buildAgendaHourLine(minutes) {
   const row = document.createElement('div');
-  row.className = 'agenda-hour-line';
-  row.style.top = `${hour * AGENDA_HOUR_HEIGHT}px`;
+  row.className = 'agenda-hour-line' + (minutes % 60 ? ' minor' : '');
+  row.style.top = `${(minutes / 60) * agendaHourHeight}px`;
   const label = document.createElement('span');
   label.className = 'agenda-hour-label';
-  label.textContent = formatTimeOfDay(`${String(hour).padStart(2, '0')}:00`);
+  label.textContent = formatTimeOfDay(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`);
   row.appendChild(label);
   return row;
 }
+
+// Minutes between the timeline's lines at the current zoom.
+const agendaLineStep = () => (agendaHourHeight >= 240 ? 15 : agendaHourHeight >= 110 ? 30 : 60);
 
 // Semi-transparent cover from the start of the day to the task's own due
 // time -- deliberately not a same-height-as-the-hour-grid opaque block like
@@ -5088,7 +5106,7 @@ function buildAgendaPassiveBand(item) {
   const band = document.createElement('div');
   band.className = 'agenda-passive-band';
   const dueMinutes = agendaTimeToMinutes(item.dueTime);
-  band.style.height = `${(dueMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
+  band.style.height = `${(dueMinutes / 60) * agendaHourHeight}px`;
   band.style.background = agendaHexToRgba(item.color, 0.16);
   const label = document.createElement('span');
   label.className = 'agenda-passive-band-label';
@@ -5180,13 +5198,13 @@ function attachAgendaBlockDrag(el, item) {
     el.classList.add('dragging');
 
     function onMouseMove(moveEvent) {
-      const deltaMinutes = ((moveEvent.clientY - startClientY) / AGENDA_HOUR_HEIGHT) * 60;
+      const deltaMinutes = ((moveEvent.clientY - startClientY) / agendaHourHeight) * 60;
       const step = moveEvent.ctrlKey ? 1 : AGENDA_DRAG_SNAP_MINUTES;
       const rawMinutes = originalDueMinutes + deltaMinutes;
       latestDueMinutes = Math.max(0, Math.min(24 * 60 - 1, Math.round(rawMinutes / step) * step));
       const range = agendaRangeForDueMinutes(latestDueMinutes, durationMinutes, item.appointment);
-      el.style.top = `${(range.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
-      el.style.height = `${((range.endMinutes - range.startMinutes) / 60) * AGENDA_HOUR_HEIGHT}px`;
+      el.style.top = `${(range.startMinutes / 60) * agendaHourHeight}px`;
+      el.style.height = `${((range.endMinutes - range.startMinutes) / 60) * agendaHourHeight}px`;
       if (timeEl) timeEl.textContent = formatTimeOfDay(agendaMinutesToTime(latestDueMinutes));
     }
 
@@ -5221,8 +5239,8 @@ const agendaDate = () => Dates.todayISO();
 function buildAgendaBlock(block) {
   const el = document.createElement('div');
   el.className = 'agenda-block' + (block.item.completed ? ' completed' : '') + (block.item.draggable ? ' draggable' : '');
-  el.style.top = `${(block.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
-  el.style.height = `${((block.endMinutes - block.startMinutes) / 60) * AGENDA_HOUR_HEIGHT}px`;
+  el.style.top = `${(block.startMinutes / 60) * agendaHourHeight}px`;
+  el.style.height = `${((block.endMinutes - block.startMinutes) / 60) * agendaHourHeight}px`;
   const widthPercent = 100 / block.totalColumns;
   el.style.left = `${widthPercent * block.column}%`;
   el.style.width = `calc(${widthPercent}% - 4px)`;
@@ -5261,7 +5279,7 @@ function positionAgendaNowLine() {
   const line = agendaTimelineEl.querySelector('.agenda-now-line');
   if (!line) return;
   const now = new Date();
-  line.style.top = `${((now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60) / 60) * AGENDA_HOUR_HEIGHT}px`;
+  line.style.top = `${((now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60) / 60) * agendaHourHeight}px`;
   line.title = formatTimeOfDay(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
 }
 setInterval(positionAgendaNowLine, AGENDA_NOW_LINE_MS);
@@ -5284,8 +5302,8 @@ function buildAgendaSessionBlock(block) {
   const session = block.item;
   const el = document.createElement('div');
   el.className = 'agenda-block measured' + (session.endMs == null ? ' live' : '');
-  el.style.top = `${(block.startMinutes / 60) * AGENDA_HOUR_HEIGHT}px`;
-  el.style.height = `${Math.max(1, ((block.endMinutes - block.startMinutes) / 60) * AGENDA_HOUR_HEIGHT)}px`;
+  el.style.top = `${(block.startMinutes / 60) * agendaHourHeight}px`;
+  el.style.height = `${Math.max(1, ((block.endMinutes - block.startMinutes) / 60) * agendaHourHeight)}px`;
   const widthPercent = 100 / block.totalColumns;
   el.style.left = `${widthPercent * block.column}%`;
   el.style.width = `calc(${widthPercent}% - 4px)`;
@@ -5321,6 +5339,57 @@ function buildAgendaSessionBlock(block) {
   return el;
 }
 
+// Zooming the agenda vertically -- Ctrl + mouse wheel (a trackpad pinch
+// arrives the same way), or a two-finger pinch on a touch screen -- around
+// the time under the pointer (or between the fingers), which stays put.
+const agendaTimelineWrapEl = document.getElementById('agenda-timeline-wrap');
+let agendaZoomSaveTimer = null;
+function zoomAgenda(factor, anchorClientY) {
+  const next = Math.min(AGENDA_MAX_HOUR_HEIGHT, Math.max(AGENDA_MIN_HOUR_HEIGHT, agendaHourHeight * factor));
+  if (Math.abs(next - agendaHourHeight) < 0.01) return;
+  const before = anchorClientY - agendaTimelineEl.getBoundingClientRect().top;
+  const anchorHours = before / agendaHourHeight;
+  agendaHourHeight = next;
+  renderTodayAgenda();
+  agendaTimelineWrapEl.scrollTop += anchorHours * agendaHourHeight - before;
+  clearTimeout(agendaZoomSaveTimer);
+  agendaZoomSaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(AGENDA_ZOOM_STORAGE_KEY, String(Math.round(agendaHourHeight)));
+    } catch {
+      // No storage: the zoom just isn't remembered.
+    }
+  }, 300);
+}
+
+agendaTimelineWrapEl.addEventListener('wheel', (e) => {
+  if (!e.ctrlKey) return; // a plain wheel scrolls
+  e.preventDefault(); // ...and Ctrl + wheel would zoom the whole page
+  const deltaY = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+  zoomAgenda(Math.exp(-deltaY * 0.0025), e.clientY);
+}, { passive: false });
+
+let agendaPinch = null;
+const touchDistance = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+const touchMidY = (e) => (e.touches[0].clientY + e.touches[1].clientY) / 2;
+agendaTimelineWrapEl.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) agendaPinch = { distance: touchDistance(e) || 1, height: agendaHourHeight };
+}, { passive: true });
+agendaTimelineWrapEl.addEventListener('touchmove', (e) => {
+  if (!agendaPinch || e.touches.length !== 2) return;
+  e.preventDefault(); // the agenda's zoom, not the page's
+  const target = (agendaPinch.height * touchDistance(e)) / agendaPinch.distance;
+  zoomAgenda(target / agendaHourHeight, touchMidY(e));
+}, { passive: false });
+agendaTimelineWrapEl.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) agendaPinch = null;
+});
+agendaTimelineWrapEl.addEventListener('touchcancel', () => {
+  agendaPinch = null;
+});
+// iOS Safari's own pinch-to-zoom of the page.
+agendaTimelineWrapEl.addEventListener('gesturestart', (e) => e.preventDefault());
+
 function renderTodayAgenda() {
   const items = agendaItems.map((item) => ({ ...item, color: resolveAgendaColor(item, item.completed, item.failed) }));
 
@@ -5334,7 +5403,9 @@ function renderTodayAgenda() {
   // that must survive this clear -- everything actually representing a task
   // goes in there instead (see .agenda-tracks, style.css).
   agendaTimelineEl.querySelectorAll('.agenda-hour-line, .agenda-now-line').forEach((el) => el.remove());
-  for (let h = 0; h < 24; h++) agendaTimelineEl.appendChild(buildAgendaHourLine(h));
+  agendaTimelineEl.style.height = `${24 * agendaHourHeight}px`;
+  const step = agendaLineStep();
+  for (let m = 0; m < 24 * 60; m += step) agendaTimelineEl.appendChild(buildAgendaHourLine(m));
   const nowLine = document.createElement('div');
   nowLine.className = 'agenda-now-line';
   agendaTimelineEl.appendChild(nowLine);
