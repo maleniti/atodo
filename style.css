@@ -174,7 +174,6 @@ main {
    app.js). Same flex-column shape as .side-panel-content, just with its own
    children instead. */
 .side-panel-empty {
-  position: relative; /* positioning context for #agenda-close-btn (narrow screens only) */
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -184,13 +183,24 @@ main {
 /* Hidden except on narrow screens (see the max-width: 1000px query below),
    where the side panel itself is a toggleable drawer rather than a
    permanent column -- these are its only open/close controls there.
-   .modal-close-btn.agenda-close-btn (not just .agenda-close-btn) so this
-   wins on specificity over .modal-close-btn's own display: flex, regardless
-   of which happens to come first in the file. */
+   .side-panel-close-btn.agenda-close-btn (not just .agenda-close-btn) so
+   this wins on specificity over .side-panel-close-btn's own display: flex,
+   regardless of which happens to come first in the file. */
 .agenda-toggle-btn,
-.modal-close-btn.agenda-close-btn {
+.side-panel-close-btn.agenda-close-btn {
   display: none;
 }
+
+/* The agenda's heading, with its close button (the same one the task
+   details have, .side-panel-close-btn) at the right end of the row. */
+.agenda-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+}
+.agenda-header .side-panel-section-heading { margin: 0; }
 
 .agenda-all-day {
   display: flex;
@@ -1223,10 +1233,9 @@ main {
 .agenda-toggle-btn:hover { background: rgba(255, 255, 255, 0.14); color: var(--text-primary); }
 
 /* Same round icon-button look as .agenda-toggle-btn, at the right end of
-   .side-panel-header's row (not position: absolute like
-   .modal-close-btn/#agenda-close-btn -- there's already a natural flex row
-   here to join instead of overlaying). Always shown: deselecting the task
-   brings the agenda back. */
+   .side-panel-header's row -- and of .agenda-header's, as #agenda-close-btn
+   (narrow screens only, see above). Always shown in the task details:
+   deselecting the task brings the agenda back. */
 .side-panel-close-btn {
   display: flex;
   margin-left: auto;
@@ -2963,16 +2972,65 @@ option {
   .series-edit-back { display: inline-flex; }
 }
 
-/* Touch screens: iOS Safari zooms the page in on focusing a text field whose
-   text is under 16px (and doesn't zoom back out) -- so fields get 16px
-   there, and a little more height to match. Desktop keeps its smaller ones. */
-@media (pointer: coarse) {
+/* Phones and touch screens: everything tapped is finger-sized -- about
+   36px or more across (a row's checkbox a bit less, its whole row taps
+   too) -- and fields get 16px text: iOS Safari (and Chrome on Android)
+   zoom the page in on focusing a field whose text is smaller, and don't
+   zoom back out. Not just (pointer: coarse): some phone browsers don't
+   report it, so a phone-width window gets the same. Desktop keeps its
+   smaller controls. */
+@media (pointer: coarse), (max-width: 700px) {
+  /* .modal-input too: its own 12px would otherwise beat plain textarea
+     and select on specificity. */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   textarea,
-  select {
+  select,
+  .modal-input {
     font-size: 16px;
   }
-  .modal-input { height: 34px; }
+  .modal-input { height: 40px; }
+  .modal-textarea { height: 64px; }
+  .modal-field label { font-size: 13px; }
+  /* .modal-field's too (its label rule would make them block, the box
+     above its text). */
+  .modal-field .modal-checkbox-row,
+  .modal-checkbox-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
+  .modal-checkbox-row input { flex: none; }
+  /* Room for a flag's long explanation at this size (a long list still
+     scrolls). */
+  .modal-checkboxes { max-height: 240px; }
+  .modal-checkbox-row input { width: 20px; height: 20px; margin: 0; }
+  .modal-actions button { height: 40px; padding: 0 18px; font-size: 14px; }
+  .modal-close-btn { width: 36px; height: 36px; }
+
+  .todo-item input[type="checkbox"] { margin-top: 0; width: 24px; height: 24px; }
+  .todo-item input[type="checkbox"].todo-checkbox-failed::after { font-size: 16px; }
+  .todo-focus-btn { width: 36px; height: 36px; }
+  .todo-focus-btn svg { width: 18px; height: 18px; }
+
+  .user-avatar-btn { width: 42px; height: 42px; font-size: 15px; }
+  .todo-month-nav-btn,
+  .agenda-toggle-btn,
+  .side-panel-close-btn { width: 36px; height: 36px; }
+  .todo-month-nav-btn svg,
+  .agenda-toggle-btn svg,
+  .side-panel-close-btn svg { width: 18px; height: 18px; }
+  .todo-view-toggle-opt { width: 40px; height: 34px; }
+  .todo-view-toggle-opt svg { width: 18px; height: 18px; }
+  .app-title-row .todo-day-add-btn { width: 36px; height: 36px; font-size: 24px; }
+  .app-title-row .todo-day-today-btn { height: 32px; padding: 0 12px; font-size: 13px; }
+}
+
+/* ...and on a phone's width, the toolbar's month, view and agenda controls
+   still fit one line (down to a 360px screen): less side padding, tighter
+   gaps, a month label only as wide as its text. */
+@media (max-width: 700px) {
+  main { padding-left: 12px; padding-right: 12px; }
+  .todo-toolbar { gap: 6px; }
+  .todo-month-label { min-width: 0; padding: 0 4px; }
+  .todo-month-nav-btn,
+  .agenda-toggle-btn { width: 34px; height: 34px; }
+  .todo-view-toggle-opt { width: 34px; }
 }
 
 @media (max-width: 1000px) {
@@ -2989,10 +3047,11 @@ option {
   }
   .side-panel.side-panel-narrow-visible { display: flex; }
   main.narrow-overlay-open .todo-column { display: none; }
-  /* .modal-close-btn.agenda-close-btn again (see the default-hidden rule,
-     above in the file) -- needs to match its specificity to actually win. */
+  /* .side-panel-close-btn.agenda-close-btn again (see the default-hidden
+     rule, above in the file) -- needs to match its specificity to actually
+     win. */
   .agenda-toggle-btn,
-  .modal-close-btn.agenda-close-btn { display: flex; }
+  .side-panel-close-btn.agenda-close-btn { display: flex; }
   /* The title's day on a line of its own, under what the list shows. */
   .app-title-date { display: block; }
   /* The running timer's own line, below the month and view controls. */

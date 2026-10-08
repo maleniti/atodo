@@ -192,10 +192,12 @@
              is an explicit action (agenda-toggle-btn above), so closing it
              needs to be one too, rather than relying on deselecting a task
              that was never selected to begin with. -->
-        <button type="button" id="agenda-close-btn" class="modal-close-btn agenda-close-btn" title="Close" data-i18n-title="common.close">
-          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        </button>
-        <div class="side-panel-section-heading" data-i18n="sidePanel.agendaHeading">Today's agenda</div>
+        <div class="agenda-header">
+          <div class="side-panel-section-heading" data-i18n="sidePanel.agendaHeading">Today's agenda</div>
+          <button type="button" id="agenda-close-btn" class="side-panel-close-btn agenda-close-btn" title="Close" data-i18n-title="common.close">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
         <div id="agenda-all-day" class="agenda-all-day"></div>
         <div id="agenda-empty" class="todo-manage-empty hidden" data-i18n="sidePanel.agendaEmpty">No tasks today.</div>
         <div id="agenda-timeline-wrap" class="agenda-timeline-wrap">
