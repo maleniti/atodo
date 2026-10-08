@@ -12,7 +12,7 @@ const TERMS_I18N = {
     'terms.pageTitle': 'Terms of Service',
     'terms.updated': 'Last updated: 8 October 2026',
     'terms.intro':
-      '<p>These Terms of Service ("Terms") govern your use of the A-To-Do to-do list application (the "Service"), operated by Male Niti, vl. Nikola Novak i Mateja Šafarić Novak ("we", "us"). By creating an account or otherwise using the Service, you agree to these Terms.</p>',
+      '<p>These Terms of Service ("Terms") govern your use of the A-To-Do to-do list application (the "Service"), operated by Male Niti, vl. Nikola Novak i Mateja Šafarić Novak ("we", "us"; see section 13 for our full details and contact). By creating an account or otherwise using the Service, you agree to these Terms.</p>',
     'terms.s1':
       "<h2>1. The Service</h2><p>A-To-Do is a to-do list application with recurring tasks, overdue/failed-appointment tracking, work timers, and per-task notes. It's offered on a Free plan and a paid Pro plan.</p>",
     'terms.s2':
@@ -38,7 +38,7 @@ const TERMS_I18N = {
     'terms.s12':
       '<h2>12. Governing law</h2><p>These Terms are governed by the laws of the Republic of Croatia, without regard to its conflict-of-laws principles. Disputes arising from them are resolved by the Municipal Court in Čakovec (Općinski sud u Čakovcu), without prejudice to the rights mandatory consumer protection law gives you, including to bring proceedings where you live.</p>',
     'terms.s13':
-      '<h2>13. Contact us</h2><p>Questions about these Terms? Write to us through our <a href="support.html">support form</a> - many answers are already in the <a href="faq.html">FAQ</a>.</p>',
+      '<h2>13. Who we are and how to contact us</h2><p>The Service is provided, and subscriptions are sold, by <strong>Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak</strong>, Slakovec 80, 40305 Nedelišće, Croatia, OIB 79072017892.</p><p>Phone: <a href="tel:+385919337988">+385 91 933 7988</a><br>Email: <a href="mailto:support@maleniti.com">support@maleniti.com</a></p><p>Questions about these Terms? Write to us by email or through our <a href="support.html">support form</a> - many answers are already in the <a href="faq.html">FAQ</a>.</p>',
   },
   hr: {
     'nav.login': 'Prijava',
@@ -49,7 +49,7 @@ const TERMS_I18N = {
     'terms.pageTitle': 'Uvjeti korištenja',
     'terms.updated': 'Zadnje ažurirano: 8. listopada 2026.',
     'terms.intro':
-      '<p>Ovi Uvjeti korištenja ("Uvjeti") uređuju vaše korištenje aplikacije za popis obveza A-To-Do ("Usluga"), koju operativno vodi Male Niti, vl. Nikola Novak i Mateja Šafarić Novak ("mi"). Otvaranjem računa ili korištenjem Usluge na drugi način, prihvaćate ove Uvjete.</p>',
+      '<p>Ovi Uvjeti korištenja ("Uvjeti") uređuju vaše korištenje aplikacije za popis obveza A-To-Do ("Usluga"), koju operativno vodi Male Niti, vl. Nikola Novak i Mateja Šafarić Novak ("mi"; puni podaci i kontakt u točki 13.). Otvaranjem računa ili korištenjem Usluge na drugi način, prihvaćate ove Uvjete.</p>',
     'terms.s1':
       '<h2>1. Usluga</h2><p>A-To-Do je aplikacija za popis obveza s ponavljajućim zadacima, praćenjem zakašnjelih/neuspjelih termina, mjeračima vremena rada i bilješkama po zadatku. Nudi se u besplatnom planu i plaćenom Pro planu.</p>',
     'terms.s2':
@@ -75,7 +75,7 @@ const TERMS_I18N = {
     'terms.s12':
       '<h2>12. Mjerodavno pravo</h2><p>Ovi Uvjeti podliježu zakonima Republike Hrvatske, bez obzira na njezina pravila o sukobu zakona. Za sporove koji iz njih proizlaze nadležan je Općinski sud u Čakovcu, ne dirajući u prava koja vam daju prisilni propisi o zaštiti potrošača, uključujući pravo pokretanja postupka u mjestu prebivališta.</p>',
     'terms.s13':
-      '<h2>13. Kontaktirajte nas</h2><p>Imate pitanja o ovim Uvjetima? Pišite nam putem našeg <a href="support.html">obrasca za podršku</a> - mnogi su odgovori već u <a href="faq.html">čestim pitanjima</a>.</p>',
+      '<h2>13. Tko smo i kako nas kontaktirati</h2><p>Uslugu pruža i pretplate prodaje <strong>Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak</strong>, Slakovec 80, 40305 Nedelišće, Hrvatska, OIB 79072017892.</p><p>Telefon: <a href="tel:+385919337988">+385 91 933 7988</a><br>E-pošta: <a href="mailto:support@maleniti.com">support@maleniti.com</a></p><p>Imate pitanja o ovim Uvjetima? Pišite nam e-poštom ili putem našeg <a href="support.html">obrasca za podršku</a> - mnogi su odgovori već u <a href="faq.html">čestim pitanjima</a>.</p>',
   },
 };
 

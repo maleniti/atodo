@@ -239,6 +239,15 @@ a { color: inherit; }
 .price-list-download .btn:disabled { opacity: 0.5; cursor: default; }
 .price-list-status { flex-basis: 100%; margin: 0; text-align: center; }
 .price-list-status.hidden { display: none; }
+.seller-info {
+  max-width: 720px;
+  margin: 18px auto 0;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: #9aa0a6;
+}
+.seller-info a { color: inherit; }
 
 .site-footer {
   text-align: center;

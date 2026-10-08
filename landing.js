@@ -166,6 +166,7 @@ const LANDING_I18N = {
     'priceList.label': 'Price list (CSV)',
     'priceList.download': 'Download',
     'priceList.unavailable': "The price list can't be loaded right now.",
+    'priceList.seller': 'Seller: Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak, Slakovec 80, 40305 Nedelišće, Croatia · OIB 79072017892 · <a href="tel:+385919337988">+385 91 933 7988</a> · <a href="mailto:support@maleniti.com">support@maleniti.com</a> · <a href="terms.html">Terms of Service</a>',
     'pricing.subscribeYearly': 'Subscribe yearly',
   },
   hr: {
@@ -211,6 +212,7 @@ const LANDING_I18N = {
     'priceList.label': 'Cjenik (CSV)',
     'priceList.download': 'Preuzmi',
     'priceList.unavailable': 'Cjenik trenutno nije moguće učitati.',
+    'priceList.seller': 'Prodavatelj: Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak, Slakovec 80, 40305 Nedelišće, Hrvatska · OIB 79072017892 · <a href="tel:+385919337988">+385 91 933 7988</a> · <a href="mailto:support@maleniti.com">support@maleniti.com</a> · <a href="terms.html">Uvjeti korištenja</a>',
     'pricing.subscribeYearly': 'Pretplatite se godišnje',
   },
 };
