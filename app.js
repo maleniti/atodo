@@ -7,893 +7,53 @@
 // SPA script just for them.
 
 // ---------------------------------------------------------------------------
-// i18n -- English + Croatian. Deliberately NOT covering everything in the
-// app: activity-log entries (task.log messages, written server-side) are
-// permanent historical text once written, so translating the dictionary
-// later wouldn't retranslate old entries and would just produce a mixed-
-// language log; and describeTaskSchedule's natural-language recurrence
-// summary ("Every 2 weeks on Mon/Wed") joins ordinals/weekday abbreviations
-// in a way that would need real Croatian grammatical-case handling to read
-// naturally, not just swapped-in word-for-word strings. Both are left in
-// English on purpose.
+// i18n. The texts come from the API, per language (i18n.js's
+// loadTranslations: this page's bundles are 'common' and 'app'), edited in
+// the admin app -- none are built in. Activity-log entries are written by
+// the server in English and come with a translation key (see
+// renderSidePanel's activity list), so they read in the current language
+// too. describeTaskSchedule's natural-language recurrence summary ("Every 2
+// weeks on Mon/Wed") is still English: it joins ordinals/weekday
+// abbreviations in a way that would need real grammatical-case handling to
+// read naturally, not just swapped-in words.
 //
 // currentUserLanguage is read by t() below and by every option-list
 // function (getFrequencyOptions() etc.) at the point they're actually
 // called (building a form, rendering the list, ...) -- never cached in a
 // plain array at script-load time -- so a language change picked up by
-// applyLanguage() takes effect immediately, without a page reload.
+// applyLanguage() takes effect immediately, without a page reload. Its
+// texts must have loaded first (ensureTranslations): every place that
+// changes the language awaits that before rendering.
 // ---------------------------------------------------------------------------
 
-const I18N = {
-  en: {
-    'login.title': 'Log in',
-    'login.email': 'Email',
-    'login.password': 'Password',
-    'login.submit': 'Log in',
-    'login.noAccount': "Don't have an account?",
-    'login.registerLink': 'Create one',
-    'login.forgotLink': 'Forgot password?',
-    'todo.backToToday': 'Today',
-    'forgotPassword.title': 'Reset your password',
-    'forgotPassword.hint': "Your account's email -- we'll send it a link to set a new password (valid for 30 minutes)",
-    'forgotPassword.submit': 'Send link',
-    'forgotPassword.sent': "If {email} has an account, a link to set a new password is on its way. It's valid for 30 minutes.",
-    'forgotPassword.invalidEmail': 'Enter a valid email address.',
-    'forgotPassword.failed': "Couldn't send the link. Please try again.",
-    'resetPassword.title': 'Set a new password',
-    'resetPassword.intro': 'Choose a new password for your account. Every other session gets signed out.',
-    'resetPassword.submit': 'Set new password',
-    'resetPassword.done': "Your new password is set, and you're logged in.",
-    'resetPassword.invalid': 'That password reset link is invalid, has expired, or has already been used. You can ask for a new one with "Forgot password?".',
-    'login.invalidCredentials': 'Incorrect email or password.',
-    'login.networkError': 'Could not reach the server. Check your connection and try again.',
-    'login.notVerified': "That email hasn't been verified yet – check your inbox for the verification link.",
-    'login.accountExpired': 'This account was automatically deleted after 12 months of inactivity, along with all its data. Log in again to reopen it, empty.',
-    'login.accountDeletedScheduled': 'This account was deleted, as scheduled, once its subscription ended, along with all its data. Log in again to reopen it, empty.',
-    'login.accountRestored': 'Welcome back! This account had been deleted, so it has been reopened empty – its earlier tasks, notes and settings are gone for good.',
-    'login.verifiedSuccess': 'Email verified – you can now log in as {email}.',
-    'login.verifyExpired': 'That verification link has expired. Please register again.',
-    'login.verifyInvalid': 'That verification link is invalid or has already been used.',
+const APP_TRANSLATION_BUNDLES = ['common', 'app'];
+// Per language: its texts once loaded, and the load in flight.
+const translationStrings = {};
+const translationLoads = {};
 
-    'register.title': 'Create account',
-    'register.confirmPassword': 'Confirm password',
-    'register.passwordHint': 'At least 8 characters.',
-    'register.submit': 'Create account',
-    'register.haveAccount': 'Already have an account?',
-    'register.loginLink': 'Log in',
-    'register.backToLogin': 'Back to log in',
-    'register.passwordMismatch': "Passwords don't match.",
-    'register.passwordTooShort': 'Password must be at least 8 characters.',
-    'register.invalidEmail': 'Enter a valid email address.',
-    'register.emailTaken': 'An account with that email already exists. Would you like to <a href="#" class="js-taken-login">log in</a>?',
-    'register.genericError': 'Something went wrong – please try again.',
-    'register.checkEmail': "We've sent a verification link to {email}. Click it within 6 hours to activate your account.",
-    'register.checkEmailCheckout': "We've sent a verification link to {email}. Click it within 6 hours – it'll log you in and take you straight on to payment.",
+function ensureTranslations(lang) {
+  if (!translationLoads[lang]) {
+    translationLoads[lang] = loadTranslations(lang, APP_TRANSLATION_BUNDLES).then((result) => {
+      translationStrings[lang] = result.strings;
+      // From the cache or nowhere: try the API again next time.
+      if (!result.fresh) delete translationLoads[lang];
+      return result.strings;
+    });
+  }
+  return translationLoads[lang];
+}
 
-    'common.close': 'Close',
-    'common.cancel': 'Cancel',
-    'common.save': 'Save',
-    'common.ok': 'OK',
-    'common.add': 'Add',
-    'common.delete': 'Delete',
-    'common.edit': 'Edit',
-    'common.remove': 'Remove',
-    'common.clickAgainToDelete': 'Click again to delete',
+// Changing the language twice in quick succession: only the latest applies,
+// whichever load finishes first (see applyLanguage/applyPreLoginLanguage).
+let languageChangeSeq = 0;
 
-    'avatar.accountMenu': 'Account menu',
-    'menu.manageTasks': 'Manage tasks…',
-    'menu.settings': 'Settings…',
-    'menu.privacyPolicy': 'Privacy Policy',
-    'menu.termsOfService': 'Terms of Service',
-    'menu.faq': 'FAQ',
-    'menu.support': 'Contact support',
-    'menu.logout': 'Log out',
-    'menu.logoutTitle': 'Log out (for testing the login screen)',
-
-    'app.titleGeneric': 'To-Do List',
-    'title.pending': 'Pending and overdue tasks for',
-    'title.next-recurrence': 'Upcoming tasks for',
-    'title.all': 'All tasks for',
-    'title.pendingNoDay': 'Pending and overdue tasks',
-    'title.next-recurrenceNoDay': 'Upcoming tasks',
-    'title.allNoDay': 'All tasks',
-
-    'month.prev': 'Previous month',
-    'month.next': 'Next month',
-    'month.jumpToCurrent': 'Jump to current month',
-    'view.pending': 'Pending & overdue tasks this month',
-    'view.next': 'Next recurrence of every task',
-    'view.all': 'All tasks this month',
-
-    'todo.addTask': '+ Add task',
-    'todo.addTaskDue': 'Add a task due {date}',
-    'todo.empty': 'You have no to-dos yet.',
-    'todo.today': 'Today',
-    'todo.yesterday': 'Yesterday',
-    'todo.tomorrow': 'Tomorrow',
-    'todo.tomorrowAllDay': 'Tomorrow, all day',
-    'todo.tomorrowAt': 'Tomorrow, {time}',
-    'todo.allDay': 'All day',
-    'todo.due': 'Due {time}',
-    'todo.overdueSince': 'Overdue since {date}',
-    'todo.overdueSinceAt': 'Overdue since {date} {time}',
-    'todo.failedWasDue': 'Failed – was due {date}',
-    'todo.failedWasDueAt': 'Failed – was due {date} {time}',
-    'todo.timerElapsed': 'Total elapsed time is {elapsed}',
-    'todo.timerElapsedPlanned': 'Total elapsed time is {elapsed} with {planned} planned',
-    'todo.timerRemainingOfTotal': '{remaining} of {total}',
-    'todo.stopWorking': 'Stop working on this task',
-    'todo.workOnNow': 'Work on this task now',
-    'todo.showUndo': 'Show (undo hiding it)',
-    'todo.hideRemove': 'Hide (remove from the list)',
-
-    'menu.timer': 'Timer',
-    'menu.autoTimer': 'Auto timer ({time})',
-    'menu.pauseTimer': 'Pause timer',
-    'menu.cancelTimer': 'Cancel timer',
-    'menu.resumeTimer': 'Resume timer',
-    'menu.markDone': 'Mark as done',
-    'menu.markFailed': 'Mark as failed',
-    'menu.focus': 'Focus',
-    'menu.unfocus': 'Unfocus',
-    'menu.show': 'Show',
-    'menu.hide': 'Hide',
-    'menu.pauseRecurrence': 'Pause recurrence until…',
-    'menu.resumeRecurrence': 'Resume recurrence now',
-    'pause.title': 'Pause "{name}"',
-    'pause.hint': 'From {date}, until the date you pick -- recurrence starts again on that exact date.',
-    'pause.summary': 'Paused {from} – {to}, resumes {resume}.',
-    'pause.nothingAfter': "This task's recurrence ends before there's anything left to resume.",
-    'datePicker.prevMonth': 'Previous month',
-    'datePicker.nextMonth': 'Next month',
-    'menu.taskStats': 'Task stats',
-    'menu.deleteMeasurement': 'Delete this measurement',
-    'agenda.measuredFocus': 'Focused {from}–{to}',
-    'agenda.measuredTimer': 'Timed {from}–{to}',
-
-    'sidePanel.agendaHeading': "Today's agenda",
-    'sidePanel.agendaEmpty': 'No tasks today.',
-    'sidePanel.occurrence': 'Occurrence',
-    'sidePanel.occurrenceTitle': 'Just this occurrence',
-    'sidePanel.task': 'Task',
-    'sidePanel.taskTitle': 'This task, every occurrence',
-    'sidePanel.series': 'Series',
-    'sidePanel.seriesTitle': 'Every task in this series',
-    'sidePanel.commentPlaceholder': 'Add a note about this task…',
-    'sidePanel.addNote': 'Add note',
-    'sidePanel.notes': 'Notes',
-    'sidePanel.occurrenceDetails': 'This occurrence ({date})',
-    'sidePanel.activity': 'Activity',
-    'sidePanel.noNotes': 'No notes yet.',
-    'sidePanel.noActivity': 'No activity yet.',
-    'sidePanel.editNote': 'Edit note',
-    'sidePanel.noteLabel': 'Note',
-    'sidePanel.editNotes': 'Edit notes',
-    'sidePanel.stopEditingNotes': 'Stop editing notes',
-
-    'timer.setTitle': 'Set a timer',
-    'timer.countUp': 'Count up (no fixed duration – stops automatically after 6 hours)',
-    'timer.minutesLabel': 'Minutes to work on this task',
-    'timer.continuePastZero': 'Continue counting down past zero instead of stopping',
-    'timer.start': 'Start',
-    'timer.set': 'Set',
-    'taskForm.editTask': 'Edit task',
-    'taskEditor.title': 'Edit task – {name}',
-    'taskEditor.tabDetails': 'Details',
-    'taskEditor.tabPattern': 'Recurrence',
-    'taskEditor.tabOccurrences': 'Occurrences',
-    'taskEditor.detailsHint': 'Changes here apply to every occurrence of this task, past and future.',
-    'taskEditor.patternHint': 'Changes here apply from today on -- past occurrences stay as they were.',
-    'taskEditor.occurrencesHint': 'Changes here are saved right away.',
-    'taskEditor.deleteTask': 'Delete task',
-    'taskEditor.next': 'next',
-    'taskEditor.findOccurrence': 'Find occurrence…',
-    'taskEditor.findOccurrenceTitle': 'Find an upcoming occurrence',
-    'taskEditor.findOccurrenceHint': 'Only the dates this task recurs on can be picked.',
-    'taskEditor.noUpcomingOccurrences': 'This task has no upcoming occurrences.',
-    'taskEditor.occurrenceDetails': 'Details',
-    'taskEditor.occurrenceDetailsPlaceholder': 'Anything specific to this occurrence…',
-    'taskEditor.noOccurrences': 'No occurrences yet.',
-    'taskEditor.statusDone': 'Done',
-    'taskEditor.statusFailed': 'Failed',
-    'taskEditor.statusMissed': 'Not done',
-    'taskEditor.statusPending': 'Due today',
-    'taskEditor.statusUpcoming': 'Upcoming',
-    'taskForm.addTask': 'Add task',
-    'taskForm.name': 'Name',
-    'taskForm.description': 'Description',
-    'taskForm.details': 'Details',
-    'taskForm.dueDate': 'Due date',
-    'taskForm.allDay': 'All day (no specific time)',
-    'taskForm.dueTime': 'Due time',
-    'taskForm.repeatsEvery': 'Repeats every',
-    'taskForm.days': 'day(s)',
-    'taskForm.weeks': 'week(s)',
-    'taskForm.months': 'month(s)',
-    'taskForm.weekdayMon': 'Mon',
-    'taskForm.weekdayTue': 'Tue',
-    'taskForm.weekdayWed': 'Wed',
-    'taskForm.weekdayThu': 'Thu',
-    'taskForm.weekdayFri': 'Fri',
-    'taskForm.weekdaySat': 'Sat',
-    'taskForm.weekdaySun': 'Sun',
-    'taskForm.sunday': 'Sunday',
-    'taskForm.monday': 'Monday',
-    'taskForm.tuesday': 'Tuesday',
-    'taskForm.wednesday': 'Wednesday',
-    'taskForm.thursday': 'Thursday',
-    'taskForm.friday': 'Friday',
-    'taskForm.saturday': 'Saturday',
-    'taskForm.alsoRecurOn': "Also recur on these days (weekly only; leave blank to just use the due date's weekday)",
-    'taskForm.monthlyPattern': 'Monthly pattern',
-    'taskForm.monthlySameDay': 'Same day of month as due date',
-    'taskForm.monthlyLastDay': 'Last day of month',
-    'taskForm.monthlyBeforeLast': 'N days before last day of month',
-    'taskForm.monthlyWeekday': 'Nth weekday of month',
-    'taskForm.monthlyMultiWeekday': 'Earliest Nth occurrence of any of the selected days',
-    'taskForm.monthlyMultiWeekdayOffset': 'N days before/after earliest Nth occurrence of any of the selected days',
-    'taskForm.monthlyMultiDay': 'Multiple days of month (1-28)',
-    'taskForm.monthlyOffsetLabel': 'Days before last day of month (0-3)',
-    'taskForm.dayOfWeek': 'Day of week',
-    'taskForm.whichOccurrence': 'Which occurrence',
-    'taskForm.ordinal1': '1st',
-    'taskForm.ordinal2': '2nd',
-    'taskForm.ordinal3': '3rd',
-    'taskForm.ordinal4': '4th',
-    'taskForm.ordinal5': '5th',
-    'taskForm.ordinalLast': 'Last',
-    'taskForm.selectedDays': 'Selected days (earliest Nth occurrence of any of these)',
-    'taskForm.daysInline': 'days',
-    'taskForm.before': 'Before',
-    'taskForm.after': 'After',
-    'taskForm.occurrenceWord': 'occurrence',
-    'taskForm.occurrenceHr': '. occurrence',
-    'taskForm.multiDayDays': 'Days of the month (1-28)',
-    'taskForm.endDate': 'End date (optional – last recurrence on or before this date)',
-    'taskForm.appointmentDesc':
-      "Appointment – its due date is an expiration, not a standing reminder: if not done by then, it's marked failed (crossed out, red) instead of staying overdue. Can still be checked off as done afterward.",
-    'taskForm.passiveDesc':
-      "Passive – a plain reminder, not an actionable task: can't be focused on or timed, and its checkbox marks it failed instead of done. With a due time, it counts as done once that time has passed (you can still mark it failed); an all-day one stays visible until you mark it failed or, once it's no longer due today, dismiss it.",
-    'taskForm.recurUntilCompletedDesc':
-      "Recur until completed – never marked overdue or failed: if not done by its due time, it's rescheduled to the next day instead (same time), and the missed occurrence stays visible alongside the new one until either is checked off. A recurring task's next occurrence is then counted from whenever it's actually completed, not the original schedule.",
-    'taskForm.endDateBeforeDue': "End date can't be before the due date.",
-
-    'manualOccurrence.title': 'Add an occurrence',
-    'manualOccurrence.add': 'Add occurrence…',
-    'manualOccurrence.exists': 'This task already has an occurrence on that date.',
-
-    'manage.title': 'To-do list',
-    'manage.selectSeries': 'Select a series on the left to edit it.',
-    'manage.backToList': '‹ Back',
-    'manage.addNewTask': '+ Add new task',
-    'manage.seriesNamePlaceholder': 'Series name',
-    'manage.saved': 'Saved',
-    'manage.noTasksYet': 'No tasks yet.',
-    'manage.resetName': 'Reset name to match series name',
-    'manage.removeFromSeries': 'Remove from series',
-
-    'occurrencePanel.editThisOccurrence': 'Edit this occurrence…',
-    'occurrencePanel.reschedule': 'Reschedule…',
-    'occurrencePanel.rescheduleTitle': 'Reschedule occurrence',
-    'occurrencePanel.rescheduleDateLabel': 'New date',
-    'occurrencePanel.rescheduleCollision': 'Another occurrence of this task is already recorded on that date.',
-    'occurrencePanel.blockedRecurUntilCompleted': "Not available while this task's next occurrence is still pending.",
-    'todo.reopenBlockedRecurUntilCompleted': 'A later occurrence of this task has already been completed since, so this one can no longer be marked not done.',
-
-    'taskStats.title': 'Stats: {name}',
-    'taskStats.totalFocusedAllRecurrences': 'Total time focused (all recurrences)',
-    'taskStats.totalFocused': 'Total time focused',
-    'taskStats.total': 'Total',
-    'taskStats.justFocused': 'Just focused',
-    'taskStats.focusedWithTimer': 'Focused with timer',
-    'taskStats.completion': 'Completion',
-    'taskStats.completed': 'Completed',
-    'taskStats.recurrencesToDate': 'Recurrences to date',
-    'taskStats.completionRate': 'Completion rate',
-    'taskStats.timePerRecurrence': 'Time per recurrence',
-    'taskStats.noFocusedTime': 'No focused time logged yet.',
-    'taskStats.focusedAndTimer': '{focused} focused · {timer} timer',
-    'taskStats.allTitle': 'Stats: all tasks',
-    'taskStats.seriesTitle': 'Stats: series "{name}"',
-    'taskStats.overview': 'Overview',
-    'taskStats.taskCount': 'Tasks',
-    'taskStats.occurrencesToDate': 'Occurrences to date',
-    'taskStats.timePerDay': 'Time per day',
-    'taskStats.since': 'Since the reset on {date}',
-    'taskStats.reset': 'Reset stats…',
-    'taskStats.resetConfirm': 'Click again to reset',
-    'manage.allStats': 'Stats (all tasks)',
-    'manage.seriesStats': 'Series stats',
-
-    'settings.title': 'Settings',
-    'settings.nickname': 'Nickname',
-    'settings.nicknamePlaceholder': 'e.g. Nikola',
-    'settings.timeFormat': 'Time format',
-    'settings.timeFormat24': '24-hour (e.g. 18:00)',
-    'settings.timeFormat12': '12-hour (e.g. 6:00 PM)',
-    'settings.language': 'Language',
-    'settings.languageEnglish': 'English',
-    'settings.languageCroatian': 'Hrvatski (Croatian)',
-    'settings.theme': 'Theme',
-    'settings.weekStart': 'First day of the week',
-    'settings.weekStartMonday': 'Monday',
-    'settings.weekStartSunday': 'Sunday',
-    'settings.themeDark': 'Dark',
-    'settings.themeLight': 'Light',
-    'settings.avatar': 'Avatar',
-    'settings.uploadImage': 'Upload image…',
-    'settings.background': 'Background',
-    'settings.changeBackground': 'Change background…',
-    'settings.subscription': 'Subscription',
-    'settings.subscriptionFree': 'Free',
-    'settings.subscriptionTrial': 'Trial (ends at: {date})',
-    'settings.subscriptionTrialExpired': 'Trial (ended at: {date})',
-    'settings.subscriptionPro': 'Pro (billed {interval}, next billing at: {date})',
-    'settings.subscriptionProCancelling': 'Pro (billed {interval}, cancels at: {date})',
-    'settings.subscriptionProExpired': 'Pro (expired at: {date})',
-    'settings.billingMonthly': 'monthly',
-    'settings.billingAnnual': 'annually',
-    'settings.cancelSubscription': 'Cancel subscription',
-    'settings.resumeSubscription': 'Resume subscription',
-    'settings.resumeSubscriptionFailed': "Your subscription couldn't be resumed. Please try again.",
-    'settings.manageBilling': 'Manage billing…',
-    'settings.manageBillingUnavailable': 'Billing management is temporarily unavailable. Please try again later.',
-    'settings.manageBillingFailed': "Couldn't open billing management. Please try again.",
-    'settings.scheduledDeletionNotice': 'This account will be deleted upon subscription expiration.',
-    'settings.cancelScheduledDeletion': 'Cancel scheduled deletion',
-    'settings.password': 'Password',
-    'settings.changePassword': 'Change password…',
-    'settings.email': 'Login email',
-    'settings.changeEmail': 'Change email…',
-    'settings.pendingEmail': 'Waiting for you to confirm {email} -- check that inbox for the link.',
-    'changeEmail.title': 'Change login email',
-    'changeEmail.new': 'New email',
-    'changeEmail.submit': 'Send confirmation link',
-    'changeEmail.sent': "We sent a confirmation link to {email} (valid for 6 hours). Until you open it, keep logging in with {current}. {current} also got a notice with a link to undo the change, in case it wasn't you.",
-    'changeEmail.invalid': 'Enter a valid email address.',
-    'changeEmail.same': 'That is already your login email.',
-    'changeEmail.taken': 'An account with that email already exists.',
-    'changeEmail.genericError': "Couldn't start the email change. Please try again.",
-    'verifyEmailChange.success': 'Your login email is now {email}.',
-    'verifyEmailChange.expired': 'That confirmation link has expired. Request the email change again from Settings.',
-    'verifyEmailChange.invalid': 'That confirmation link is invalid or has already been used.',
-    'verifyEmailChange.taken': 'That address has been taken by another account in the meantime, so the change was cancelled.',
-    'undoEmailChange.title': 'Email change undone -- set a new password',
-    'undoEmailChange.intro': 'Your login email is {email} again, and every session has been signed out. Whoever changed it may know your password, so choose a new one now.',
-    'undoEmailChange.submit': 'Set new password',
-    'undoEmailChange.done': 'Your login email is {email} again, and your new password is set.',
-    'undoEmailChange.skipped': "Your login email is {email} again, and every session has been signed out. You can still log in with your current password -- change it in Settings as soon as you can.",
-    'undoEmailChange.invalid': 'That undo link is invalid, has expired, or has already been used.',
-    'undoEmailChange.taken': "Your previous address now belongs to another account, so it couldn't be restored. Please contact support.",
-    'undoEmailChange.resetExpired': 'That password reset has expired. Log in with your current password and change it in Settings.',
-    'settings.data': 'Data',
-    'settings.downloadData': 'Download my data…',
-    'settings.importData': 'Import data…',
-    'settings.dangerZone': 'Danger zone',
-    'settings.deleteAccount': 'Delete account…',
-
-    'changePassword.title': 'Change password',
-    'changePassword.current': 'Current password',
-    'changePassword.new': 'New password',
-    'changePassword.confirm': 'Confirm new password',
-    'changePassword.submit': 'Change password',
-    'changePassword.tooShort': 'New password must be at least 8 characters.',
-    'changePassword.mismatch': "New passwords don't match.",
-    'changePassword.wrongCurrent': 'Current password is incorrect.',
-    'changePassword.genericError': "Couldn't change your password. Try again in a bit.",
-    'changePassword.success': 'Your password has been changed.',
-
-    'deleteAccount.title': 'Delete account',
-    'deleteAccount.warning':
-      "This permanently deletes every task, note, and setting in your account – immediately, with no way to get them back. Download a copy first if you want to keep it. Only your email, password and whether you've had a free trial are kept, for 12 months: logging in again during that time reopens the account, empty.",
-    'deleteAccount.subscriberNotice':
-      "You have an active Pro subscription. Deleting immediately forfeits the rest of your paid period with no refund, and cuts off access right away. You can instead schedule deletion for when your subscription ends – it'll be cancelled now, but you'll keep full access until then.",
-    'deleteAccount.confirm': 'Delete my account permanently',
-    'deleteAccount.confirmImmediate': 'Delete immediately',
-    'deleteAccount.schedule': 'Schedule deletion for {date}',
-
-    'subscribe.title': 'Upgrade to A-To-Do Pro',
-    'subscribe.cta': 'Start free trial…',
-    'subscribe.ctaPaid': 'Subscribe…',
-    'subscribe.priceHintPaid': 'Just <span data-price-plan="monthly"></span>/month <span data-anchor-plan="monthly"></span>, or <span data-price-plan="annual"></span>/year <span data-anchor-plan="annual"></span>.',
-    'subscribe.headerCta': 'Subscribe',
-    'subscribe.maybeLater': 'Maybe later',
-    'subscribe.benefitTasks': 'Unlimited tasks, recurring or not',
-    'subscribe.benefitNotes': 'Unlimited notes on every task',
-    'subscribe.benefitAds': 'No more subscription reminders cluttering your list',
-    'subscribe.priceHint': 'Just <span data-price-plan="monthly"></span>/month <span data-anchor-plan="monthly"></span> afterwards – start with a free 14-day trial, no payment required now.',
-    'subscribe.reasonCreateLimit': "You've hit a limit of what we can do for you for free. Subscribe today and keep adding to your To-Do list indefinitely!",
-    'subscribe.reasonTaskLimit': "This task is beyond your free plan's limit, so it can't be completed or noted on.",
-    'subscribe.taskName': 'Subscribe to A-To-Do',
-    'subscribe.taskDescription': 'Unlock unlimited tasks and notes',
-    'subscribe.taskDetails':
-      'Unlock A-To-Do Pro:\n– Unlimited tasks, recurring or not\n– Unlimited notes on every task\n– No more subscription reminders cluttering your list',
-
-    'background.title': 'Change background',
-    'background.accessKeyLabel': 'Unsplash Access Key',
-    'background.accessKeyPlaceholder': 'Paste your Unsplash API Access Key',
-    'background.hint':
-      'Backgrounds are pulled from <a href="https://unsplash.com/developers" target="_blank" rel="noopener">Unsplash’s free developer API</a>. Create a free app there and paste its Access Key here — it’s saved only on this device, separately from your task data.',
-    'background.saveKey': 'Save key',
-    'background.searchPlaceholder': 'Search Unsplash, e.g. mountains, minimal, ocean',
-    'background.search': 'Search',
-    'background.loading': 'Loading…',
-    'background.noResults': 'No results.',
-    'background.usePhoto': 'Use this photo – by {name} on Unsplash',
-    'background.keyRejected': 'That Unsplash Access Key was rejected – double-check it and try again.',
-    'background.rateLimited': "Unsplash's free-tier rate limit was hit for this key – try again in a bit.",
-    'background.requestFailed': 'Unsplash request failed ({status}).',
-    'background.creditBy': 'Photo by',
-    'background.creditOn': 'on',
-    'background.creditUnsplashName': 'Unsplash',
-
-    'data.notJson': "That file isn't valid JSON.",
-    'data.notExport': "That file doesn't look like an advanced-todo data export.",
-    'data.importConfirm': "Importing will replace all of your current tasks and settings with what's in this file. Continue?",
-    'data.importLimitedByFreePlan':
-      "Your free plan's limits apply to imports too, so some of this file's tasks and/or notes were left out. Subscribe to import everything.",
-    'saveStatus.failed': "Your latest changes haven't been saved yet ({message}). Retrying automatically -- keep this tab open until this message goes away, or they'll be lost.",
-    'saveStatus.retryNow': 'Retry now',
-    'saveStatus.maintenance': "A-To-Do is being updated -- your latest changes will be saved as soon as it's back, in a few minutes. Keep this tab open until this message goes away.",
-    'login.maintenance': 'A-To-Do is being updated. Please try again in a few minutes -- this page will keep trying.',
-    'siteStatus.announcement': 'A-To-Do will be briefly unavailable for an update on {date} (about {minutes} min). Your tasks are safe -- changes made meanwhile are saved once it’s back.',
-    'siteStatus.newVersion': 'A new version of A-To-Do is available.',
-    'siteStatus.reload': 'Reload',
-    'saveStatus.retrying': 'Retrying…',
-    'data.importSaveFailed':
-      "The import didn't go through, so your tasks are as they were: {message} Try again in a bit, and if it keeps happening, please contact support and attach the file you tried to import so we can look into it.",
-    'data.importTitle': 'Importing data',
-    'data.importSize': 'The file is {size}.',
-    'data.importMetered': 'You seem to be on a metered or data-saving connection -- the upload will use about {size} of data.',
-    'data.importProgress': 'Uploading… {done} of {total}',
-    'data.importCommitting': 'Saving…',
-    'data.importTooLarge': 'That file is too large to import.',
-    'taskForm.timeZone': 'Time zone',
-    'taskForm.timeZoneFluid': 'Fluid -- local time wherever you are',
-    'todo.showTimerTask': 'Show this task',
-    'todo.zoneTime': '{time} {city}',
-  },
-  hr: {
-    'login.title': 'Prijava',
-    'login.email': 'E-mail',
-    'login.password': 'Lozinka',
-    'login.submit': 'Prijava',
-    'login.noAccount': 'Nemate račun?',
-    'login.registerLink': 'Napravite ga',
-    'login.forgotLink': 'Zaboravili ste lozinku?',
-    'todo.backToToday': 'Danas',
-    'forgotPassword.title': 'Resetiranje lozinke',
-    'forgotPassword.hint': 'E-mail vašeg računa -- na njega ćemo poslati poveznicu za postavljanje nove lozinke (vrijedi 30 minuta)',
-    'forgotPassword.submit': 'Pošalji poveznicu',
-    'forgotPassword.sent': 'Ako za {email} postoji račun, poveznica za postavljanje nove lozinke je na putu. Vrijedi 30 minuta.',
-    'forgotPassword.invalidEmail': 'Upišite valjanu e-mail adresu.',
-    'forgotPassword.failed': 'Poveznicu nije bilo moguće poslati. Pokušajte ponovno.',
-    'resetPassword.title': 'Postavite novu lozinku',
-    'resetPassword.intro': 'Odaberite novu lozinku za svoj račun. Sve ostale sesije bit će odjavljene.',
-    'resetPassword.submit': 'Postavi novu lozinku',
-    'resetPassword.done': 'Nova lozinka je postavljena i prijavljeni ste.',
-    'resetPassword.invalid': 'Ta poveznica za resetiranje lozinke nije valjana, istekla je ili je već iskorištena. Novu možete zatražiti putem "Zaboravili ste lozinku?".',
-    'login.invalidCredentials': 'Netočan e-mail ili lozinka.',
-    'login.networkError': 'Nije moguće spojiti se na poslužitelj. Provjerite vezu i pokušajte ponovno.',
-    'login.notVerified': 'Taj e-mail još nije potvrđen – provjerite poštanski sandučić za poveznicu za potvrdu.',
-    'login.accountExpired': 'Ovaj račun je automatski izbrisan nakon 12 mjeseci neaktivnosti, zajedno sa svim podacima. Prijavite se ponovno kako biste ga ponovno otvorili, prazan.',
-    'login.accountDeletedScheduled': 'Ovaj račun je izbrisan, kako je zakazano, po isteku pretplate, zajedno sa svim podacima. Prijavite se ponovno kako biste ga ponovno otvorili, prazan.',
-    'login.accountRestored': 'Dobro došli natrag! Ovaj račun bio je izbrisan pa je ponovno otvoren prazan – njegovi raniji zadaci, bilješke i postavke nepovratno su izbrisani.',
-    'login.verifiedSuccess': 'E-mail potvrđen – sada se možete prijaviti kao {email}.',
-    'login.verifyExpired': 'Ta poveznica za potvrdu je istekla. Molimo registrirajte se ponovno.',
-    'login.verifyInvalid': 'Ta poveznica za potvrdu nije valjana ili je već iskorištena.',
-
-    'register.title': 'Napravi račun',
-    'register.confirmPassword': 'Potvrdite lozinku',
-    'register.passwordHint': 'Najmanje 8 znakova.',
-    'register.submit': 'Napravi račun',
-    'register.haveAccount': 'Već imate račun?',
-    'register.loginLink': 'Prijavite se',
-    'register.backToLogin': 'Natrag na prijavu',
-    'register.passwordMismatch': 'Lozinke se ne podudaraju.',
-    'register.passwordTooShort': 'Lozinka mora imati najmanje 8 znakova.',
-    'register.invalidEmail': 'Unesite valjanu e-mail adresu.',
-    'register.emailTaken': 'Račun s tom e-mail adresom već postoji. Želite li se <a href="#" class="js-taken-login">prijaviti</a>?',
-    'register.genericError': 'Nešto je pošlo po zlu – pokušajte ponovno.',
-    'register.checkEmail': 'Poslali smo poveznicu za potvrdu na {email}. Kliknite je unutar 6 sati kako biste aktivirali račun.',
-    'register.checkEmailCheckout': 'Poslali smo poveznicu za potvrdu na {email}. Kliknite je unutar 6 sati – prijavit će vas i odvesti ravno na plaćanje.',
-
-    'common.close': 'Zatvori',
-    'common.cancel': 'Odustani',
-    'common.save': 'Spremi',
-    'common.ok': 'U redu',
-    'common.add': 'Dodaj',
-    'common.delete': 'Izbriši',
-    'common.edit': 'Uredi',
-    'common.remove': 'Ukloni',
-    'common.clickAgainToDelete': 'Kliknite ponovno za brisanje',
-
-    'avatar.accountMenu': 'Izbornik računa',
-    'menu.manageTasks': 'Upravljanje zadacima…',
-    'menu.settings': 'Postavke…',
-    'menu.privacyPolicy': 'Pravila privatnosti',
-    'menu.termsOfService': 'Uvjeti korištenja',
-    'menu.faq': 'Česta pitanja',
-    'menu.support': 'Kontakt podrške',
-    'menu.logout': 'Odjava',
-    'menu.logoutTitle': 'Odjava (za testiranje zaslona za prijavu)',
-
-    'app.titleGeneric': 'Popis obveza',
-    'title.pending': 'Zadaci na čekanju i zakašnjeli za',
-    'title.next-recurrence': 'Nadolazeći zadaci za',
-    'title.all': 'Svi zadaci za',
-    'title.pendingNoDay': 'Zadaci na čekanju i zakašnjeli',
-    'title.next-recurrenceNoDay': 'Nadolazeći zadaci',
-    'title.allNoDay': 'Svi zadaci',
-
-    'month.prev': 'Prethodni mjesec',
-    'month.next': 'Sljedeći mjesec',
-    'month.jumpToCurrent': 'Skoči na trenutni mjesec',
-    'view.pending': 'Zadaci na čekanju i zakašnjeli ovaj mjesec',
-    'view.next': 'Sljedeće ponavljanje svakog zadatka',
-    'view.all': 'Svi zadaci ovaj mjesec',
-
-    'todo.addTask': '+ Dodaj zadatak',
-    'todo.addTaskDue': 'Dodaj zadatak s rokom {date}',
-    'todo.empty': 'Još nemate zadataka.',
-    'todo.today': 'Danas',
-    'todo.yesterday': 'Jučer',
-    'todo.tomorrow': 'Sutra',
-    'todo.tomorrowAllDay': 'Sutra, cijeli dan',
-    'todo.tomorrowAt': 'Sutra, {time}',
-    'todo.allDay': 'Cijeli dan',
-    'todo.due': 'Rok: {time}',
-    'todo.overdueSince': 'Zakašnjelo od {date}',
-    'todo.overdueSinceAt': 'Zakašnjelo od {date} {time}',
-    'todo.failedWasDue': 'Neuspješno – rok je bio {date}',
-    'todo.failedWasDueAt': 'Neuspješno – rok je bio {date} {time}',
-    'todo.timerElapsed': 'Ukupno proteklo vrijeme: {elapsed}',
-    'todo.timerElapsedPlanned': 'Ukupno proteklo vrijeme: {elapsed} od planiranih {planned}',
-    'todo.timerRemainingOfTotal': '{remaining} od {total}',
-    'todo.stopWorking': 'Prestani raditi na ovom zadatku',
-    'todo.workOnNow': 'Radi na ovom zadatku sada',
-    'todo.showUndo': 'Prikaži (poništi skrivanje)',
-    'todo.hideRemove': 'Sakrij (ukloni s popisa)',
-
-    'menu.timer': 'Mjerač vremena',
-    'menu.autoTimer': 'Automatski mjerač ({time})',
-    'menu.pauseTimer': 'Pauziraj mjerač vremena',
-    'menu.cancelTimer': 'Odustani od mjerača vremena',
-    'menu.resumeTimer': 'Nastavi mjerač vremena',
-    'menu.markDone': 'Označi kao obavljeno',
-    'menu.markFailed': 'Označi kao neuspješno',
-    'menu.focus': 'Fokusiraj',
-    'menu.unfocus': 'Ukloni fokus',
-    'menu.show': 'Prikaži',
-    'menu.hide': 'Sakrij',
-    'menu.pauseRecurrence': 'Pauziraj ponavljanje do…',
-    'menu.resumeRecurrence': 'Nastavi ponavljanje odmah',
-    'pause.title': 'Pauziraj "{name}"',
-    'pause.hint': 'Od {date} do datuma koji odaberete -- ponavljanje se nastavlja točno na taj datum.',
-    'pause.summary': 'Pauzirano {from} – {to}, nastavlja se {resume}', // no trailing period: Croatian dates already end in one
-    'pause.nothingAfter': 'Ponavljanje ovog zadatka završava prije nego što bi se imalo što nastaviti.',
-    'datePicker.prevMonth': 'Prethodni mjesec',
-    'datePicker.nextMonth': 'Sljedeći mjesec',
-    'menu.taskStats': 'Statistika zadatka',
-    'menu.deleteMeasurement': 'Izbriši ovo mjerenje',
-    'agenda.measuredFocus': 'Fokus {from}–{to}',
-    'agenda.measuredTimer': 'Mjereno {from}–{to}',
-
-    'sidePanel.agendaHeading': 'Današnji raspored',
-    'sidePanel.agendaEmpty': 'Danas nema zadataka.',
-    'sidePanel.occurrence': 'Pojava',
-    'sidePanel.occurrenceTitle': 'Samo ova pojava',
-    'sidePanel.task': 'Zadatak',
-    'sidePanel.taskTitle': 'Ovaj zadatak, sve pojave',
-    'sidePanel.series': 'Niz',
-    'sidePanel.seriesTitle': 'Svaki zadatak u ovom nizu',
-    'sidePanel.commentPlaceholder': 'Dodajte bilješku o ovom zadatku…',
-    'sidePanel.addNote': 'Dodaj bilješku',
-    'sidePanel.notes': 'Bilješke',
-    'sidePanel.occurrenceDetails': 'Ova pojava ({date})',
-    'sidePanel.activity': 'Aktivnost',
-    'sidePanel.noNotes': 'Još nema bilješki.',
-    'sidePanel.noActivity': 'Još nema aktivnosti.',
-    'sidePanel.editNote': 'Uredi bilješku',
-    'sidePanel.noteLabel': 'Bilješka',
-    'sidePanel.editNotes': 'Uredi bilješke',
-    'sidePanel.stopEditingNotes': 'Prestani uređivati bilješke',
-
-    'timer.setTitle': 'Postavi mjerač vremena',
-    'timer.countUp': 'Broji unaprijed (bez fiksnog trajanja – automatski se zaustavlja nakon 6 sati)',
-    'timer.minutesLabel': 'Minute rada na ovom zadatku',
-    'timer.continuePastZero': 'Nastavi odbrojavati ispod nule umjesto zaustavljanja',
-    'timer.start': 'Pokreni',
-    'timer.set': 'Postavi',
-    'taskForm.editTask': 'Uredi zadatak',
-    'taskEditor.title': 'Uredi zadatak – {name}',
-    'taskEditor.tabDetails': 'Podaci',
-    'taskEditor.tabPattern': 'Ponavljanje',
-    'taskEditor.tabOccurrences': 'Pojave',
-    'taskEditor.detailsHint': 'Promjene ovdje vrijede za sve pojave ovog zadatka, prošle i buduće.',
-    'taskEditor.patternHint': 'Promjene ovdje vrijede od danas nadalje -- prošle pojave ostaju kakve jesu.',
-    'taskEditor.occurrencesHint': 'Promjene ovdje spremaju se odmah.',
-    'taskEditor.deleteTask': 'Izbriši zadatak',
-    'taskEditor.next': 'sljedeća',
-    'taskEditor.findOccurrence': 'Pronađi pojavu…',
-    'taskEditor.findOccurrenceTitle': 'Pronađi nadolazeću pojavu',
-    'taskEditor.findOccurrenceHint': 'Mogu se odabrati samo datumi na koje se ovaj zadatak ponavlja.',
-    'taskEditor.noUpcomingOccurrences': 'Ovaj zadatak nema nadolazećih pojava.',
-    'taskEditor.occurrenceDetails': 'Pojedinosti',
-    'taskEditor.occurrenceDetailsPlaceholder': 'Nešto specifično za ovu pojavu…',
-    'taskEditor.noOccurrences': 'Još nema pojava.',
-    'taskEditor.statusDone': 'Obavljeno',
-    'taskEditor.statusFailed': 'Neuspjelo',
-    'taskEditor.statusMissed': 'Nije obavljeno',
-    'taskEditor.statusPending': 'Danas',
-    'taskEditor.statusUpcoming': 'Nadolazeće',
-    'taskForm.addTask': 'Dodaj zadatak',
-    'taskForm.name': 'Naziv',
-    'taskForm.description': 'Opis',
-    'taskForm.details': 'Detalji',
-    'taskForm.dueDate': 'Datum dospijeća',
-    'taskForm.allDay': 'Cijeli dan (bez određenog vremena)',
-    'taskForm.dueTime': 'Vrijeme dospijeća',
-    'taskForm.repeatsEvery': 'Ponavlja se svakih',
-    'taskForm.days': 'dan(a)',
-    'taskForm.weeks': 'tjedan(a)',
-    'taskForm.months': 'mjesec(a)',
-    'taskForm.weekdayMon': 'Pon',
-    'taskForm.weekdayTue': 'Uto',
-    'taskForm.weekdayWed': 'Sri',
-    'taskForm.weekdayThu': 'Čet',
-    'taskForm.weekdayFri': 'Pet',
-    'taskForm.weekdaySat': 'Sub',
-    'taskForm.weekdaySun': 'Ned',
-    'taskForm.sunday': 'Nedjelja',
-    'taskForm.monday': 'Ponedjeljak',
-    'taskForm.tuesday': 'Utorak',
-    'taskForm.wednesday': 'Srijeda',
-    'taskForm.thursday': 'Četvrtak',
-    'taskForm.friday': 'Petak',
-    'taskForm.saturday': 'Subota',
-    'taskForm.alsoRecurOn': 'Također se ponavlja ovim danima (samo tjedno; ostavite prazno za dan u tjednu datuma dospijeća)',
-    'taskForm.monthlyPattern': 'Mjesečni obrazac',
-    'taskForm.monthlySameDay': 'Isti dan u mjesecu kao datum dospijeća',
-    'taskForm.monthlyLastDay': 'Zadnji dan u mjesecu',
-    'taskForm.monthlyBeforeLast': 'N dana prije zadnjeg dana u mjesecu',
-    'taskForm.monthlyWeekday': 'N-ti dan u tjednu u mjesecu',
-    'taskForm.monthlyMultiWeekday': 'Najranija N-ta pojava bilo kojeg od odabranih dana',
-    'taskForm.monthlyMultiWeekdayOffset': 'N dana prije/poslije najranije N-te pojave bilo kojeg od odabranih dana',
-    'taskForm.monthlyMultiDay': 'Više dana u mjesecu (1-28)',
-    'taskForm.monthlyOffsetLabel': 'Dana prije zadnjeg dana u mjesecu (0-3)',
-    'taskForm.dayOfWeek': 'Dan u tjednu',
-    'taskForm.whichOccurrence': 'Koja pojava',
-    'taskForm.ordinal1': '1.',
-    'taskForm.ordinal2': '2.',
-    'taskForm.ordinal3': '3.',
-    'taskForm.ordinal4': '4.',
-    'taskForm.ordinal5': '5.',
-    'taskForm.ordinalLast': 'Zadnja',
-    'taskForm.selectedDays': 'Odabrani dani (najranija N-ta pojava bilo kojeg od njih)',
-    'taskForm.daysInline': 'dana',
-    'taskForm.before': 'Prije',
-    'taskForm.after': 'Poslije',
-    'taskForm.occurrenceWord': 'pojava',
-    'taskForm.occurrenceHr': '. pojava',
-    'taskForm.multiDayDays': 'Dani u mjesecu (1-28)',
-    'taskForm.endDate': 'Datum završetka (neobavezno – zadnje ponavljanje na ili prije ovog datuma)',
-    'taskForm.appointmentDesc':
-      "Termin – datum dospijeća je rok, a ne stalni podsjetnik: ako nije obavljen do tada, označava se kao neuspješan (precrtano, crveno) umjesto da ostane zakašnjelo. Ipak se može naknadno označiti kao obavljeno.",
-    'taskForm.passiveDesc':
-      "Pasivno – običan podsjetnik, a ne izvediv zadatak: ne može se fokusirati niti mjeriti vrijeme, a njegova kvačica označava neuspjeh umjesto dovršenosti. S rokom u određeno vrijeme smatra se obavljenim čim to vrijeme prođe (i dalje ga možete označiti neuspješnim); cjelodnevno ostaje vidljivo dok ga ne označite neuspješnim ili, kad više nije na redu za danas, ga uklonite.",
-    'taskForm.recurUntilCompletedDesc':
-      "Ponavljaj do dovršetka – nikad se ne označava kao zakašnjelo ili neuspješno: ako nije obavljeno do roka, premješta se na sljedeći dan (isto vrijeme), a propušteni rok ostaje vidljiv uz novi sve dok jedan od njih ne označite obavljenim. Sljedeća pojava ponavljajućeg zadatka tada se računa od trenutka kad je stvarno dovršen, a ne prema izvornom rasporedu.",
-    'taskForm.endDateBeforeDue': 'Datum završetka ne može biti prije datuma dospijeća.',
-
-    'manualOccurrence.title': 'Dodaj pojavu',
-    'manualOccurrence.add': 'Dodaj pojavu…',
-    'manualOccurrence.exists': 'Ovaj zadatak već ima pojavu na taj datum.',
-
-    'manage.title': 'Popis zadataka',
-    'manage.selectSeries': 'Odaberite niz slijeva za njegovo uređivanje.',
-    'manage.backToList': '‹ Natrag',
-    'manage.addNewTask': '+ Dodaj novi zadatak',
-    'manage.seriesNamePlaceholder': 'Naziv niza',
-    'manage.saved': 'Spremljeno',
-    'manage.noTasksYet': 'Još nema zadataka.',
-    'manage.resetName': 'Vrati naziv na naziv niza',
-    'manage.removeFromSeries': 'Ukloni iz niza',
-
-    'occurrencePanel.editThisOccurrence': 'Uredi ovu pojavu…',
-    'occurrencePanel.reschedule': 'Promijeni datum…',
-    'occurrencePanel.rescheduleTitle': 'Promjena datuma pojave',
-    'occurrencePanel.rescheduleDateLabel': 'Novi datum',
-    'occurrencePanel.rescheduleCollision': 'Druga pojava ovog zadatka već je zabilježena na taj datum.',
-    'occurrencePanel.blockedRecurUntilCompleted': 'Nije dostupno dok je sljedeća pojava ovog zadatka još na čekanju.',
-    'todo.reopenBlockedRecurUntilCompleted': 'Kasnija pojava ovog zadatka od tada je već dovršena, pa se ova više ne može označiti kao nedovršena.',
-
-    'taskStats.title': 'Statistika: {name}',
-    'taskStats.totalFocusedAllRecurrences': 'Ukupno vrijeme fokusa (sva ponavljanja)',
-    'taskStats.totalFocused': 'Ukupno vrijeme fokusa',
-    'taskStats.total': 'Ukupno',
-    'taskStats.justFocused': 'Samo fokusirano',
-    'taskStats.focusedWithTimer': 'Fokusirano uz mjerač vremena',
-    'taskStats.completion': 'Dovršenost',
-    'taskStats.completed': 'Dovršeno',
-    'taskStats.recurrencesToDate': 'Ponavljanja do danas',
-    'taskStats.completionRate': 'Stopa dovršenosti',
-    'taskStats.timePerRecurrence': 'Vrijeme po ponavljanju',
-    'taskStats.noFocusedTime': 'Još nije zabilježeno vrijeme fokusa.',
-    'taskStats.focusedAndTimer': '{focused} fokusirano · {timer} mjerač',
-    'taskStats.allTitle': 'Statistika: svi zadaci',
-    'taskStats.seriesTitle': 'Statistika: serija "{name}"',
-    'taskStats.overview': 'Pregled',
-    'taskStats.taskCount': 'Zadaci',
-    'taskStats.occurrencesToDate': 'Pojavljivanja do danas',
-    'taskStats.timePerDay': 'Vrijeme po danu',
-    'taskStats.since': 'Od resetiranja {date}',
-    'taskStats.reset': 'Resetiraj statistiku…',
-    'taskStats.resetConfirm': 'Klikni ponovno za resetiranje',
-    'manage.allStats': 'Statistika (svi zadaci)',
-    'manage.seriesStats': 'Statistika serije',
-
-    'settings.title': 'Postavke',
-    'settings.nickname': 'Nadimak',
-    'settings.nicknamePlaceholder': 'npr. Nikola',
-    'settings.timeFormat': 'Format vremena',
-    'settings.timeFormat24': '24-satni (npr. 18:00)',
-    'settings.timeFormat12': '12-satni (npr. 6:00 PM)',
-    'settings.language': 'Jezik',
-    'settings.languageEnglish': 'English (engleski)',
-    'settings.languageCroatian': 'Hrvatski',
-    'settings.theme': 'Tema',
-    'settings.weekStart': 'Prvi dan u tjednu',
-    'settings.weekStartMonday': 'Ponedjeljak',
-    'settings.weekStartSunday': 'Nedjelja',
-    'settings.themeDark': 'Tamna',
-    'settings.themeLight': 'Svijetla',
-    'settings.avatar': 'Avatar',
-    'settings.uploadImage': 'Učitaj sliku…',
-    'settings.background': 'Pozadina',
-    'settings.changeBackground': 'Promijeni pozadinu…',
-    'settings.subscription': 'Pretplata',
-    'settings.subscriptionFree': 'Besplatno',
-    'settings.subscriptionTrial': 'Probno razdoblje (do: {date})',
-    'settings.subscriptionTrialExpired': 'Probno razdoblje (isteklo: {date})',
-    'settings.subscriptionPro': 'Pro (naplata {interval}, sljedeća naplata: {date})',
-    'settings.subscriptionProCancelling': 'Pro (naplata {interval}, otkazuje se: {date})',
-    'settings.subscriptionProExpired': 'Pro (isteklo: {date})',
-    'settings.billingMonthly': 'mjesečno',
-    'settings.billingAnnual': 'godišnje',
-    'settings.cancelSubscription': 'Otkaži pretplatu',
-    'settings.resumeSubscription': 'Nastavi pretplatu',
-    'settings.resumeSubscriptionFailed': 'Pretplatu nije bilo moguće nastaviti. Pokušajte ponovno.',
-    'settings.manageBilling': 'Upravljaj plaćanjem…',
-    'settings.manageBillingUnavailable': 'Upravljanje plaćanjem trenutno nije dostupno. Pokušajte ponovno kasnije.',
-    'settings.manageBillingFailed': 'Upravljanje plaćanjem nije se moglo otvoriti. Pokušajte ponovno.',
-    'settings.scheduledDeletionNotice': 'Ovaj račun će biti izbrisan po isteku pretplate.',
-    'settings.cancelScheduledDeletion': 'Otkaži zakazano brisanje',
-    'settings.password': 'Lozinka',
-    'settings.changePassword': 'Promijeni lozinku…',
-    'settings.email': 'E-pošta za prijavu',
-    'settings.changeEmail': 'Promijeni e-poštu…',
-    'settings.pendingEmail': 'Čeka se potvrda adrese {email} -- poveznicu potražite u tom sandučiću.',
-    'changeEmail.title': 'Promijeni e-poštu za prijavu',
-    'changeEmail.new': 'Nova e-pošta',
-    'changeEmail.submit': 'Pošalji poveznicu za potvrdu',
-    'changeEmail.sent': 'Poveznicu za potvrdu poslali smo na {email} (vrijedi 6 sati). Dok je ne otvorite, i dalje se prijavljujte s {current}. Na {current} stigla je i obavijest s poveznicom za poništavanje promjene, za slučaj da to niste bili vi.',
-    'changeEmail.invalid': 'Unesite ispravnu adresu e-pošte.',
-    'changeEmail.same': 'To je već vaša e-pošta za prijavu.',
-    'changeEmail.taken': 'Račun s tom adresom e-pošte već postoji.',
-    'changeEmail.genericError': 'Promjenu e-pošte nije bilo moguće pokrenuti. Pokušajte ponovno.',
-    'verifyEmailChange.success': 'Vaša e-pošta za prijavu sada je {email}.',
-    'verifyEmailChange.expired': 'Poveznica za potvrdu je istekla. Ponovno zatražite promjenu e-pošte u Postavkama.',
-    'verifyEmailChange.invalid': 'Poveznica za potvrdu nije ispravna ili je već iskorištena.',
-    'verifyEmailChange.taken': 'Tu je adresu u međuvremenu preuzeo drugi račun, pa je promjena otkazana.',
-    'undoEmailChange.title': 'Promjena e-pošte poništena -- postavite novu lozinku',
-    'undoEmailChange.intro': 'Vaša e-pošta za prijavu ponovno je {email}, a sve su sesije odjavljene. Tko god ju je promijenio možda zna vašu lozinku, pa odmah odaberite novu.',
-    'undoEmailChange.submit': 'Postavi novu lozinku',
-    'undoEmailChange.done': 'Vaša e-pošta za prijavu ponovno je {email}, a nova lozinka je postavljena.',
-    'undoEmailChange.skipped': 'Vaša e-pošta za prijavu ponovno je {email}, a sve su sesije odjavljene. I dalje se možete prijaviti trenutnom lozinkom -- promijenite je u Postavkama čim prije.',
-    'undoEmailChange.invalid': 'Poveznica za poništavanje nije ispravna, istekla je ili je već iskorištena.',
-    'undoEmailChange.taken': 'Vaša prethodna adresa sada pripada drugom računu, pa je nije bilo moguće vratiti. Obratite se podršci.',
-    'undoEmailChange.resetExpired': 'Postavljanje lozinke je isteklo. Prijavite se trenutnom lozinkom i promijenite je u Postavkama.',
-    'settings.data': 'Podaci',
-    'settings.downloadData': 'Preuzmi moje podatke…',
-    'settings.importData': 'Uvezi podatke…',
-    'settings.dangerZone': 'Opasna zona',
-    'settings.deleteAccount': 'Izbriši račun…',
-
-    'changePassword.title': 'Promjena lozinke',
-    'changePassword.current': 'Trenutna lozinka',
-    'changePassword.new': 'Nova lozinka',
-    'changePassword.confirm': 'Potvrdi novu lozinku',
-    'changePassword.submit': 'Promijeni lozinku',
-    'changePassword.tooShort': 'Nova lozinka mora imati najmanje 8 znakova.',
-    'changePassword.mismatch': 'Nove lozinke se ne podudaraju.',
-    'changePassword.wrongCurrent': 'Trenutna lozinka nije točna.',
-    'changePassword.genericError': 'Nismo uspjeli promijeniti vašu lozinku. Pokušajte ponovno za koji trenutak.',
-    'changePassword.success': 'Vaša lozinka je promijenjena.',
-
-    'deleteAccount.title': 'Izbriši račun',
-    'deleteAccount.warning':
-      'Ovime se trajno briše svaki zadatak, bilješka i postavka na vašem računu – odmah, bez mogućnosti vraćanja. Preuzmite kopiju prije brisanja ako je želite zadržati. Čuvaju se samo vaša e-mail adresa, lozinka i podatak jeste li već imali besplatno probno razdoblje, 12 mjeseci: ponovna prijava u tom razdoblju ponovno otvara račun, prazan.',
-    'deleteAccount.subscriberNotice':
-      'Imate aktivnu Pro pretplatu. Trenutačno brisanje znači gubitak preostalog plaćenog razdoblja bez povrata novca, te odmah gubite pristup. Umjesto toga možete zakazati brisanje za trenutak isteka pretplate – pretplata će se odmah otkazati, ali pristup ćete imati do tada.',
-    'deleteAccount.confirm': 'Trajno izbriši moj račun',
-    'deleteAccount.confirmImmediate': 'Izbriši odmah',
-    'deleteAccount.schedule': 'Zakaži brisanje za {date}',
-
-    'subscribe.title': 'Nadogradite na A-To-Do Pro',
-    'subscribe.cta': 'Isprobajte besplatno…',
-    'subscribe.ctaPaid': 'Pretplati se…',
-    'subscribe.priceHintPaid': 'Samo <span data-price-plan="monthly"></span> mjesečno <span data-anchor-plan="monthly"></span> ili <span data-price-plan="annual"></span> godišnje <span data-anchor-plan="annual"></span>.',
-    'subscribe.headerCta': 'Pretplati se',
-    'subscribe.maybeLater': 'Možda kasnije',
-    'subscribe.benefitTasks': 'Neograničen broj zadataka, ponavljajućih ili ne',
-    'subscribe.benefitNotes': 'Neograničen broj bilješki na svakom zadatku',
-    'subscribe.benefitAds': 'Bez podsjetnika za pretplatu koji zatrpavaju popis',
-    'subscribe.priceHint': 'Nakon toga samo <span data-price-plan="monthly"></span> mjesečno <span data-anchor-plan="monthly"></span> – započnite s besplatnim probnim razdobljem od 14 dana, bez plaćanja sada.',
-    'subscribe.reasonCreateLimit': 'Dosegli ste granicu onoga što možemo ponuditi besplatno. Pretplatite se danas i nastavite neograničeno dodavati zadatke na svoj popis obveza!',
-    'subscribe.reasonTaskLimit': 'Ovaj zadatak je izvan ograničenja besplatnog plana, pa se ne može završiti ni komentirati.',
-    'subscribe.taskName': 'Pretplatite se na A-To-Do',
-    'subscribe.taskDescription': 'Otključajte neograničen broj zadataka i bilješki',
-    'subscribe.taskDetails':
-      'Otključajte A-To-Do Pro:\n– Neograničen broj zadataka, ponavljajućih ili ne\n– Neograničen broj bilješki na svakom zadatku\n– Bez podsjetnika za pretplatu koji zatrpavaju popis',
-
-    'background.title': 'Promjena pozadine',
-    'background.accessKeyLabel': 'Unsplash API ključ',
-    'background.accessKeyPlaceholder': 'Zalijepite svoj Unsplash API ključ',
-    'background.hint':
-      'Pozadine se preuzimaju putem <a href="https://unsplash.com/developers" target="_blank" rel="noopener">Unsplashovog besplatnog razvojnog API-ja</a>. Ondje izradite besplatnu aplikaciju i zalijepite ovdje njezin pristupni ključ — sprema se samo na ovom uređaju, odvojeno od podataka o vašim zadacima.',
-    'background.saveKey': 'Spremi ključ',
-    'background.searchPlaceholder': 'Pretraži Unsplash, npr. planine, minimalizam, more',
-    'background.search': 'Pretraži',
-    'background.loading': 'Učitavanje…',
-    'background.noResults': 'Nema rezultata.',
-    'background.usePhoto': 'Koristi ovu fotografiju – autor {name} na Unsplashu',
-    'background.keyRejected': 'Taj Unsplash API ključ je odbijen – provjerite ga i pokušajte ponovno.',
-    'background.rateLimited': 'Dosegnuto je ograničenje besplatnog Unsplash plana za ovaj ključ – pokušajte ponovno za koji trenutak.',
-    'background.requestFailed': 'Unsplash zahtjev nije uspio ({status}).',
-    'background.creditBy': 'Fotografija autora',
-    'background.creditOn': 'na',
-    'background.creditUnsplashName': 'Unsplashu',
-
-    'data.notJson': 'Ta datoteka nije valjani JSON.',
-    'data.notExport': 'Čini se da ta datoteka nije izvoz podataka iz ove aplikacije.',
-    'data.importConfirm': 'Uvoz će zamijeniti sve vaše trenutne zadatke i postavke sadržajem ove datoteke. Želite li nastaviti?',
-    'data.importLimitedByFreePlan':
-      'Ograničenja vašeg besplatnog plana vrijede i za uvoz, pa su neki zadaci i/ili bilješke iz ove datoteke izostavljeni. Pretplatite se za potpuni uvoz.',
-    'saveStatus.failed': 'Vaše posljednje promjene još nisu spremljene ({message}). Spremanje se automatski ponavlja -- ne zatvarajte ovu karticu dok ova poruka ne nestane, inače će se promjene izgubiti.',
-    'saveStatus.retryNow': 'Pokušaj ponovno',
-    'saveStatus.maintenance': 'A-To-Do se ažurira -- vaše posljednje promjene spremit će se čim ponovno proradi, za nekoliko minuta. Ne zatvarajte ovu karticu dok ova poruka ne nestane.',
-    'login.maintenance': 'A-To-Do se ažurira. Pokušajte ponovno za nekoliko minuta -- ova stranica će pokušavati sama.',
-    'siteStatus.announcement': 'A-To-Do će {date} nakratko biti nedostupan zbog ažuriranja (oko {minutes} min). Vaši zadaci su sigurni -- promjene napravljene u međuvremenu spremit će se čim ponovno proradi.',
-    'siteStatus.newVersion': 'Dostupna je nova verzija A-To-Do-a.',
-    'siteStatus.reload': 'Učitaj ponovno',
-    'saveStatus.retrying': 'Ponovni pokušaj…',
-    'data.importSaveFailed':
-      'Uvoz nije uspio, pa su vaši zadaci ostali kakvi su bili: {message} Pokušajte ponovno za koji trenutak, a ako se problem nastavi, javite se podršci i priložite datoteku koju ste pokušali uvesti kako bismo to mogli istražiti.',
-    'data.importTitle': 'Uvoz podataka',
-    'data.importSize': 'Datoteka ima {size}.',
-    'data.importMetered': 'Čini se da koristite ograničenu vezu ili uštedu podataka -- prijenos će potrošiti oko {size} podataka.',
-    'data.importProgress': 'Prijenos… {done} od {total}',
-    'data.importCommitting': 'Spremanje…',
-    'data.importTooLarge': 'Ta je datoteka prevelika za uvoz.',
-    'taskForm.timeZone': 'Vremenska zona',
-    'taskForm.timeZoneFluid': 'Promjenjiva -- lokalno vrijeme gdje god bili',
-    'todo.showTimerTask': 'Prikaži ovaj zadatak',
-    'todo.zoneTime': '{time} {city}',
-  },
-};
-
-// Falls back to English for any key missing from the current language (lets
-// hr stay incomplete without ever showing a raw key or blank string), then
-// to the key itself if even English is somehow missing it (should never
-// happen in practice -- a visible "raw key" is easier to notice/fix than a
-// silent blank). {placeholder} tokens in the string are replaced from
-// `vars` -- a plain templating scheme, not full ICU pluralization/gendering,
-// which none of these strings need.
 function t(key, vars) {
-  const str = (I18N[currentUserLanguage] && I18N[currentUserLanguage][key]) || I18N.en[key] || key;
-  if (!vars) return str;
-  return str.replace(/\{(\w+)\}/g, (_, name) => (vars[name] != null ? vars[name] : `{${name}}`));
+  return formatTranslation(translationStrings[currentUserLanguage] || {}, key, vars);
+}
+// The same for code shared with the marketing pages (anchor-prices.js),
+// which define their own.
+function pageText(key, vars) {
+  return t(key, vars);
 }
 
 // Maps the app's own language codes to a BCP-47 tag for toLocaleDateString/
@@ -902,7 +62,9 @@ function t(key, vars) {
 // language setting instead of whatever locale the browser happens to be
 // configured with.
 function currentLocaleTag() {
-  return currentUserLanguage === 'hr' ? 'hr-HR' : 'en-US';
+  if (currentUserLanguage === 'hr') return 'hr-HR';
+  if (currentUserLanguage === 'en') return 'en-US';
+  return currentUserLanguage;
 }
 
 // Walks every element carrying one of these data-i18n* attributes and sets
@@ -1644,7 +806,7 @@ let currentUserNickname = null;
 let currentUserAvatar = null; // data URL, or null for the initials fallback
 let currentUserTimeFormat = '24'; // '12' | '24' -- see formatTimeOfDay/formatDateTime
 let currentUserBackground = null; // same shape as the profile's background field, or null -- see applyBackground
-let currentUserLanguage = 'en'; // 'en' | 'hr' -- see the i18n section up top (t()/currentLocaleTag())
+let currentUserLanguage = 'en'; // a language code (GET /atodo/v1/languages) -- see the i18n section up top (t()/currentLocaleTag())
 let currentUserTheme = 'dark'; // 'dark' | 'light' -- see applyTheme below
 // 0 (Sunday) .. 6, or null if never chosen -- see effectiveWeekStart.
 let currentUserWeekStart = null;
@@ -1655,10 +817,10 @@ let currentUserPendingEmail = null;
 
 // The first day of the week calendars and weekday lists start on: the
 // user's own choice (Settings), else each language's usual convention --
-// Monday for Croatian, Sunday for English.
+// Sunday for English, Monday for Croatian (and any other language).
 function effectiveWeekStart() {
   if (currentUserWeekStart != null) return currentUserWeekStart;
-  return currentUserLanguage === 'hr' ? 1 : 0;
+  return currentUserLanguage === 'en' ? 0 : 1;
 }
 // Same shape as getMe()'s subscription field (null | { id, plan, ... }) --
 // see describeSubscription. Refreshed after boot()/
@@ -1677,8 +839,12 @@ let currentUserTrialAvailable = false;
 // startup and whenever Settings' Save button changes it. No page reload
 // needed: every dynamic string call t() fresh at render time (see the i18n
 // section up top), so re-running the renders below is enough to pick up the
-// change immediately, the same as any other Settings field.
-function applyLanguage(language) {
+// change immediately, the same as any other Settings field -- once the
+// language's texts have loaded.
+async function applyLanguage(language) {
+  const seq = ++languageChangeSeq;
+  await ensureTranslations(language);
+  if (seq !== languageChangeSeq) return;
   currentUserLanguage = language;
   applyStaticTranslations();
   renderAppTitle();
@@ -1752,7 +918,10 @@ const PRE_LOGIN_LANG_STORAGE_KEY = 'advanced-todo-pre-login-language';
 // and by the EN/HR toggle on those screens. Deliberately not applyLanguage()
 // (app.js's post-login equivalent): that one also re-renders the to-do list/
 // side panel/manage-tasks modal, none of which exist yet at this point.
-function applyPreLoginLanguage(lang) {
+async function applyPreLoginLanguage(lang) {
+  const seq = ++languageChangeSeq;
+  await ensureTranslations(lang);
+  if (seq !== languageChangeSeq) return;
   currentUserLanguage = lang;
   applyStaticTranslations();
   document.querySelectorAll('.lang-toggle [data-lang]').forEach((btn) => {
@@ -5505,6 +4674,17 @@ function buildSidePanelCommentRow(note) {
 // isn't repeated here even in series scope -- it's already shown once per
 // task in the task-summaries block at the top of the panel (see
 // buildSidePanelTaskSummary).
+// An activity-log entry in the current language: the server names each
+// with a translation key (`log.*`) and its parameters (a date, shown the way
+// dates are shown here) -- one it doesn't recognise has no key and reads as
+// it was written.
+function describeLogEntry(entry) {
+  if (!entry.key) return entry.message;
+  const params = { ...(entry.params || {}) };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(params.date || '')) params.date = formatShortDate(params.date);
+  return t(entry.key, params);
+}
+
 function buildSidePanelLogRow(entry, label) {
   const item = document.createElement('div');
   item.className = 'side-panel-log-item';
@@ -5513,7 +4693,8 @@ function buildSidePanelLogRow(entry, label) {
   topRow.className = 'side-panel-log-top-row';
   const msg = document.createElement('span');
   msg.className = 'side-panel-log-message';
-  msg.textContent = label ? `${label} -- ${entry.message}` : entry.message;
+  const message = describeLogEntry(entry);
+  msg.textContent = label ? `${label} -- ${message}` : message;
   const time = document.createElement('span');
   time.className = 'side-panel-log-time';
   time.textContent = formatDateTime(entry.timestamp);
@@ -6453,9 +5634,33 @@ for (const toggle of SETTINGS_TOGGLES) {
   }
 }
 
+// Settings' language list: every language there is (GET
+// /atodo/v1/languages), each by its own name. Until it loads (or if it
+// can't), the page's own English/Croatian options stand in.
+async function fillSettingsLanguageSelect() {
+  let languages;
+  try {
+    languages = await loadLanguages();
+  } catch (err) {
+    console.error('Failed to load languages:', err);
+    return;
+  }
+  if (!languages.length) return;
+  const selected = settingsLanguageSelect.value || currentUserLanguage;
+  settingsLanguageSelect.innerHTML = '';
+  for (const language of languages) {
+    const option = document.createElement('option');
+    option.value = language.id;
+    option.textContent = language.name.charAt(0).toLocaleUpperCase(language.id) + language.name.slice(1);
+    settingsLanguageSelect.appendChild(option);
+  }
+  settingsLanguageSelect.value = selected;
+}
+
 function openSettingsModal() {
   settingsNicknameInput.value = currentUserNickname || '';
   settingsLanguageSelect.value = currentUserLanguage;
+  fillSettingsLanguageSelect();
   renderSettingsToggles();
   renderSettingsEmailSection();
   settingsPendingAvatar = undefined;
@@ -6787,6 +5992,7 @@ settingsImportDataFileInput.onchange = async () => {
   currentUserLanguage = profile.language || 'en';
   currentUserTheme = profile.theme || 'dark';
   currentUserWeekStart = profile.weekStart ?? null;
+  await ensureTranslations(currentUserLanguage);
 
   todoViewMode = TODO_VIEW_MODES.includes(data.todoViewMode) ? data.todoViewMode : 'pending';
   saveTodoViewMode();
@@ -7513,6 +6719,7 @@ appTitleTodayBtn.onclick = () => {
 // in the background, applying and saving it whenever it resolves.
 async function startApp(needsLanguageDetection) {
   startSiteStatusPolling();
+  await ensureTranslations(currentUserLanguage);
   applyStaticTranslations();
   renderAppTitle();
   renderUserAvatar();
@@ -7613,12 +6820,12 @@ async function handleEmailVerificationLink() {
   }
 }
 
-function boot() {
+async function boot() {
   // No account to read a saved language preference from yet at this point
   // (there's no token, or it hasn't been checked yet) -- resolved in
   // priority order, same idea (and same reasoning) as site-i18n.js's own
   // resolveInitialSiteLanguage for the separate marketing flow:
-  //   1. A `?lang=en|hr` handoff from that marketing/legal flow (see
+  //   1. A `?lang=` handoff from that marketing/legal flow (see
   //      site-i18n.js/landing.html etc.) -- lets clicking through to
   //      "Log in" from one of those pages show the login/register screen in
   //      the language the visitor was just reading, without touching any
@@ -7636,7 +6843,7 @@ function boot() {
   let preLoginLangExplicit = false;
   const bootUrlParams = new URLSearchParams(location.search);
   const langHandoff = bootUrlParams.get('lang');
-  if (langHandoff === 'en' || langHandoff === 'hr') {
+  if (/^[a-z]{2}$/.test(langHandoff || '')) {
     currentUserLanguage = langHandoff;
     preLoginLangExplicit = true;
     localStorage.setItem(PRE_LOGIN_LANG_STORAGE_KEY, langHandoff);
@@ -7649,11 +6856,12 @@ function boot() {
     history.replaceState(null, '', location.pathname + (strippedSearch ? `?${strippedSearch}` : '') + location.hash);
   } else {
     const storedPreLoginLang = localStorage.getItem(PRE_LOGIN_LANG_STORAGE_KEY);
-    if (storedPreLoginLang === 'en' || storedPreLoginLang === 'hr') {
+    if (/^[a-z]{2}$/.test(storedPreLoginLang || '')) {
       currentUserLanguage = storedPreLoginLang;
       preLoginLangExplicit = true;
     }
   }
+  await ensureTranslations(currentUserLanguage);
   applyStaticTranslations();
   document.querySelectorAll('.lang-toggle [data-lang]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.lang === currentUserLanguage);

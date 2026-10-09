@@ -3,7 +3,8 @@
 A to-do list web app for tasks that repeat: recurring tasks with flexible
 patterns, overdue and failed states, work timers, notes and an activity log
 per task. Free to use with limits, or unlimited with a paid Pro subscription.
-Available in English and Croatian.
+Available in English and Croatian, and in any language added in the admin
+app.
 
 This repository is the **client**: plain HTML, CSS and JavaScript, with no
 build step, framework or dependencies. The backend it talks to lives in a
@@ -44,8 +45,8 @@ separate repository (see [How it fits together](#how-it-fits-together)).
   suggestion, complaint), reachable from the avatar menu, the login screen
   and every page's footer.
 - **Personalisation** — nickname and avatar, light and dark themes,
-  backgrounds from Unsplash, 12/24-hour time, first day of the week,
-  English or Croatian.
+  backgrounds from Unsplash, 12/24-hour time, first day of the week, and
+  the language (every language the admin app has).
 
 ## How it fits together
 
@@ -59,8 +60,12 @@ separate repository (see [How it fits together](#how-it-fits-together)).
 The client keeps nothing of value in the browser: tasks, settings and
 subscriptions live on the backend, and so do the task rules (recurrence,
 overdue, timers, the free plan's limits). The client loads the list one day
-at a time, as far as the screen needs, and sends one request per change. `localStorage` only holds the session
-token and a few display preferences from before login.
+at a time, as far as the screen needs, and sends one request per change. The
+interface texts are on the backend too: every page fetches them in its
+language when it loads, and they're edited (and languages added) in the
+admin app's Translations tab. `localStorage` only holds the session token, a
+few display preferences from before login, and the last texts fetched (used
+only when the backend can't be reached).
 
 ## Files
 
@@ -73,6 +78,7 @@ token and a few display preferences from before login.
 | `sharedInputBehavior.js` | Text-selection behaviour for every input. |
 | `landing.*`, `checkout.*`, `success.*`, `cancel.*` | The website and the subscription flow. |
 | `faq.*`, `support.*`, `privacy.*`, `terms.*` | Help and legal pages. |
+| `i18n.js` | Loads the interface texts and the languages from the backend, for every page. |
 | `site-i18n.js` | Language handling for the website pages (the app has its own). |
 | `api-spec.yaml` | The OpenAPI contract the backend implements (a copy lives in the backend repository — keep them in sync). |
 | `Dockerfile`, `nginx.conf`, `docker-entrypoint.d/`, `atd` | The container that serves the client. |
@@ -110,7 +116,6 @@ so configuration changes need only a re-run, not a rebuild.
 |---|---|
 | `apiBaseUrl` / `API_BASE_URL` | The backend's base URL; empty means same-origin `/atodo/v1`. |
 | `unsplashAccessKey` / `UNSPLASH_ACCESS_KEY` | An app-wide Unsplash key for the background picker. Without it, each user can enter their own. |
-| `landingVideoUrlEn`, `landingVideoUrlHr` / `LANDING_VIDEO_URL_EN`, `LANDING_VIDEO_URL_HR` | YouTube links for the landing page's walkthrough video, per language; empty shows a placeholder. |
 
 The Docker build also takes a `VERSION` build argument (the platform
 release, `dev` by default), written to `version.js`: open tabs compare it
@@ -157,7 +162,8 @@ male-niti's README.
   Stripe Dashboard.
 - **Support replies are sent by email by hand**, and support messages are
   not deleted automatically.
-- **Two languages**: English and Croatian.
+- **The website pages toggle between English and Croatian only** (the app
+  itself offers every language); account emails are English only.
 - **Little automated testing**: only the backend's task rules have unit
   tests.
 

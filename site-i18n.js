@@ -2,14 +2,16 @@
 // Language handling shared by every page in the marketing/subscription/
 // legal flow (landing.html, checkout.html, success.html, cancel.html,
 // privacy.html, terms.html) -- NOT used by index.html/app.js, which has its
-// own i18n system (see the "i18n" section at the top of app.js) with its own
-// storage (the user's profile, per account). This one is simpler: EN/HR
-// only, one shared preference for every page in this flow, no per-account
-// storage since a visitor here may not be logged in at all.
+// own language handling (see the "i18n" section at the top of app.js) with
+// its own storage (the user's profile, per account). This one is simpler:
+// an EN/HR toggle, one shared preference for every page in this flow, no
+// per-account storage since a visitor here may not be logged in at all.
+// The texts themselves come from the API like the app's (i18n.js): each
+// page loads the 'common' bundle and its own.
 //
 // Priority for the language a page actually opens in (see
 // resolveInitialSiteLanguage):
-//   1. A `?lang=en|hr` URL param -- the explicit handoff used when a link
+//   1. A `?lang=` URL param -- the explicit handoff used when a link
 //      inside the logged-in app (Settings, the avatar menu, ...) points out
 //      here, so the destination matches the app's own current language
 //      (see app.js's updateOutboundLegalLinks). Consumed once, then
@@ -49,7 +51,7 @@ async function detectSiteLanguageFromIP() {
 async function resolveInitialSiteLanguage() {
   const params = new URLSearchParams(location.search);
   const handoff = params.get('lang');
-  if (handoff === 'en' || handoff === 'hr') {
+  if (/^[a-z]{2}$/.test(handoff || '')) {
     setStoredMarketingLanguage(handoff);
     params.delete('lang');
     const newSearch = params.toString();
@@ -57,27 +59,48 @@ async function resolveInitialSiteLanguage() {
     return handoff;
   }
   const stored = getStoredMarketingLanguage();
-  if (stored === 'en' || stored === 'hr') return stored;
+  if (/^[a-z]{2}$/.test(stored || '')) return stored;
   const detected = await detectSiteLanguageFromIP();
   setStoredMarketingLanguage(detected);
   return detected;
 }
 
-// `dict` is { en: { key: string }, hr: { key: string } } -- plain text goes
-// through data-i18n (textContent), markup (lists, paragraphs, links) goes
-// through data-i18n-html (innerHTML), same split app.js's own
-// applyStaticTranslations uses. Falls back to English, then to the raw key,
-// same reasoning as app.js's t().
-function applySiteTranslations(lang, dict) {
-  const strings = dict[lang] || dict.en || {};
+// The page's texts in its current language (loadSiteTexts), and lookups
+// into them -- pageText() is also what code shared with the app
+// (anchor-prices.js) uses.
+let currentSiteStrings = {};
+let siteBundle = null;
+const siteTextLoads = {};
+
+function siteStrings() {
+  return currentSiteStrings;
+}
+
+function pageText(key, vars) {
+  return formatTranslation(currentSiteStrings, key, vars);
+}
+
+function loadSiteTexts(lang) {
+  if (!siteTextLoads[lang]) {
+    siteTextLoads[lang] = loadTranslations(lang, ['common', siteBundle]).then((result) => {
+      if (!result.fresh) delete siteTextLoads[lang];
+      return result.strings;
+    });
+  }
+  return siteTextLoads[lang];
+}
+
+// Plain text goes through data-i18n (textContent), markup (lists,
+// paragraphs, links) through data-i18n-html (innerHTML), same split app.js's
+// own applyStaticTranslations uses.
+function applySiteTranslations(lang, strings) {
+  currentSiteStrings = strings;
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach((el) => {
-    const key = el.dataset.i18n;
-    el.textContent = strings[key] ?? dict.en[key] ?? key;
+    el.textContent = pageText(el.dataset.i18n);
   });
   document.querySelectorAll('[data-i18n-html]').forEach((el) => {
-    const key = el.dataset.i18nHtml;
-    el.innerHTML = strings[key] ?? dict.en[key] ?? key;
+    el.innerHTML = pageText(el.dataset.i18nHtml);
   });
   document.querySelectorAll('.lang-toggle [data-lang]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.lang === lang);
@@ -95,19 +118,27 @@ function applySiteTranslations(lang, dict) {
   });
 }
 
-// Resolves the language, applies it, and wires the EN/HR toggle buttons
-// (any element matching `.lang-toggle [data-lang]`) to switch languages
-// live -- no reload, just a fresh applySiteTranslations pass. Call once per
-// page, after its own `dict` is defined.
-async function initSitePage(dict, onLanguageChange) {
+// Resolves the language, loads and applies the page's texts (`bundle`: its
+// own bundle, e.g. 'landing', next to 'common'), and wires the EN/HR toggle
+// buttons (any element matching `.lang-toggle [data-lang]`) to switch
+// languages live -- no reload, just the other language's texts (loaded the
+// first time) and a fresh applySiteTranslations pass. Clicked twice in
+// quick succession, the later click wins. Call once per page.
+async function initSitePage(bundle, onLanguageChange) {
+  siteBundle = bundle;
   const lang = await resolveInitialSiteLanguage();
-  applySiteTranslations(lang, dict);
+  applySiteTranslations(lang, await loadSiteTexts(lang));
   if (onLanguageChange) onLanguageChange(lang);
+  let switchSeq = 0;
   document.querySelectorAll('.lang-toggle [data-lang]').forEach((btn) => {
-    btn.onclick = () => {
-      setStoredMarketingLanguage(btn.dataset.lang);
-      applySiteTranslations(btn.dataset.lang, dict);
-      if (onLanguageChange) onLanguageChange(btn.dataset.lang);
+    btn.onclick = async () => {
+      const seq = ++switchSeq;
+      const next = btn.dataset.lang;
+      setStoredMarketingLanguage(next);
+      const strings = await loadSiteTexts(next);
+      if (seq !== switchSeq) return;
+      applySiteTranslations(next, strings);
+      if (onLanguageChange) onLanguageChange(next);
     };
   });
   return lang;

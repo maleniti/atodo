@@ -13,33 +13,6 @@
 // getStoredMarketingLanguage, and anchor-prices.js for fillAnchorPrices.
 
 
-const CHECKOUT_I18N = {
-  en: {
-    'checkout.title': 'Processing your payment…',
-    'checkout.summaryDefault': 'Setting up your subscription.',
-    'checkout.summary': 'Subscribing to A-To-Do Pro – {price}.',
-    'checkout.perMonth': '/month',
-    'checkout.perYear': '/year',
-    'checkout.cancelLink': 'Cancel',
-    'nav.faq': 'FAQ',
-    'nav.support': 'Contact support',
-    'nav.privacy': 'Privacy Policy',
-    'nav.terms': 'Terms of Service',
-  },
-  hr: {
-    'checkout.title': 'Obrada plaćanja…',
-    'checkout.summaryDefault': 'Postavljanje vaše pretplate.',
-    'checkout.summary': 'Pretplata na A-To-Do Pro – {price}.',
-    'checkout.perMonth': ' mjesečno',
-    'checkout.perYear': ' godišnje',
-    'checkout.cancelLink': 'Odustani',
-    'nav.faq': 'Česta pitanja',
-    'nav.support': 'Kontakt podrške',
-    'nav.privacy': 'Pravila privatnosti',
-    'nav.terms': 'Uvjeti korištenja',
-  },
-};
-
 const params = new URLSearchParams(location.search);
 const plan = params.get('plan') === 'annual' ? 'annual' : 'monthly';
 const returningSessionId = params.get('session_id');
@@ -49,7 +22,7 @@ const returningSessionId = params.get('session_id');
 // data-i18n swap -- and once the prices (anchor-prices.js) have loaded: the
 // price is the price list's, the same one checkout charges.
 function renderPlanSummary(lang) {
-  const strings = CHECKOUT_I18N[lang] || CHECKOUT_I18N.en;
+  const strings = siteStrings();
   const summaryEl = document.getElementById('checkout-plan-summary');
   const [before, after] = strings['checkout.summary'].split('{price}');
   summaryEl.textContent = '';
@@ -128,7 +101,7 @@ async function runCheckout() {
   }
 }
 
-initSitePage(CHECKOUT_I18N, (lang) => {
+initSitePage('checkout', (lang) => {
   renderPlanSummary(lang);
   loadSitePrices(lang).then(() => renderPlanSummary(lang), () => {});
 });

@@ -1,10 +1,8 @@
 // Landing page -- video embed + pricing buttons. Depends on auth.js (loaded
-// first, see landing.html) for getCurrentUserIdFromStoredToken, on
-// site-i18n.js for initSitePage, and optionally on config.js's
-// window.APP_CONFIG.landingVideoUrlEn/landingVideoUrlHr (see CLAUDE.md's
-// Configuration section) -- left with no video shown at all for a language
-// whose URL isn't set, same fallback spirit as the rest of this app's
-// optional config.
+// first, see landing.html) for getCurrentUserIdFromStoredToken and on
+// site-i18n.js for initSitePage. The walkthrough video's link is one of the
+// page's texts ('landing.videoUrl', set per language in the admin app) --
+// a language whose link is empty shows a placeholder instead.
 
 // Accepts a plain watch URL (youtube.com/watch?v=ID), a short link
 // (youtu.be/ID), or an already-embeddable URL, and returns the
@@ -37,10 +35,10 @@ function toYouTubeEmbedUrl(url) {
 // every EN/HR toggle click (see initSitePage below). Unlike a one-shot
 // setup, has to handle switching *back* to a placeholder too (a visitor
 // touring both languages could land on one with no video configured after
-// having just seen one that did).
-function setUpVideo(lang) {
-  const videoUrl = window.APP_CONFIG && window.APP_CONFIG[lang === 'hr' ? 'landingVideoUrlHr' : 'landingVideoUrlEn'];
-  const embedUrl = toYouTubeEmbedUrl(videoUrl);
+// having just seen one that did). A language that hasn't a link of its own
+// gets English's (the API's fallback for any text).
+function setUpVideo() {
+  const embedUrl = toYouTubeEmbedUrl(pageText('landing.videoUrl').trim());
   const iframe = document.getElementById('video-iframe');
   if (!embedUrl) {
     iframe.src = '';
@@ -48,7 +46,7 @@ function setUpVideo(lang) {
     document.getElementById('video-placeholder').classList.remove('hidden');
     return;
   }
-  iframe.src = embedUrl;
+  if (iframe.getAttribute('src') !== embedUrl) iframe.src = embedUrl;
   document.getElementById('video-frame').classList.remove('hidden');
   document.getElementById('video-placeholder').classList.add('hidden');
 }
@@ -80,7 +78,7 @@ const PLAN_FOR_INTERVAL = { month: 'monthly', year: 'annual' };
 
 async function renderPricingCards(lang) {
   const grid = document.getElementById('pricing-grid');
-  const strings = LANDING_I18N[lang] || LANDING_I18N.en;
+  const strings = siteStrings();
   let products;
   try {
     products = await loadSitePrices(lang);
@@ -121,101 +119,6 @@ function escapeLandingHtml(text) {
   div.textContent = text == null ? '' : String(text);
   return div.innerHTML;
 }
-
-const LANDING_I18N = {
-  en: {
-    'nav.login': 'Log in',
-    'nav.faq': 'FAQ',
-    'nav.support': 'Contact support',
-    'nav.privacy': 'Privacy Policy',
-    'nav.terms': 'Terms of Service',
-    'hero.title': 'The to-do list that actually keeps up with you',
-    'hero.subtitle':
-      'Recurring tasks, overdue & failed-appointment tracking, work timers, and per-task notes -- all in one fast, no-nonsense list.',
-    'hero.getStarted': 'Get started free',
-    'hero.seePricing': 'See pricing',
-    'hero.videoPlaceholder': 'Video walkthrough coming soon.',
-    'features.heading': 'What you get',
-    'features.recurringTitle': 'Flexible recurring tasks',
-    'features.recurringBody':
-      'Daily, weekly, or monthly patterns -- specific weekdays, "the 2nd Tuesday", or a handful of exact days each month.',
-    'features.overdueTitle': 'Overdue & failed tracking',
-    'features.overdueBody':
-      "A missed task carries over until you deal with it; an appointment past its due date is marked failed instead, so nothing quietly slips away.",
-    'features.timersTitle': 'Work timers & focus mode',
-    'features.timersBody':
-      "Start a countdown or count-up timer on whatever you're working on right now, and pick it back up later exactly where you left off.",
-    'features.notesTitle': 'Notes & activity history',
-    'features.notesBody': 'Keep context on every task -- notes you wrote, and a running log of everything that happened to it.',
-    'features.agendaTitle': "Today's agenda",
-    'features.agendaBody': "A side panel that always shows what's actually on your plate today, without digging through the full list.",
-    'features.responsiveTitle': 'Works everywhere',
-    'features.responsiveBody': 'A responsive layout that works as well on your phone as it does on your desktop.',
-    'pricing.heading': 'Pricing',
-    'pricing.freeLimit1': 'Up to 10 one-off tasks',
-    'pricing.freeLimit2': 'Up to 5 recurring tasks',
-    'pricing.freeLimit3': 'Up to 5 notes per task',
-    'pricing.perMonth': '/ month',
-    'pricing.proBenefit1': 'Unlimited tasks, recurring or not',
-    'pricing.proBenefit2': 'Unlimited notes on every task',
-    'pricing.proBenefit3': 'No more subscription reminders cluttering your list',
-    'pricing.subscribeMonthly': 'Subscribe monthly',
-    'pricing.perYear': '/ year',
-    'pricing.save': 'Save ~{percent}% vs. monthly',
-    'pricing.unavailable': "Prices can't be loaded right now - please try again later.",
-    'priceList.label': 'Price list (CSV)',
-    'priceList.download': 'Download',
-    'priceList.unavailable': "The price list can't be loaded right now.",
-    'priceList.seller': 'Seller: Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak, Slakovec 80, 40305 Nedelišće, Croatia · OIB 79072017892 · <a href="tel:+385919337988">+385 91 933 7988</a> · <a href="mailto:support@maleniti.com">support@maleniti.com</a> · <a href="terms.html">Terms of Service</a>',
-    'pricing.subscribeYearly': 'Subscribe yearly',
-  },
-  hr: {
-    'nav.login': 'Prijava',
-    'nav.faq': 'Česta pitanja',
-    'nav.support': 'Kontakt podrške',
-    'nav.privacy': 'Pravila privatnosti',
-    'nav.terms': 'Uvjeti korištenja',
-    'hero.title': 'Popis obveza koji zaista prati vaš tempo',
-    'hero.subtitle':
-      'Ponavljajući zadaci, praćenje zakašnjelih i neuspjelih termina, mjerači vremena rada i bilješke po zadatku -- sve u jednom brzom, jednostavnom popisu.',
-    'hero.getStarted': 'Započnite besplatno',
-    'hero.seePricing': 'Pogledajte cijene',
-    'hero.videoPlaceholder': 'Video vodič uskoro stiže.',
-    'features.heading': 'Što dobivate',
-    'features.recurringTitle': 'Fleksibilni ponavljajući zadaci',
-    'features.recurringBody':
-      'Dnevni, tjedni ili mjesečni obrasci -- određeni dani u tjednu, "drugi utorak", ili nekoliko točnih dana u mjesecu.',
-    'features.overdueTitle': 'Praćenje zakašnjelih i neuspjelih',
-    'features.overdueBody':
-      'Propušten zadatak prenosi se dalje dok ga ne riješite; termin nakon isteka roka umjesto toga se označava neuspjelim, tako da vam ništa ne promakne.',
-    'features.timersTitle': 'Mjerači vremena rada i način fokusa',
-    'features.timersBody':
-      'Pokrenite odbrojavanje ili mjerenje vremena za ono na čemu trenutačno radite, i nastavite kasnije točno gdje ste stali.',
-    'features.notesTitle': 'Bilješke i povijest aktivnosti',
-    'features.notesBody': 'Zadržite kontekst na svakom zadatku -- bilješke koje ste napisali i tekući zapis svega što se s njim dogodilo.',
-    'features.agendaTitle': 'Današnji raspored',
-    'features.agendaBody': 'Bočna ploča koja uvijek prikazuje što je stvarno na redu danas, bez pretraživanja cijelog popisa.',
-    'features.responsiveTitle': 'Radi svugdje',
-    'features.responsiveBody': 'Responzivan izgled koji radi jednako dobro na mobitelu kao i na računalu.',
-    'pricing.heading': 'Cijene',
-    'pricing.freeLimit1': 'Do 10 jednokratnih zadataka',
-    'pricing.freeLimit2': 'Do 5 ponavljajućih zadataka',
-    'pricing.freeLimit3': 'Do 5 bilješki po zadatku',
-    'pricing.perMonth': '/ mjesec',
-    'pricing.proBenefit1': 'Neograničen broj zadataka, ponavljajućih ili ne',
-    'pricing.proBenefit2': 'Neograničen broj bilješki na svakom zadatku',
-    'pricing.proBenefit3': 'Bez podsjetnika za pretplatu koji zatrpavaju popis',
-    'pricing.subscribeMonthly': 'Pretplatite se mjesečno',
-    'pricing.perYear': '/ godina',
-    'pricing.save': 'Ušteda ~{percent}% u odnosu na mjesečno',
-    'pricing.unavailable': 'Cijene trenutno nije moguće učitati - pokušajte ponovno kasnije.',
-    'priceList.label': 'Cjenik (CSV)',
-    'priceList.download': 'Preuzmi',
-    'priceList.unavailable': 'Cjenik trenutno nije moguće učitati.',
-    'priceList.seller': 'Prodavatelj: Male Niti, zajednički obrt za usluge programiranja, vl. Nikola Novak i Mateja Šafarić Novak, Slakovec 80, 40305 Nedelišće, Hrvatska · OIB 79072017892 · <a href="tel:+385919337988">+385 91 933 7988</a> · <a href="mailto:support@maleniti.com">support@maleniti.com</a> · <a href="terms.html">Uvjeti korištenja</a>',
-    'pricing.subscribeYearly': 'Pretplatite se godišnje',
-  },
-};
 
 // The published price list (Croatian law: Odluka o objavi cjenika, NN
 // 101/2026): every version still due -- each replaced one stays available
@@ -260,7 +163,7 @@ function renderPriceListVersions(lang) {
 
 function showPriceListUnavailable() {
   priceListStatus.dataset.i18n = 'priceList.unavailable';
-  priceListStatus.textContent = (LANDING_I18N[priceListLanguage] || LANDING_I18N.en)['priceList.unavailable'];
+  priceListStatus.textContent = pageText('priceList.unavailable');
   priceListStatus.classList.remove('hidden');
 }
 
@@ -293,7 +196,7 @@ priceListDownloadBtn.onclick = () => {
 
 let currentLandingLanguage = null;
 
-initSitePage(LANDING_I18N, (lang) => {
+initSitePage('landing', (lang) => {
   currentLandingLanguage = lang;
   setUpVideo(lang);
   renderPricingCards(lang);

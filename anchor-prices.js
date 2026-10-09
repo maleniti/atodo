@@ -20,16 +20,9 @@
 const SITE_PRICES_URL = `${(window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || ''}/maleniti/v1/price-lists/atodo/current`;
 const PLAN_INTERVALS = { monthly: 'month', annual: 'year' };
 
-const ANCHOR_PRICE_STRINGS = {
-  en: {
-    required: 'Anchor price must be shown in accordance with Croatian law.',
-    differs: 'Anchor price is not the price you pay.',
-  },
-  hr: {
-    required: 'Sidrena cijena mora biti istaknuta u skladu s hrvatskim zakonom.',
-    differs: 'Sidrena cijena nije cijena koju plaćate.',
-  },
-};
+// The tooltip's texts ('anchorPrice.required', 'anchorPrice.differs', in
+// the 'common' bundle) come through pageText(), which each page defines
+// over its own loaded texts (app.js, site-i18n.js).
 
 const ANCHOR_ICON_SVG =
   '<svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -82,9 +75,9 @@ function formatSitePrice(amount, lang) {
 // landing.css), shown on hover and on focus -- tabindex makes a tap focus
 // it, so it works on touch screens too, where a plain title never shows.
 function renderAnchorBadge(el, product, lang) {
-  const strings = ANCHOR_PRICE_STRINGS[lang] || ANCHOR_PRICE_STRINGS.en;
+  const required = pageText('anchorPrice.required');
   const anchor = product.anchor_eur ?? product.price_eur;
-  const tip = anchor === product.price_eur ? strings.required : `${strings.required} ${strings.differs}`;
+  const tip = anchor === product.price_eur ? required : `${required} ${pageText('anchorPrice.differs')}`;
   const amount = formatSitePrice(anchor, lang);
   el.className = 'anchor-price';
   el.tabIndex = 0;
