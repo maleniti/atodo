@@ -6070,8 +6070,7 @@ document.getElementById('settings-change-email-btn').onclick = () => promptChang
 
 // A notice to show once the next boot() has put up the login screen or the
 // app -- for a flow that has to reload the page first (see
-// handleUndoEmailChangeLink). sessionStorage: this tab only, and gone once
-// shown.
+// submitPasswordReset). sessionStorage: this tab only, and gone once shown.
 const POST_BOOT_NOTICE_KEY = 'atodo.postBootNotice';
 
 function reloadWithNotice(text, kind) {
@@ -6125,23 +6124,13 @@ async function handleEmailChangeVerificationLink() {
   }
 }
 
-// `?undoEmailChange=<token>` -- the link emailed to the OLD address (POST
-// /auth/undo-email-change). Handled before boot() signs anything in: the
-// undo ends every session, so this one's stored token is dropped too. Then
-// straight to setting a new password (the change-password modal in reset
-// mode, see openPasswordResetModal) -- whoever changed the email may know
-// the current one. Every outcome reloads into a normal boot(), with a notice.
-async function handleUndoEmailChangeLink() {
-  const token = takeUrlParam('undoEmailChange');
-  let result;
-  try {
-    result = await apiFetch('/auth/undo-email-change', { method: 'POST', body: { token } });
-  } catch (err) {
-    reloadWithNotice(t(err.code === 'EMAIL_TAKEN' ? 'undoEmailChange.taken' : 'undoEmailChange.invalid'), 'error');
-    return;
-  }
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  openPasswordResetModal({ resetToken: result.resetToken, email: result.email });
+// `?undoEmailChange=<token>` -- an undo link an older version emailed to
+// the OLD address on an email change. Undoing a change from a link is gone
+// (it could be abused): someone whose email was changed without their
+// knowledge writes to support. Such a link just says so.
+function handleUndoEmailChangeLink() {
+  takeUrlParam('undoEmailChange');
+  showInfoModal(t('undoEmailChange.unavailable'), 'error');
 }
 
 const settingsChangePasswordBtn = document.getElementById('settings-change-password-btn');
@@ -6156,11 +6145,9 @@ const changePasswordTitleEl = changePasswordOverlay.querySelector('.modal-title'
 const changePasswordCurrentField = changePasswordCurrentInput.closest('.modal-field');
 const changePasswordSubmitBtn = changePasswordFormEl.querySelector('button[type="submit"]');
 // Non-null while this modal is setting a new password with a reset token --
-// after an email-change undo ({ resetToken, email }, see
-// handleUndoEmailChangeLink) or from a "Forgot password?" link
-// ({ kind: 'forgot', resetToken }, see handlePasswordResetLink): no current
-// password (the reset token stands in for it), and POST /auth/reset-password
-// instead of change-password.
+// from a "Forgot password?" link ({ resetToken }, see
+// handlePasswordResetLink): no current password (the reset token stands in
+// for it), and POST /auth/reset-password instead of change-password.
 let passwordResetContext = null;
 
 function openChangePasswordModal() {
@@ -6175,23 +6162,20 @@ function openChangePasswordModal() {
 
 function openPasswordResetModal(context) {
   passwordResetContext = context;
-  const forgot = context.kind === 'forgot';
   changePasswordFormEl.reset();
-  changePasswordTitleEl.textContent = t(forgot ? 'resetPassword.title' : 'undoEmailChange.title');
-  changePasswordSubmitBtn.textContent = t(forgot ? 'resetPassword.submit' : 'undoEmailChange.submit');
+  changePasswordTitleEl.textContent = t('resetPassword.title');
+  changePasswordSubmitBtn.textContent = t('resetPassword.submit');
   changePasswordCurrentField.classList.add('hidden');
-  showAuthMessage(changePasswordMessageEl, 'success', forgot ? t('resetPassword.intro') : t('undoEmailChange.intro', { email: context.email }));
+  showAuthMessage(changePasswordMessageEl, 'success', t('resetPassword.intro'));
   changePasswordOverlay.classList.remove('hidden');
   changePasswordNewInput.focus();
 }
 
 function closeChangePasswordModal() {
   changePasswordOverlay.classList.add('hidden');
-  // Skipping the new password after an undo still has to land somewhere --
-  // signed out, on the login screen, told what happened. Closing a "Forgot
-  // password?" reset just goes back to wherever this tab would otherwise be.
-  if (passwordResetContext && passwordResetContext.kind === 'forgot') location.replace(location.pathname + location.search + location.hash);
-  else if (passwordResetContext) reloadWithNotice(t('undoEmailChange.skipped', { email: passwordResetContext.email }), 'success');
+  // Closing a "Forgot password?" reset just goes back to wherever this tab
+  // would otherwise be.
+  if (passwordResetContext) location.replace(location.pathname + location.search + location.hash);
 }
 
 settingsChangePasswordBtn.onclick = openChangePasswordModal;
@@ -6244,8 +6228,7 @@ async function submitPasswordReset() {
     showAuthMessage(changePasswordMessageEl, 'error', t('changePassword.mismatch'));
     return;
   }
-  const { resetToken, email, kind } = passwordResetContext;
-  const forgot = kind === 'forgot';
+  const { resetToken } = passwordResetContext;
   let restored = false;
   try {
     const result = await apiFetch('/auth/reset-password', { method: 'POST', body: { resetToken, newPassword } });
@@ -6262,12 +6245,12 @@ async function submitPasswordReset() {
     }
     passwordResetContext = null;
     if (err.code === 'ACCOUNT_EXPIRED_INACTIVITY' || err.code === 'ACCOUNT_DELETED_SCHEDULED') reloadWithNotice(describeAuthError(err), 'error');
-    else reloadWithNotice(t(forgot ? 'resetPassword.invalid' : 'undoEmailChange.resetExpired'), 'error');
+    else reloadWithNotice(t('resetPassword.invalid'), 'error');
     return;
   }
   passwordResetContext = null;
   if (restored) reloadWithNotice(t('login.accountRestored'), 'success');
-  else reloadWithNotice(forgot ? t('resetPassword.done') : t('undoEmailChange.done', { email }), 'success');
+  else reloadWithNotice(t('resetPassword.done'), 'success');
 }
 
 // `?resetPassword=<token>` -- a "Forgot password?" link (POST
@@ -6277,7 +6260,7 @@ async function submitPasswordReset() {
 // and logs this one in); closing the modal just carries on as before.
 function handlePasswordResetLink() {
   const resetToken = takeUrlParam('resetPassword');
-  openPasswordResetModal({ kind: 'forgot', resetToken });
+  openPasswordResetModal({ resetToken });
 }
 
 // "Forgot password?" on the login screen. The answer is the same whether or
@@ -6870,10 +6853,7 @@ async function boot() {
       applyPreLoginLanguage(btn.dataset.lang);
     };
   });
-  if (new URLSearchParams(location.search).has('undoEmailChange')) {
-    handleUndoEmailChangeLink(); // reloads into a fresh boot() once done
-    return;
-  }
+  if (new URLSearchParams(location.search).has('undoEmailChange')) handleUndoEmailChangeLink();
   if (new URLSearchParams(location.search).has('resetPassword')) {
     handlePasswordResetLink(); // reloads into a fresh boot() once done (or closed)
     return;
