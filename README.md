@@ -77,7 +77,7 @@ only when the backend can't be reached).
 | `anchor-prices.js` | Loads the current prices and fills every price and anchor-price badge. |
 | `sharedInputBehavior.js` | Text-selection behaviour for every input. |
 | `landing.*`, `checkout.*`, `success.*`, `cancel.*` | The website and the subscription flow. |
-| `faq.*`, `support.*`, `privacy.*`, `terms.*` | Help and legal pages. |
+| `faq.*`, `support.*`, `privacy.*`, `terms.*`, `legal-page.js` | Help and legal pages (the Privacy Policy and Terms of Service are written and published in the admin app). |
 | `i18n.js` | Loads the interface texts and the languages from the backend, for every page. |
 | `site-i18n.js` | Language handling for the website pages (the app has its own). |
 | `api-spec.yaml` | The OpenAPI contract the backend implements (a copy lives in the backend repository — keep them in sync). |

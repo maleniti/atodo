@@ -82,7 +82,7 @@ function pageText(key, vars) {
 
 function loadSiteTexts(lang) {
   if (!siteTextLoads[lang]) {
-    siteTextLoads[lang] = loadTranslations(lang, ['common', siteBundle]).then((result) => {
+    siteTextLoads[lang] = loadTranslations(lang, ['common', siteBundle].filter(Boolean)).then((result) => {
       if (!result.fresh) delete siteTextLoads[lang];
       return result.strings;
     });
@@ -119,11 +119,12 @@ function applySiteTranslations(lang, strings) {
 }
 
 // Resolves the language, loads and applies the page's texts (`bundle`: its
-// own bundle, e.g. 'landing', next to 'common'), and wires the EN/HR toggle
-// buttons (any element matching `.lang-toggle [data-lang]`) to switch
-// languages live -- no reload, just the other language's texts (loaded the
-// first time) and a fresh applySiteTranslations pass. Clicked twice in
-// quick succession, the later click wins. Call once per page.
+// own bundle, e.g. 'landing', next to 'common' -- null for none), and wires
+// the EN/HR toggle buttons (any element matching `.lang-toggle
+// [data-lang]`) to switch languages live -- no reload, just the other
+// language's texts (loaded the first time) and a fresh
+// applySiteTranslations pass. Clicked twice in quick succession, the later
+// click wins. Call once per page.
 async function initSitePage(bundle, onLanguageChange) {
   siteBundle = bundle;
   const lang = await resolveInitialSiteLanguage();

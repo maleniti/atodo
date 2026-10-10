@@ -1,5 +1,4 @@
-// Terms of Service page -- static legal content, no auth.js dependency,
-// just site-i18n.js for language handling. Same one-key-per-section
-// approach as privacy.js -- see its own comment for why.
+// Terms of Service page -- the document itself is written and published in
+// the admin app (see legal-page.js); site-i18n.js handles the language.
 
-initSitePage('terms');
+initLegalPage('terms');
