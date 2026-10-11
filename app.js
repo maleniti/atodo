@@ -4828,12 +4828,14 @@ function renderSidePanel() {
           occurrences: detail.occurrences.map((o) => ({ ...o, taskId: detail.task.taskId })),
         };
     const nameOf = new Map(scoped.notes.map((rec) => [rec.taskId, rec.name]));
+    // A task-level entry names the occurrence it was about, if any -- never
+    // the task's due date, which says nothing about the entry (and moves).
     for (const rec of scoped.notes) {
       for (const comment of rec.comments || []) notes.push({ taskId: rec.taskId, occurrenceDate: null, comment, label: rec.name });
-      for (const entry of rec.log || []) logEntries.push({ entry, label: `${rec.name}, ${entry.occurrenceDate || rec.dueDate}` });
+      for (const entry of rec.log || []) logEntries.push({ entry, label: entry.occurrenceDate ? `${rec.name}, ${formatShortDate(entry.occurrenceDate)}` : rec.name });
     }
     for (const occurrence of scoped.occurrences) {
-      const label = `${nameOf.get(occurrence.taskId) || ''}, ${occurrence.occurrenceDate}`;
+      const label = `${nameOf.get(occurrence.taskId) || ''}, ${formatShortDate(occurrence.occurrenceDate)}`;
       for (const comment of occurrence.comments || []) notes.push({ taskId: occurrence.taskId, occurrenceDate: occurrence.occurrenceDate, comment, label });
       for (const entry of occurrence.log || []) logEntries.push({ entry, label });
     }
