@@ -2378,12 +2378,11 @@ async function openTaskEditor(taskId, { tab = 'details', occurrenceDate = null }
   const decoded = decodePatternResult(result);
   if (!decoded) return;
 
-  // Both are no-ops server-side when nothing in them changed. The pattern
-  // goes first: refused (making a one-off recurring past the free plan's
+  // One request, both tabs (PATCH /tasks/:taskId with `pattern`) -- one
+  // action, so one activity-log entry. A no-op server-side when nothing
+  // changed; refused (making a one-off recurring past the free plan's
   // limit, say -- reportActionError offers a subscription), nothing of the
-  // edit is saved. Except when the edit turns "passive" off and "recur until
-  // completed" on: the server only takes the latter once the task isn't
-  // passive any more, so the details go first then.
+  // edit is saved.
   const allDay = result.allDay.length > 0;
   const details = {
     name: result.name,
@@ -2395,22 +2394,17 @@ async function openTaskEditor(taskId, { tab = 'details', occurrenceDate = null }
     appointment: result.appointment.length > 0,
     passive: result.passive.length > 0,
   };
-  const saveDetails = () => taskAction(taskId, '', { method: 'PATCH', body: details });
-  const savePattern = () => savePatternChange(taskId, decoded);
-  if (task.passive && !details.passive && decoded.recurUntilCompleted && !task.recurUntilCompleted) {
-    if (await saveDetails()) savePattern();
-  } else if (await savePattern()) {
-    saveDetails();
-  }
+  saveTaskEdit(taskId, { ...details, pattern: decoded });
 }
 
-// Saves a new pattern (PUT /tasks/:taskId/pattern). One that would change
-// the task's past -- which dates before today are its occurrences -- comes
-// back refused (PATTERN_CHANGE_NEEDS_CHOICE): the user then picks how
+// Saves the editor's edit (PATCH /tasks/:taskId: the details and `pattern`).
+// A pattern change that would change the task's past -- which dates before
+// today are its occurrences -- comes back refused
+// (PATTERN_CHANGE_NEEDS_CHOICE): the user then picks how
 // (askPatternChangeResolution) and it's sent again with that choice, or
 // nothing is saved. Resolves like taskAction: the response, or undefined.
-async function savePatternChange(taskId, pattern) {
-  const send = (resolution) => runAction(() => apiFetch(`/tasks/${encodeURIComponent(taskId)}/pattern`, { method: 'PUT', body: resolution ? { ...pattern, resolution } : pattern }));
+async function saveTaskEdit(taskId, edit) {
+  const send = (resolution) => runAction(() => apiFetch(`/tasks/${encodeURIComponent(taskId)}`, { method: 'PATCH', body: resolution ? { ...edit, resolution } : edit }));
   try {
     return await send(null);
   } catch (err) {
