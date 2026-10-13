@@ -82,7 +82,11 @@ async function apiFetch(path, { method = 'GET', body, token, attempt = 0 } = {})
     // (the API container restarting behind nginx) -- same as the
     // MAINTENANCE the API and nginx's maintenance mode send explicitly.
     const code = (data && data.code) || ([502, 503, 504].includes(res.status) ? 'MAINTENANCE' : res.status === 429 ? 'TOO_MANY_REQUESTS' : 'UNKNOWN_ERROR');
-    throw codeError(code, data && data.message);
+    const err = codeError(code, data && data.message);
+    // What the client needs to act on the refusal (e.g. a pattern change's
+    // choice, PATTERN_CHANGE_NEEDS_CHOICE), when the server sends it.
+    if (data && data.details) err.details = data.details;
+    throw err;
   }
   return data;
 }

@@ -348,8 +348,11 @@ function showFormModal(title, fields, opts = {}) {
           // current value) -- see field.text below and its recomputation in
           // updateVisibility. Skips the fieldGetters bookkeeping entirely:
           // there's no value to collect on submit.
+          // field.block: a sentence on a line of its own, wrapping, rather
+          // than a fragment next to a control.
           const span = document.createElement('span');
-          span.className = 'modal-static-text';
+          span.className = 'modal-static-text' + (field.block ? ' modal-static-text-block' : '');
+          if (field.block) host.classList.add('modal-field-inline-item-block');
           host.appendChild(span);
           staticEls.push({ el: span, text: field.text, host, showIf: field.showIf });
           continue;
@@ -2393,12 +2396,77 @@ async function openTaskEditor(taskId, { tab = 'details', occurrenceDate = null }
     passive: result.passive.length > 0,
   };
   const saveDetails = () => taskAction(taskId, '', { method: 'PATCH', body: details });
-  const savePattern = () => taskAction(taskId, '/pattern', { method: 'PUT', body: decoded });
+  const savePattern = () => savePatternChange(taskId, decoded);
   if (task.passive && !details.passive && decoded.recurUntilCompleted && !task.recurUntilCompleted) {
     if (await saveDetails()) savePattern();
   } else if (await savePattern()) {
     saveDetails();
   }
+}
+
+// Saves a new pattern (PUT /tasks/:taskId/pattern). One that would change
+// the task's past -- which dates before today are its occurrences -- comes
+// back refused (PATTERN_CHANGE_NEEDS_CHOICE): the user then picks how
+// (askPatternChangeResolution) and it's sent again with that choice, or
+// nothing is saved. Resolves like taskAction: the response, or undefined.
+async function savePatternChange(taskId, pattern) {
+  const send = (resolution) => runAction(() => apiFetch(`/tasks/${encodeURIComponent(taskId)}/pattern`, { method: 'PUT', body: resolution ? { ...pattern, resolution } : pattern }));
+  try {
+    return await send(null);
+  } catch (err) {
+    if (err.code !== 'PATTERN_CHANGE_NEEDS_CHOICE' || !err.details) return reportActionError(err);
+    const resolution = await askPatternChangeResolution(err.details);
+    if (!resolution) return undefined;
+    return send(resolution).catch(reportActionError);
+  }
+}
+
+// The choice for a pattern change that would alter the past (details: the
+// server's { today, recordedDates } -- the past occurrences with something
+// recorded on them). Either recalculate the past from the new pattern --
+// every past occurrence deleted -- or apply the new pattern from a date (no
+// later than today): earlier dates keep the old pattern, past occurrences
+// from it on are deleted. Each says how many recorded occurrences that
+// deletes; the last recorded one is named, so a date after it loses none.
+// Resolves { mode: 'recalculate' } | { mode: 'from', date } | null.
+async function askPatternChangeResolution({ today, recordedDates = [] }) {
+  const last = recordedDates.length ? recordedDates[recordedDates.length - 1] : null;
+  const intro = last
+    ? t('patternChoice.introLastRecorded', { date: formatShortDate(last) })
+    : t('patternChoice.introNothingRecorded');
+  const recordedFrom = (date) => recordedDates.filter((d) => d >= date).length;
+  const consequence = (values) => {
+    if (values.mode === 'recalculate') {
+      return recordedDates.length
+        ? t('patternChoice.recalculateLoses', { count: recordedDates.length })
+        : t('patternChoice.recalculateLosesNothing');
+    }
+    if (!values.from || values.from > today) return t('patternChoice.fromNoLaterThanToday', { date: formatShortDate(today) });
+    const lost = recordedFrom(values.from);
+    return lost ? t('patternChoice.fromLoses', { count: lost, date: formatShortDate(values.from) }) : t('patternChoice.fromLosesNothing', { date: formatShortDate(values.from) });
+  };
+  const result = await showFormModal(t('patternChoice.title'), [
+    [{ type: 'static', block: true, text: () => intro }],
+    {
+      name: 'mode',
+      label: t('patternChoice.how'),
+      type: 'select',
+      options: [
+        { value: 'from', label: t('patternChoice.from') },
+        { value: 'recalculate', label: t('patternChoice.recalculate') },
+      ],
+      value: 'from',
+    },
+    { name: 'from', label: t('patternChoice.fromDate'), type: 'date', value: today, max: today, showIf: (v) => v.mode === 'from' },
+    [{ type: 'static', block: true, text: consequence }],
+  ], { okLabel: t('patternChoice.apply') });
+  if (!result) return null;
+  if (result.mode === 'recalculate') return { mode: 'recalculate' };
+  if (!result.from || result.from > today) {
+    showInfoModal(t('patternChoice.fromNoLaterThanToday', { date: formatShortDate(today) }));
+    return null;
+  }
+  return { mode: 'from', date: result.from };
 }
 
 function prependEditorHint(pane, key) {

@@ -2779,6 +2779,16 @@ main textarea,
   color: var(--text-primary);
   white-space: nowrap;
 }
+/* ...or a whole sentence, on its own line, wrapping (field.block). */
+.modal-field-inline-item-block {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.modal-static-text-block {
+  display: block;
+  white-space: normal;
+  line-height: 1.45;
+}
 
 .modal-field label {
   display: block;
