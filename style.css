@@ -1867,6 +1867,15 @@ html[data-theme="light"] body:not(.has-background) .todo-item.focused:hover { ba
 .todo-item > .todo-work-on-btn {
   position: relative;
 }
+/* ...and above the focus spotlight's beam (.spotlight-beam, z-index 0),
+   which shines from the spotlight back over them. The spotlight's own
+   button stays at auto: a z-index there would trap the beam inside it. */
+.todo-item > input[type="checkbox"],
+.todo-item > .todo-item-text,
+.todo-item > .todo-item-lock,
+.todo-item > .todo-focus-btn {
+  z-index: 1;
+}
 
 .todo-timer-bar {
   position: absolute;
@@ -2028,28 +2037,60 @@ html[data-theme="light"] .not-today > .todo-item-text {
 .todo-focus-btn:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
 
 /* The "work on this now" toggle (see buildTodoItemRow, app.js) -- its own
-   class, not .todo-focus-btn above, since it needs a distinctly bigger
-   target than the plain dismiss/show button next to it. An eye (open once
-   focused, closed otherwise -- see WORK_ON_ICON/WORKING_ON_ICON) rather than
-   the plain dot this used to be; no border or background tint here since
-   the open icon's own white sclera/black pupil already read clearly against
-   any background color, including .todo-item.focused's own blue tint, where
-   a plain colored icon used to all but disappear. */
+   class, not .todo-focus-btn above: a stage spotlight (SPOTLIGHT_ICON),
+   lit with a beam across the row while focused. No border or background
+   tint: the black silhouette and the yellow light read on any row. */
 .todo-work-on-btn {
   flex: none;
   align-self: center;
-  width: 40px;
+  width: 32px;
   height: 32px;
+  padding: 0;
   border: none;
   background: transparent;
-  color: #4a84b8;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-/* Holds the eye's place on a row that can't be focused, so every row is
-   the same height (see buildTodoItemRow). */
+/* The spotlight: a black silhouette (its shell, stand and dark lens), the
+   only part that toggles the focus. A faint halo keeps it visible on the
+   dark theme's dark rows. */
+.spotlight-shell {
+  position: relative;
+  z-index: 1;
+  display: block;
+  overflow: visible;
+}
+.spotlight-body { fill: #000; }
+.spotlight-lens { fill: #262626; }
+html:not([data-theme="light"]) .spotlight-shell { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45)); }
+.todo-work-on-btn:hover .spotlight-lens { fill: #4d4a3a; }
+/* Focused: the lens lit, and the beam -- a cone widening from the lens to
+   the left, across the row's whole height (the row clips it: it's drawn
+   taller than any row) and behind its text, fading out across it. It's
+   positioned from the button but lets every click through. */
+.todo-work-on-btn.active .spotlight-lens { fill: #ffd84d; filter: drop-shadow(0 0 3px rgba(255, 216, 77, 0.9)); }
+.spotlight-beam {
+  display: none;
+  position: absolute;
+  z-index: 0;
+  right: 26px;
+  top: -400px;
+  bottom: -400px;
+  width: 1400px;
+  pointer-events: none;
+  /* From the lens (its height, at its centre: 414px of 832) to the box's
+     whole height at the far left -- steep enough to fill any row's height
+     about 100px from the lamp. */
+  clip-path: polygon(100% 48.9%, 0 0, 0 100%, 100% 50.6%);
+  background:
+    radial-gradient(ellipse 160px 45px at 100% 49.75%, rgba(255, 240, 160, 0.6), rgba(255, 240, 160, 0) 100%),
+    linear-gradient(to left, rgba(255, 216, 77, 0.6) 0, rgba(255, 210, 70, 0.34) 220px, rgba(255, 205, 65, 0.22) 520px, rgba(255, 205, 65, 0.1) 850px, rgba(255, 205, 65, 0) 1250px);
+}
+.todo-work-on-btn.active .spotlight-beam { display: block; }
+/* Holds the spotlight's place on a row that can't be focused, so every row
+   is the same height (see buildTodoItemRow). */
 .todo-work-on-placeholder {
   box-sizing: border-box;
   visibility: hidden;

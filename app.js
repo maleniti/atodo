@@ -3269,16 +3269,20 @@ function describeDayLabel(dateISO, todayISO) {
   return dateStr;
 }
 
-// A closed eye (not yet focused on) vs. an open one (currently focused) --
-// same eye outline as SHOW_ICON below (same "this is visible/active" idea,
-// and the closed state reuses just its top eyelid curve for visual
-// continuity), but with a white sclera fill plus a colored iris/black pupil
-// on the open state, so the icon itself reads clearly against any
-// background color rather than relying on a border/backdrop behind it.
-const WORK_ON_ICON =
-  '<svg viewBox="0 0 24 24" width="25" height="25"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7"/></svg>';
-const WORKING_ON_ICON =
-  '<svg viewBox="0 0 24 24" width="25" height="25"><path fill="white" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="black" stroke="none"/></svg>';
+// The focus control: a stage spotlight turned to the left, a black
+// silhouette -- its lens lit and a yellow beam shining back over the row's
+// text while the occurrence is focused (.todo-work-on-btn.active, see
+// style.css), dark otherwise. Only the spotlight itself is the button; the
+// beam lets clicks through.
+const SPOTLIGHT_ICON =
+  '<svg class="spotlight-shell" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">' +
+  // barrel, its wider front bezel (left) and back cap; the U-shaped yoke
+  // holding it at the pivot, on a stem and base
+  '<path class="spotlight-body" d="M8 5h2.5a1.5 1.5 0 0 1 1.5 1.5V8h9.5a1.5 1.5 0 0 1 1.5 1.5v1h1.2a1.3 1.3 0 0 1 1.3 1.3v4.4a1.3 1.3 0 0 1-1.3 1.3H23v1a1.5 1.5 0 0 1-1.5 1.5H12v1.5a1.5 1.5 0 0 1-1.5 1.5H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z' +
+  'M12.3 14h1.8v7.2a1.6 1.6 0 0 0 1.6 1.6h2.6a1.6 1.6 0 0 0 1.6-1.6V14h1.8v7.2a3.4 3.4 0 0 1-3 3.4v2.2h3.3a1 1 0 0 1 1 1V29h-11v-1.2a1 1 0 0 1 1-1h3.3v-2.2a3.4 3.4 0 0 1-3-3.4z"/>' +
+  '<ellipse class="spotlight-lens" cx="6.6" cy="14" rx="1.6" ry="7.4"/>' +
+  '</svg>';
+const SPOTLIGHT_BEAM = '<span class="spotlight-beam" aria-hidden="true"></span>';
 const DISMISS_ICON =
   '<svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>';
 const SHOW_ICON =
@@ -3451,7 +3455,7 @@ function buildTodoItemRow(item, dimmed) {
   if (has('focus') || has('unfocus')) {
     const workOnBtn = document.createElement('button');
     workOnBtn.className = 'todo-work-on-btn' + (item.active ? ' active' : '');
-    workOnBtn.innerHTML = item.active ? WORKING_ON_ICON : WORK_ON_ICON;
+    workOnBtn.innerHTML = SPOTLIGHT_BEAM + SPOTLIGHT_ICON;
     workOnBtn.title = item.active ? t('todo.stopWorking') : t('todo.workOnNow');
     workOnBtn.onclick = (e) => {
       e.stopPropagation();
@@ -3463,12 +3467,11 @@ function buildTodoItemRow(item, dimmed) {
     row.appendChild(workOnBtn);
   } else {
     // An invisible stand-in, so a row that can't be focused (done, failed,
-    // not due yet, ...) is as tall as one with the eye -- every row the same
-    // height.
+    // ...) is as tall as one with the spotlight -- every row the same height.
     const placeholder = document.createElement('span');
     placeholder.className = 'todo-work-on-btn todo-work-on-placeholder';
     placeholder.setAttribute('aria-hidden', 'true');
-    placeholder.innerHTML = WORK_ON_ICON;
+    placeholder.innerHTML = SPOTLIGHT_ICON;
     row.appendChild(placeholder);
   }
 
