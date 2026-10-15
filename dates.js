@@ -1,6 +1,6 @@
 // Plain calendar helpers for the client -- formatting and stepping dates
 // ('YYYY-MM-DD' strings in the browser's local time). No rules: what a task
-// does on which day is the server's business (male-niti-api's
+// does on which day is the server's business (the api repo's
 // lib/atodo/domain/, which recurrence.js and occurrence.js moved to).
 
 const Dates = {

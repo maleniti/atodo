@@ -956,7 +956,7 @@ function currentUserProfileSnapshot() {
 
 // ---------------------------------------------------------------------------
 // Actions -- every change is a request to the server, which applies the
-// task rules itself (male-niti-api's lib/atodo/domain/) and answers with
+// task rules itself (the api repo's lib/atodo/domain/) and answers with
 // what changed. Actions run one at a time, in order. One that fails for a
 // reason that will pass (no connection, an update in progress) stays
 // queued: a banner says so (renderSaveStatus), it's retried automatically

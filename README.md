@@ -53,9 +53,9 @@ separate repository (see [How it fits together](#how-it-fits-together)).
 | Repository | What it is |
 |---|---|
 | **atodo** (this one) | The client: the app (`index.html`) and its website — landing page with pricing, checkout, FAQ, support, Privacy Policy, Terms of Service. |
-| **male-niti-api** | The backend. Implements this client's contract, [`api-spec.yaml`](api-spec.yaml) (`/atodo/v1`), plus the published price lists (`/maleniti/v1/price-lists`), Stripe billing, fiscalization and email. Its database schema is versioned there (`db/migrations/`). |
-| **male-niti-admin** | The admin app: price lists, products and points of sale, support messages. |
-| **male-niti** | The platform: builds and deploys everything with Docker Compose (`./mn`), including the TLS proxy, database backups, maintenance mode and versioned releases. |
+| **api** | The backend. Implements this client's contract, [`api-spec.yaml`](api-spec.yaml) (`/atodo/v1`), plus the published price lists (`/maleniti/v1/price-lists`), Stripe billing, fiscalization and email. Its database schema is versioned there (`db/migrations/`). |
+| **admin** | The admin app: price lists, products and points of sale, support messages. |
+| **platform** | The platform: builds and deploys everything with Docker Compose (`./mn`), including the TLS proxy, database backups, maintenance mode and versioned releases. |
 
 The client keeps nothing of value in the browser: tasks, settings and
 subscriptions live on the backend, and so do the task rules (recurrence,
@@ -86,7 +86,7 @@ only when the backend can't be reached).
 
 ## Running it locally
 
-You need a backend implementing `api-spec.yaml` — see male-niti-api.
+You need a backend implementing `api-spec.yaml` — see the `api` repository.
 
 **Without Docker:**
 
@@ -127,16 +127,16 @@ not here.
 
 ## Tests
 
-The task rules and their tests live in the backend (male-niti-api,
+The task rules and their tests live in the backend (the `api` repository,
 `npm test`). The client has no automated tests; it's tested by hand against
 a running backend.
 
 ## Deployment
 
-The platform (male-niti) deploys versioned releases: `./mn deploy
+The platform (`platform`) deploys versioned releases: `./mn deploy
 <version>` builds every repository at that version's tag, migrates the
 database (behind a maintenance page) and starts the new release. See
-male-niti's README.
+`platform`'s README.
 
 ## Known limitations
 
