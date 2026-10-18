@@ -545,6 +545,29 @@ main {
   white-space: pre-wrap;
   margin-top: 2px;
 }
+/* Series scope: the members' names in one wrapping line (see
+   buildSidePanelSeriesNames). */
+.side-panel-series-names {
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-label);
+}
+.side-panel-series-name.selected {
+  color: var(--accent);
+}
+/* A small accent-coloured disc, vertically centred -- unlike a typed bullet
+   in a name, which takes the text colour and sits on the baseline. */
+.side-panel-series-names-separator {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+  vertical-align: middle;
+}
 
 .side-panel-comment-input {
   height: 64px;

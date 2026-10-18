@@ -4750,7 +4750,11 @@ function describeLogEntry(entry) {
   return t(entry.key, params);
 }
 
-function buildSidePanelLogRow(entry, label) {
+// `label` names where an entry came from in series scope ("Task, 15 Oct --
+// Marked done"); in task scope the task goes without saying, so an entry about
+// one occurrence names just that (`occurrenceDate`: "15 Oct occurrence: Marked
+// done", worded per language).
+function buildSidePanelLogRow(entry, label, occurrenceDate) {
   const item = document.createElement('div');
   item.className = 'side-panel-log-item';
 
@@ -4759,7 +4763,8 @@ function buildSidePanelLogRow(entry, label) {
   const msg = document.createElement('span');
   msg.className = 'side-panel-log-message';
   const message = describeLogEntry(entry);
-  msg.textContent = label ? `${label} -- ${message}` : message;
+  if (occurrenceDate) msg.textContent = t('sidePanel.logOccurrence', { date: formatShortDate(occurrenceDate), activity: message });
+  else msg.textContent = label ? `${label} -- ${message}` : message;
   const time = document.createElement('span');
   time.className = 'side-panel-log-time';
   time.textContent = formatDateTime(entry.timestamp);
@@ -4796,6 +4801,28 @@ function buildSidePanelTaskSummary(task) {
   }
 
   return item;
+}
+
+// Series scope's top section: just the members' names, one after another,
+// the selected task's highlighted. The separator is a drawn dot, not a
+// character, so a "•" in a name can't be mistaken for it.
+function buildSidePanelSeriesNames(tasks, selectedTaskId) {
+  const line = document.createElement('div');
+  line.className = 'side-panel-series-names';
+  tasks.forEach((task, i) => {
+    if (i > 0) {
+      const separator = document.createElement('span');
+      separator.className = 'side-panel-series-names-separator';
+      separator.setAttribute('aria-hidden', 'true');
+      line.appendChild(separator);
+    }
+    const name = document.createElement('span');
+    name.className = 'side-panel-series-name';
+    name.classList.toggle('selected', task.taskId === selectedTaskId);
+    name.textContent = task.name;
+    line.appendChild(name);
+  });
+  return line;
 }
 
 function renderSidePanel() {
@@ -4849,11 +4876,11 @@ function renderSidePanel() {
     return;
   }
 
-  // Task info: in series scope, a block per member (they differ on any of
-  // it); otherwise the one task's.
+  // Task info: in series scope just the members' names; otherwise the one
+  // task's name, description and details.
   const seriesTasks = data.series ? data.series.tasks : null;
   if (sidePanelScope === 'series' && seriesTasks) {
-    for (const member of seriesTasks) sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(member));
+    sidePanelSummariesEl.appendChild(buildSidePanelSeriesNames(seriesTasks, detail.task.taskId));
   } else {
     sidePanelSummariesEl.appendChild(buildSidePanelTaskSummary(detail.task));
   }
@@ -4893,16 +4920,23 @@ function renderSidePanel() {
           occurrences: detail.occurrences.map((o) => ({ ...o, taskId: detail.task.taskId })),
         };
     const nameOf = new Map(scoped.notes.map((rec) => [rec.taskId, rec.name]));
+    const inSeries = sidePanelScope === 'series' && data.series;
     // A task-level entry names the occurrence it was about, if any -- never
     // the task's due date, which says nothing about the entry (and moves).
     for (const rec of scoped.notes) {
-      for (const comment of rec.comments || []) notes.push({ taskId: rec.taskId, occurrenceDate: null, comment, label: rec.name });
-      for (const entry of rec.log || []) logEntries.push({ entry, label: entry.occurrenceDate ? `${rec.name}, ${formatShortDate(entry.occurrenceDate)}` : rec.name });
+      for (const comment of rec.comments || []) notes.push({ taskId: rec.taskId, occurrenceDate: null, comment, label: inSeries ? rec.name : null });
+      for (const entry of rec.log || []) {
+        if (!inSeries) logEntries.push({ entry, label: null, occurrenceDate: entry.occurrenceDate || null });
+        else logEntries.push({ entry, label: entry.occurrenceDate ? `${rec.name}, ${formatShortDate(entry.occurrenceDate)}` : rec.name });
+      }
     }
     for (const occurrence of scoped.occurrences) {
       const label = `${nameOf.get(occurrence.taskId) || ''}, ${formatShortDate(occurrence.occurrenceDate)}`;
-      for (const comment of occurrence.comments || []) notes.push({ taskId: occurrence.taskId, occurrenceDate: occurrence.occurrenceDate, comment, label });
-      for (const entry of occurrence.log || []) logEntries.push({ entry, label });
+      // In task scope the task goes without saying: a note on one occurrence
+      // names just that occurrence, worded per language (as its log entries).
+      const noteLabel = inSeries ? label : t('sidePanel.noteOccurrence', { date: formatShortDate(occurrence.occurrenceDate) });
+      for (const comment of occurrence.comments || []) notes.push({ taskId: occurrence.taskId, occurrenceDate: occurrence.occurrenceDate, comment, label: noteLabel });
+      for (const entry of occurrence.log || []) logEntries.push(inSeries ? { entry, label } : { entry, label: null, occurrenceDate: occurrence.occurrenceDate });
     }
   }
   notes.sort((a, b) => b.comment.timestamp - a.comment.timestamp);
@@ -4912,7 +4946,7 @@ function renderSidePanel() {
   for (const note of notes) sidePanelCommentsEl.appendChild(buildSidePanelCommentRow(note));
 
   if (logEntries.length === 0) sidePanelLogEl.appendChild(buildSidePanelEmptyRow(t('sidePanel.noActivity')));
-  for (const { entry, label } of logEntries) sidePanelLogEl.appendChild(buildSidePanelLogRow(entry, label));
+  for (const { entry, label, occurrenceDate } of logEntries) sidePanelLogEl.appendChild(buildSidePanelLogRow(entry, label, occurrenceDate));
 }
 
 sidePanelScopeOpts.forEach((btn) => {
