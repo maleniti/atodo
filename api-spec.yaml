@@ -2785,8 +2785,9 @@ components:
             complete (see Occurrence.status). A timed one counts as done once
             its due time has passed (derived, not stored) -- after its time
             it's done or failed, before it pending or failed; an all-day one
-            carries over until marked failed or dismissed. Never together
-            with recurUntilCompleted.
+            is never overdue: it's listed as it is for a day after its date
+            (to be marked failed belatedly, or dismissed), then dismissed
+            automatically. Never together with recurUntilCompleted.
         recurUntilCompleted:
           type: boolean
           description: >-
